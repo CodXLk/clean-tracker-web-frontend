@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
+/*
+ * All colors defined here become Tailwind utilities automatically.
+ * e.g. --color-primary  →  bg-primary, text-primary, border-primary, ring-primary
+ */
+@theme {
+  /* Brand */
+  --color-primary:            #0B585A;
+  --color-primary-variant:    #073D3E;
+  --color-secondary:          #03DAC6;
+  --color-secondary-variant:  #018786;
+
+  /* Surface / Background */
+  --color-background: #F5F5F5;
+  --color-surface:    #FFFFFF;
+
+  /* On-colors (text/icon color on top of each surface) */
+  --color-on-primary:    #FFFFFF;
+  --color-on-secondary:  #000000;
+  --color-on-background: #1C1B1F;
+  --color-on-surface:    #1C1B1F;
+  --color-on-error:      #FFFFFF;
+
+  /* Semantic */
+  --color-success: #27AE60;
+  --color-warning: #FFC107;
+  --color-info:    #0B585A;
+  --color-error:   #B00020;
+  --color-danger:  #FF0000;
+
+  /* Grey scale */
+  --color-grey-100: #F5F5F5;
+  --color-grey-300: #E0E0E0;
+  --color-grey-500: #9E9E9E;
+  --color-grey-700: #616161;
+  --color-grey-900: #212121;
+
+  /* Status (used in StatusDot — orange not in original palette, added for in-progress state) */
+  --color-status-active:   #27AE60;
+  --color-status-pending:  #F97316;
+  --color-status-inactive: #9E9E9E;
+
+  /* Navigation */
+  --color-nav-bar-bg:        #1C1C2E;
+  --color-nav-icon-inactive: #737373;
+
+  /* Typography — fallbacks used until Next.js injects --font-geist-* at runtime */
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--font-geist-mono, ui-monospace, monospace);
+}
+
+/* ── CSS Variables (for direct CSS usage outside Tailwind) ─────────────────── */
+:root {
+  --background: #F5F5F5;
+  --foreground: #1C1B1F;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1C1C2E;
+    --foreground: #F5F5F5;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
