@@ -32,4 +32,7 @@ export const ENDPOINTS = {
   inventory: {
     list: "/inventory",
   },
+  contact: {
+    submit: "/contact",
+  },
 } as const;

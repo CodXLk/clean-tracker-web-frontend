@@ -49,6 +49,8 @@
   /* Typography — fallbacks used until Next.js injects --font-geist-* at runtime */
   --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
   --font-mono: var(--font-geist-mono, ui-monospace, monospace);
+  /* Marketing site headings (Primeway) */
+  --font-heading: var(--font-plus-jakarta-sans, ui-sans-serif, system-ui, sans-serif);
 }
 
 /* ── CSS Variables (for direct CSS usage outside Tailwind) ─────────────────── */
