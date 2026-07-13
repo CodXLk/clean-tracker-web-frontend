@@ -70,3 +70,42 @@ body {
   background-color: var(--background);
   color: var(--foreground);
 }
+
+/* ── Google Places Autocomplete ────────────────────────────────────────────
+   The .pac-container dropdown is appended to <body>; keep it above modals
+   (which use z-index: 50) so suggestions are always visible, and size it to
+   be comfortably readable rather than the cramped Google default. */
+.pac-container {
+  z-index: 100000 !important;
+  min-width: 320px !important;
+  border-radius: 0.75rem;
+  margin-top: 0.25rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  border: 1px solid #E0E0E0;
+  font-family: inherit;
+}
+
+.pac-item {
+  padding: 0.625rem 0.875rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background-color: var(--color-grey-100);
+}
+
+.pac-icon {
+  margin-top: 0.2rem;
+}
+
+.pac-item-query {
+  font-size: 0.95rem;
+  padding-right: 0.25rem;
+}
+
+.pac-matched {
+  font-weight: 600;
+}
