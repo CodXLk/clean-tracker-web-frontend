@@ -1,51 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import { callBackend } from "@/lib/api/backend";
+import { BACKEND } from "@/lib/api/endpoints";
 import { AUTH_COOKIE } from "@/lib/constants";
+
+interface LoginData {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: { id: string; firstName: string; lastName?: string; email: string; role: string };
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const result = await callBackend(BACKEND.auth.login, { method: "POST", body, auth: false });
+    const envelope = (result.json ?? {}) as { data?: LoginData; message?: string };
 
-    // Forward to Spring Boot
-    const response = await fetch(
-      `${process.env.SPRING_BOOT_API_URL}/api/auth/login`,
-      {
-        method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key":    process.env.SPRING_BOOT_API_KEY ?? "",
-        },
-        body: JSON.stringify(body),
-      },
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
+    if (!result.ok || !envelope.data?.accessToken) {
       return NextResponse.json(
-        { message: error.message ?? "Invalid credentials" },
-        { status: response.status },
+        { message: envelope.message ?? "Invalid credentials" },
+        { status: result.status || 401 },
       );
     }
 
-    const data = await response.json();
-    const res  = NextResponse.json({ message: "Login successful" }, { status: 200 });
+    const { accessToken, expiresIn, user } = envelope.data;
 
-    res.cookies.set(AUTH_COOKIE, data.accessToken, {
+    // Return non-sensitive display info; the token is only ever set in an HTTP-only cookie.
+    const res = NextResponse.json(
+      { user: { id: user.id, name: [user.firstName, user.lastName].filter(Boolean).join(" "), role: user.role } },
+      { status: 200 },
+    );
+
+    res.cookies.set(AUTH_COOKIE, accessToken, {
       httpOnly: true,
-      secure:   process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      path:     "/",
-      maxAge:   15 * 60, // 15 minutes
+      path: "/",
+      maxAge: Math.max(60, Math.floor((expiresIn || 86_400_000) / 1000)),
     });
-
-    if (data.refreshToken) {
-      res.cookies.set("refresh-token", data.refreshToken, {
-        httpOnly: true,
-        secure:   process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path:     "/api/auth/refresh",
-        maxAge:   7 * 24 * 60 * 60, // 7 days
-      });
-    }
 
     return res;
   } catch {

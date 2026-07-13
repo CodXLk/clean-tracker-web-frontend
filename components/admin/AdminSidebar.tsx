@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  ClipboardCheck,
-  MessageSquare,
-  Package,
-  ChevronDown,
+  Building2,
+  UsersRound,
   Menu,
   X,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { useLogout } from "@/features/auth/hooks/useAuth";
+import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 
 interface NavItemConfig {
   label: string;
@@ -23,11 +25,10 @@ interface NavItemConfig {
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
-  { label: "Dashboard",   href: "/admin/dashboard",   icon: LayoutDashboard },
-  { label: "Workforce",   href: "/admin/workforce",   icon: Users },
-  { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
-  { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
-  { label: "Deliveries",  href: "/admin/deliveries",  icon: Package },
+  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "Users",     href: "/admin/users",     icon: Users },
+  { label: "Companies", href: "/admin/companies", icon: Building2 },
+  { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
 ];
 
 interface SidebarNavItemProps {
@@ -59,23 +60,29 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
 
 function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const me = useMe();
+  const logout = useLogout();
 
   function isItemActive(item: NavItemConfig): boolean {
     return pathname === item.href || pathname.startsWith(item.href + "/");
+  }
+
+  const fullName = me.data
+    ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ")
+    : "…";
+  const initial = (me.data?.firstName ?? "?").charAt(0).toUpperCase();
+
+  function handleLogout() {
+    logout.mutate(undefined, { onSettled: () => router.replace("/login") });
   }
 
   return (
     <div className="flex h-full flex-col bg-primary">
       {/* Logo / Brand */}
       <div className="px-4 py-6">
-        <p className="text-lg font-bold text-white">Company Logo</p>
-        <div className="mt-4">
-          <p className="text-xs text-white/50 mb-1">Current Site</p>
-          <button className="flex w-full items-center justify-between rounded-xl bg-white/10 px-3 py-2 text-sm text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">
-            <span>Site A</span>
-            <ChevronDown size={16} aria-hidden="true" />
-          </button>
-        </div>
+        <p className="text-lg font-bold text-white">Primeway</p>
+        <p className="text-xs text-white/50">Cleaning Management</p>
       </div>
 
       {/* Navigation */}
@@ -97,12 +104,22 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25] text-sm font-semibold text-white"
             aria-hidden="true"
           >
-            S
+            {initial}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white">Mr. Jhon</p>
-            <p className="text-xs text-white/50">Supervisor</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-white">{fullName}</p>
+            <p className="text-xs text-white/50">{me.data ? ROLE_LABELS[me.data.role] : ""}</p>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={logout.isPending}
+            aria-label="Sign out"
+            title="Sign out"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-50"
+          >
+            <LogOut size={16} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </div>
