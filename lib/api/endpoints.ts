@@ -1,15 +1,41 @@
+// Next.js Route Handler paths (called by client components via clientApi, baseURL "/api")
 export const ENDPOINTS = {
   auth: {
-    login:   "/api/auth/login",
-    logout:  "/api/auth/logout",
-    refresh: "/api/auth/refresh",
-    me:      "/api/auth/me",
+    login:        "/auth/login",
+    logout:       "/auth/logout",
+    me:           "/auth/me",
+    accountSetup: "/auth/account-setup",
   },
   users: {
-    list:   "/api/users",
-    byId:   (id: string) => `/api/users/${id}`,
-    create: "/api/users",
-    update: (id: string) => `/api/users/${id}`,
-    delete: (id: string) => `/api/users/${id}`,
+    list:        "/users",
+    create:      "/users",
+    byId:        (id: string) => `/users/${id}`,
+    resendSetup: (id: string) => `/users/${id}/resend-setup`,
+  },
+  companies: {
+    list:   "/companies",
+    create: "/companies",
+    byId:   (id: string) => `/companies/${id}`,
+  },
+} as const;
+
+// Spring Boot backend paths (called server-side from Route Handlers)
+export const BACKEND = {
+  auth: {
+    login:        "/api/v1/auth/login",
+    me:           "/api/v1/auth/me",
+    accountSetup: "/api/v1/auth/account-setup",
+    changePassword: "/api/v1/auth/change-password",
+  },
+  users: {
+    list:        "/api/v1/users",
+    create:      "/api/v1/users",
+    byId:        (id: string) => `/api/v1/users/${id}`,
+    resendSetup: (id: string) => `/api/v1/users/${id}/resend-setup`,
+  },
+  companies: {
+    list:   "/api/v1/companies",
+    create: "/api/v1/companies",
+    byId:   (id: string) => `/api/v1/companies/${id}`,
   },
 } as const;

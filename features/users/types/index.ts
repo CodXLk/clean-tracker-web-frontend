@@ -1,1 +1,6 @@
-export type { User, CreateUserInput, UpdateUserInput } from "../schemas/user.schema";
+export type {
+  User,
+  CreateUserInput,
+  UpdateUserInput,
+  Role,
+} from "../schemas/user.schema";
