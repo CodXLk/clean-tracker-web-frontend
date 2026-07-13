@@ -1166,6 +1166,8 @@ Every time a new reusable component is built, add it to the table below so futur
 | `LoadingSpinner` | `LoadingSpinner.tsx` | `size`, `className` | Animated loading indicator |
 | `ErrorMessage` | `ErrorMessage.tsx` | `message`, `className` | Inline field or section error text |
 | `EmptyState` | `EmptyState.tsx` | `title`, `description`, `action`, `className` | Empty list / zero-data placeholder |
+| `ProgressBar` | `ProgressBar.tsx` | `percent`, `className`, `barClassName` | Horizontal progress bar (rankings, inventory stock) |
+| `SearchInput` | `SearchInput.tsx` | `value`, `onChange`, `placeholder`, `className` | Icon + text search field used above filter tabs |
 
 #### `components/layout/`
 
