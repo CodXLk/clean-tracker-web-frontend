@@ -7,6 +7,9 @@ import {
   Users,
   Building2,
   UsersRound,
+  ClipboardCheck,
+  MessageSquare,
+  Package,
   Menu,
   X,
   LogOut,
@@ -25,10 +28,13 @@ interface NavItemConfig {
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Users",     href: "/admin/users",     icon: Users },
-  { label: "Companies", href: "/admin/companies", icon: Building2 },
-  { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
+  { label: "Dashboard",   href: "/admin/dashboard",   icon: LayoutDashboard },
+  { label: "Workforce",   href: "/admin/workforce",   icon: UsersRound },
+  { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
+  { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
+  { label: "Inventory",   href: "/admin/deliveries",  icon: Package },
+  { label: "Users",       href: "/admin/users",       icon: Users },
+  { label: "Companies",   href: "/admin/companies",   icon: Building2 },
 ];
 
 interface SidebarNavItemProps {
