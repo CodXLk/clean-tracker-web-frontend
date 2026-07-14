@@ -1,34 +1,29 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
-import {
-  CreateUserSchema,
-  ROLE_LABELS,
-  type CreateUserInput,
-  type Role,
-} from "@/features/users/schemas/user.schema";
+import { CreateUserSchema, type CreateUserInput } from "@/features/users/schemas/user.schema";
 import { useCreateUser, getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import { useCompanies } from "@/features/companies/hooks/useCompanies";
+import { useRoles } from "@/features/users/hooks/useRoles";
 
 interface CreateUserModalProps {
   open: boolean;
   onClose: () => void;
-  allowedRoles: Role[];
 }
 
-export function CreateUserModal({ open, onClose, allowedRoles }: CreateUserModalProps) {
+export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
   const createUser = useCreateUser();
-  const companiesQuery = useCompanies();
+  const rolesQuery = useRoles();
 
   const {
     register,
     handleSubmit,
-    watch,
     reset,
+    control,
     formState: { errors },
   } = useForm<CreateUserInput>({
     resolver: zodResolver(CreateUserSchema),
@@ -37,12 +32,8 @@ export function CreateUserModal({ open, onClose, allowedRoles }: CreateUserModal
       lastName: "",
       email: "",
       phoneNumber: "",
-      role: allowedRoles[0],
-      companyId: undefined,
     },
   });
-
-  const selectedRole = watch("role");
 
   function close() {
     reset();
@@ -62,13 +53,6 @@ export function CreateUserModal({ open, onClose, allowedRoles }: CreateUserModal
       description="They will receive an email with a temporary password and a setup link."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="First name" required error={errors.firstName?.message} {...register("firstName")} />
-          <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
-        </div>
-        <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
-        <TextField label="Phone number" error={errors.phoneNumber?.message} {...register("phoneNumber")} />
-
         <div className="flex flex-col gap-1.5">
           <label htmlFor="role" className="text-sm font-medium text-on-surface">
             Role<span className="ml-0.5 text-error">*</span>
@@ -76,45 +60,44 @@ export function CreateUserModal({ open, onClose, allowedRoles }: CreateUserModal
           <select
             id="role"
             className="h-11 w-full rounded-xl border border-grey-300 bg-white px-3.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            defaultValue=""
+            disabled={rolesQuery.isLoading}
             {...register("role")}
           >
-            {allowedRoles.map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
+            <option value="" disabled>
+              {rolesQuery.isLoading ? "Loading roles…" : "Select a role"}
+            </option>
+            {rolesQuery.data?.map((role) => (
+              <option key={role.name} value={role.name}>
+                {role.label}
               </option>
             ))}
           </select>
+          {rolesQuery.isError && (
+            <p className="text-xs font-medium text-error">Failed to load roles. Please try again.</p>
+          )}
           {errors.role?.message && <p className="text-xs font-medium text-error">{errors.role.message}</p>}
         </div>
 
-        {selectedRole === "CLIENT" && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="companyId" className="text-sm font-medium text-on-surface">
-              Client company<span className="ml-0.5 text-error">*</span>
-            </label>
-            <select
-              id="companyId"
-              className="h-11 w-full rounded-xl border border-grey-300 bg-white px-3.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              defaultValue=""
-              {...register("companyId")}
-            >
-              <option value="" disabled>
-                {companiesQuery.isLoading ? "Loading companies…" : "Select a company"}
-              </option>
-              {companiesQuery.data?.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-            {errors.companyId?.message && (
-              <p className="text-xs font-medium text-error">{errors.companyId.message}</p>
-            )}
-            {companiesQuery.data?.length === 0 && (
-              <p className="text-xs text-grey-500">No client companies yet — create one first.</p>
-            )}
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextField label="First name" required error={errors.firstName?.message} {...register("firstName")} />
+          <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
+        </div>
+        <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
+        <Controller
+          control={control}
+          name="phoneNumber"
+          render={({ field }) => (
+            <PhoneNumberField
+              label="Phone number"
+              value={field.value ?? ""}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              name={field.name}
+              error={errors.phoneNumber?.message}
+            />
+          )}
+        />
 
         {createUser.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

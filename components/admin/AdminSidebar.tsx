@@ -7,28 +7,53 @@ import {
   Users,
   Building2,
   UsersRound,
+  ContactRound,
+  ChevronDown,
+  ClipboardCheck,
+  MessageSquare,
+  Package,
   Menu,
   X,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 
-interface NavItemConfig {
+interface NavChild {
   label: string;
   href: string;
+}
+
+interface NavItemConfig {
+  label: string;
   icon: LucideIcon;
+  /** Leaf items link directly. */
+  href?: string;
+  /** Parent items expand/collapse a submenu instead of linking. */
+  children?: NavChild[];
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Users",     href: "/admin/users",     icon: Users },
+  { label: "Users", href: "/admin/users", icon: Users },
   { label: "Companies", href: "/admin/companies", icon: Building2 },
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
+  { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
+  { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
+  { label: "Inventory",   href: "/admin/deliveries",  icon: Package },
+  {
+    label: "Client Management",
+    icon: ContactRound,
+    children: [
+      { label: "Client-Company", href: "/admin/user-management/client-companies" },
+      { label: "Client-Contact", href: "/admin/user-management/clients" },
+      { label: "Site Management", href: "/admin/user-management/sites" },
+    ],
+  },
 ];
 
 interface SidebarNavItemProps {
@@ -42,7 +67,7 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
 
   return (
     <Link
-      href={item.href}
+      href={item.href ?? "#"}
       aria-current={isActive ? "page" : undefined}
       onClick={onClick}
       className={cn(
@@ -58,6 +83,76 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
   );
 }
 
+interface SidebarNavGroupProps {
+  item: NavItemConfig;
+  pathname: string;
+  onLinkClick?: () => void;
+}
+
+function SidebarNavGroup({ item, pathname, onLinkClick }: SidebarNavGroupProps) {
+  const Icon = item.icon;
+  const children = item.children ?? [];
+  const isChildActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const groupActive = children.some((child) => isChildActive(child.href));
+
+  // Collapsed by default; opens automatically when viewing one of its pages.
+  const [expanded, setExpanded] = useState(groupActive);
+
+  const submenuId = `submenu-${item.label.replace(/\s+/g, "-").toLowerCase()}`;
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={submenuId}
+        onClick={() => setExpanded((v) => !v)}
+        className={cn(
+          "flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+          groupActive ? "bg-white/10 text-white font-medium" : "text-white/70 hover:bg-white/10 font-normal",
+        )}
+      >
+        <span className="flex items-center gap-3">
+          <Icon size={20} strokeWidth={groupActive ? 2.5 : 1.75} aria-hidden="true" />
+          {item.label}
+        </span>
+        <ChevronDown
+          size={16}
+          aria-hidden="true"
+          className={cn("shrink-0 transition-transform", expanded && "rotate-180")}
+        />
+      </button>
+
+      {expanded && (
+        <ul id={submenuId} className="mt-1 flex flex-col gap-1 pl-4">
+          {children.map((child) => {
+            const active = isChildActive(child.href);
+            return (
+              <li key={child.href}>
+                <Link
+                  href={child.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={onLinkClick}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                    active ? "bg-[#ED5F25] text-white font-medium" : "text-white/60 hover:bg-white/10 font-normal",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-white/40")}
+                  />
+                  {child.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -65,6 +160,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const logout = useLogout();
 
   function isItemActive(item: NavItemConfig): boolean {
+    if (!item.href) return false;
     return pathname === item.href || pathname.startsWith(item.href + "/");
   }
 
@@ -87,14 +183,23 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
       {/* Navigation */}
       <nav aria-label="Admin navigation" className="mt-2 flex flex-col gap-1 px-3">
-        {NAV_ITEMS.map((item) => (
-          <SidebarNavItem
-            key={item.href}
-            item={item}
-            isActive={isItemActive(item)}
-            onClick={onLinkClick}
-          />
-        ))}
+        {NAV_ITEMS.map((item) =>
+          item.children ? (
+            <SidebarNavGroup
+              key={item.label}
+              item={item}
+              pathname={pathname}
+              onLinkClick={onLinkClick}
+            />
+          ) : (
+            <SidebarNavItem
+              key={item.href}
+              item={item}
+              isActive={isItemActive(item)}
+              onClick={onLinkClick}
+            />
+          ),
+        )}
       </nav>
 
       {/* User profile */}
@@ -129,22 +234,57 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 export function AdminSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Close the drawer on Escape, and if the viewport is resized up to desktop
+  // while it's open (avoids a stuck open drawer behind the persistent sidebar).
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false);
+    }
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    function onViewportChange(e: MediaQueryListEvent) {
+      if (e.matches) setMobileOpen(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    desktopQuery.addEventListener("change", onViewportChange);
+
+    // Prevent the page from scrolling behind the open drawer.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      desktopQuery.removeEventListener("change", onViewportChange);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
+
   return (
     <>
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — fixed off-flow; main is offset with lg:ml-64 */}
       <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 lg:block">
         <SidebarContent />
       </aside>
 
-      {/* Mobile hamburger button */}
-      <button
-        type="button"
-        aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-md lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      >
-        <Menu size={20} aria-hidden="true" />
-      </button>
+      {/* Mobile/tablet top bar — sits in normal document flow so it reserves its
+          own space and never overlaps the page title or content below it. */}
+      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-grey-200 bg-white px-4 shadow-sm lg:hidden">
+        <button
+          type="button"
+          aria-label="Open navigation"
+          aria-expanded={mobileOpen}
+          onClick={() => setMobileOpen(true)}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Menu size={20} aria-hidden="true" />
+        </button>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-on-surface">Primeway</p>
+          <p className="truncate text-xs text-grey-500">Cleaning Management</p>
+        </div>
+      </header>
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -158,10 +298,11 @@ export function AdminSidebar() {
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed bottom-0 left-0 top-0 z-50 w-64 transform transition-transform duration-300 lg:hidden",
+          "fixed bottom-0 left-0 top-0 z-50 w-64 max-w-[80vw] transform transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
         aria-label="Mobile admin navigation"
+        aria-hidden={!mobileOpen}
       >
         <div className="relative h-full">
           <button

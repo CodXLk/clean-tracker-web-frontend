@@ -10,11 +10,12 @@ import { cn } from "@/lib/utils/cn";
 const assignmentSchema = z.object({
   date: z.string().min(1, "Date required"),
   time: z.string().min(1, "Time required"),
+  taskName: z.string().min(1, "Task name required"),
   site: z.string().min(1, "Site required"),
+  floor: z.string().min(1, "Floor required"),
   assignmentType: z.string().min(1, "Assignment type required"),
   area: z.string().min(1, "Area required"),
   durationHours: z.number().min(0.5, "Minimum 0.5 hours").max(24, "Maximum 24 hours"),
-  repeat: z.boolean(),
   durationType: z.string(),
   durationCount: z.number().min(1),
   description: z.string(),
@@ -22,6 +23,33 @@ const assignmentSchema = z.object({
 });
 
 export type AssignmentFormData = z.infer<typeof assignmentSchema>;
+
+const SITE_OPTIONS = ["Site A", "Site B", "Site C", "Site D"] as const;
+
+const FLOOR_OPTIONS = [
+  "Ground Floor",
+  "Floor 1",
+  "Floor 2",
+  "Floor 3",
+  "Floor 4",
+  "Floor 5",
+  "Basement",
+] as const;
+
+const AREA_OPTIONS = [
+  "Offices",
+  "Lobby",
+  "Restrooms",
+  "Break Room",
+  "Conference Room",
+  "Reception",
+  "Corridors",
+  "Parking Area",
+  "Stairwells",
+  "Warehouse",
+] as const;
+
+const ASSIGNMENT_TYPE_OPTIONS = ["General Task", "Periodical Task", "Work Orders"] as const;
 
 interface CleanerOption {
   id: string;
@@ -78,11 +106,12 @@ export function NewAssignmentModal({
     defaultValues: {
       date: defaultDate ? formatDateForInput(defaultDate) : "",
       time: defaultTime,
+      taskName: "",
       site: "",
+      floor: "",
       assignmentType: "",
       area: "",
       durationHours: 1,
-      repeat: false,
       durationType: "Daily",
       durationCount: 1,
       description: "",
@@ -90,7 +119,8 @@ export function NewAssignmentModal({
     },
   });
 
-  const repeatEnabled = watch("repeat");
+  const assignmentType = watch("assignmentType");
+  const isPeriodical = assignmentType === "Periodical Task";
   const selectedCleaners = watch("selectedCleaners");
 
   useEffect(() => {
@@ -98,11 +128,12 @@ export function NewAssignmentModal({
       reset({
         date: defaultDate ? formatDateForInput(defaultDate) : "",
         time: defaultTime,
+        taskName: "",
         site: "",
+        floor: "",
         assignmentType: "",
         area: "",
         durationHours: 1,
-        repeat: false,
         durationType: "Daily",
         durationCount: 1,
         description: "",
@@ -236,27 +267,73 @@ export function NewAssignmentModal({
               </div>
             </div>
 
-            {/* Row 2: Site */}
+            {/* Row 2: Task Name */}
             <div className="mt-4 flex flex-col gap-1.5">
-              <label htmlFor="assign-site" className="text-sm font-medium text-on-surface">
-                Site
+              <label htmlFor="assign-task-name" className="text-sm font-medium text-on-surface">
+                Task Name
               </label>
               <input
-                id="assign-site"
+                id="assign-task-name"
                 type="text"
-                placeholder="e.g., Site A"
-                {...register("site")}
+                placeholder="e.g., Weekly office cleaning"
+                {...register("taskName")}
                 className={cn(
                   "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                  errors.site ? "border-danger" : "border-grey-300",
+                  errors.taskName ? "border-danger" : "border-grey-300",
                 )}
               />
-              {errors.site && (
-                <p className="text-xs text-danger">{errors.site.message}</p>
+              {errors.taskName && (
+                <p className="text-xs text-danger">{errors.taskName.message}</p>
               )}
             </div>
 
-            {/* Row 3: Assignment Type + Area */}
+            {/* Row 3: Select Site + Select Floor */}
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="assign-site" className="text-sm font-medium text-on-surface">
+                  Select Site
+                </label>
+                <select
+                  id="assign-site"
+                  {...register("site")}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
+                    errors.site ? "border-danger" : "border-grey-300",
+                  )}
+                >
+                  <option value="">Select site</option>
+                  {SITE_OPTIONS.map((site) => (
+                    <option key={site} value={site}>{site}</option>
+                  ))}
+                </select>
+                {errors.site && (
+                  <p className="text-xs text-danger">{errors.site.message}</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="assign-floor" className="text-sm font-medium text-on-surface">
+                  Select Floor
+                </label>
+                <select
+                  id="assign-floor"
+                  {...register("floor")}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
+                    errors.floor ? "border-danger" : "border-grey-300",
+                  )}
+                >
+                  <option value="">Select floor</option>
+                  {FLOOR_OPTIONS.map((floor) => (
+                    <option key={floor} value={floor}>{floor}</option>
+                  ))}
+                </select>
+                {errors.floor && (
+                  <p className="text-xs text-danger">{errors.floor.message}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Row 4: Assignment Type + Select Area */}
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="assign-type" className="text-sm font-medium text-on-surface">
@@ -271,10 +348,9 @@ export function NewAssignmentModal({
                   )}
                 >
                   <option value="">Select type</option>
-                  <option value="General Cleaning">General Cleaning</option>
-                  <option value="Window Washing">Window Washing</option>
-                  <option value="Deep Clean">Deep Clean</option>
-                  <option value="Inspection">Inspection</option>
+                  {ASSIGNMENT_TYPE_OPTIONS.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
                 {errors.assignmentType && (
                   <p className="text-xs text-danger">{errors.assignmentType.message}</p>
@@ -282,25 +358,28 @@ export function NewAssignmentModal({
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="assign-area" className="text-sm font-medium text-on-surface">
-                  Area
+                  Select Area
                 </label>
-                <input
+                <select
                   id="assign-area"
-                  type="text"
-                  placeholder="e.g., Floor 3 - Offices"
                   {...register("area")}
                   className={cn(
                     "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
                     errors.area ? "border-danger" : "border-grey-300",
                   )}
-                />
+                >
+                  <option value="">Select area</option>
+                  {AREA_OPTIONS.map((area) => (
+                    <option key={area} value={area}>{area}</option>
+                  ))}
+                </select>
                 {errors.area && (
                   <p className="text-xs text-danger">{errors.area.message}</p>
                 )}
               </div>
             </div>
 
-            {/* Row 4: Duration hours */}
+            {/* Row 5: Duration hours */}
             <div className="mt-4 flex flex-col gap-1.5">
               <label htmlFor="assign-duration" className="text-sm font-medium text-on-surface">
                 Duration (hours)
@@ -330,35 +409,8 @@ export function NewAssignmentModal({
               )}
             </div>
 
-            {/* Row 5: Repeat toggle */}
-            <div className="mt-4 flex items-center gap-3">
-              <Controller
-                name="repeat"
-                control={control}
-                render={({ field }) => (
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={field.value}
-                    onClick={() => field.onChange(!field.value)}
-                    className={cn(
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                      field.value
-                        ? "border-primary bg-primary text-white"
-                        : "border-grey-300 bg-white",
-                    )}
-                  >
-                    {field.value && <Check size={12} aria-hidden="true" />}
-                  </button>
-                )}
-              />
-              <label className="text-sm font-medium text-on-surface select-none cursor-pointer">
-                Repeat
-              </label>
-            </div>
-
-            {/* Row 6: Duration type + count (shown when repeat=true) */}
-            {repeatEnabled && (
+            {/* Row 6: Duration type + count (shown when Assignment Type is "Periodical Task") */}
+            {isPeriodical && (
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="assign-duration-type" className="text-sm font-medium text-on-surface">

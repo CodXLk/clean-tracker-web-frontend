@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalAuMobileSchema } from "@/lib/validators/phone";
 
 // Roles mirror the Spring Boot `Role` enum.
 export const ROLES = [
@@ -38,20 +39,25 @@ export const UserSchema = z.object({
 
 export const UserListSchema = z.array(UserSchema);
 
+// Dynamic role option returned by GET /api/v1/roles. SUPER_ADMIN is excluded server-side.
+export const RoleOptionSchema = z.object({
+  name: RoleSchema,
+  label: z.string(),
+});
+
+export const RoleOptionListSchema = z.array(RoleOptionSchema);
+export type RoleOption = z.infer<typeof RoleOptionSchema>;
+
 // Outbound create payload — matches CreateUserRequest.
-export const CreateUserSchema = z
-  .object({
-    firstName: z.string().min(1, "First name is required").max(50),
-    lastName: z.string().max(50).optional().or(z.literal("")),
-    email: z.string().email("A valid email is required"),
-    phoneNumber: z.string().max(30).optional().or(z.literal("")),
-    role: RoleSchema,
-    companyId: z.string().uuid("Select a client company").optional(),
-  })
-  .refine((data) => data.role !== "CLIENT" || !!data.companyId, {
-    message: "A client must be linked to a client company",
-    path: ["companyId"],
-  });
+// CLIENT is not a valid value here: client users are only provisioned via Client Management,
+// never through this manual invite form (the Role dropdown never offers it).
+export const CreateUserSchema = z.object({
+  firstName: z.string().min(1, "First name is required").max(50),
+  lastName: z.string().max(50).optional().or(z.literal("")),
+  email: z.string().email("A valid email is required"),
+  phoneNumber: optionalAuMobileSchema,
+  role: RoleSchema,
+});
 
 export const UpdateUserSchema = z.object({
   firstName: z.string().min(1).max(50).optional(),
