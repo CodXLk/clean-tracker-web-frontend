@@ -15,11 +15,12 @@ export const ClientSchema = z.object({
 export const ClientListSchema = z.array(ClientSchema);
 
 // Outbound create/update payload — matches Create/UpdateClientRequest.
+// Email is required: creating a client also provisions a CLIENT-role login for them.
 export const ClientFormSchema = z.object({
   clientCompanyId: z.string().uuid("Please select a client-company"),
   name: z.string().min(2, "Name must be at least 2 characters").max(120, "Name is too long"),
   contactNumber: z.string().max(30, "Contact number is too long").optional().or(z.literal("")),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
 });
 
 export type Client = z.infer<typeof ClientSchema>;

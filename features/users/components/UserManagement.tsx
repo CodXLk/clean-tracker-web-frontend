@@ -127,7 +127,7 @@ export function UserManagement() {
       </div>
 
       {allowedRoles.length > 0 && (
-        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} allowedRoles={allowedRoles} />
+        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} />
       )}
     </div>
   );

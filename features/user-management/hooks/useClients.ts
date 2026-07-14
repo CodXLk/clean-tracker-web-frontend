@@ -9,6 +9,7 @@ import {
   type Client,
   type ClientFormInput,
 } from "@/features/user-management/schemas/client.schema";
+import { userKeys } from "@/features/users/hooks/userKeys";
 import { clientKeys, siteKeys } from "./keys";
 
 function toPayload(input: ClientFormInput): Record<string, unknown> {
@@ -44,7 +45,11 @@ export function useCreateClient() {
       const { data } = await clientApi.post(ENDPOINTS.clients.create, toPayload(input));
       return ClientSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientKeys.all }),
+    // Creating a client also provisions a CLIENT-role user, so the Users list may be stale too.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
   });
 }
 

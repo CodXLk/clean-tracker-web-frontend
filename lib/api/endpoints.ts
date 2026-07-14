@@ -32,6 +32,9 @@ export const ENDPOINTS = {
     create: "/sites",
     byId:   (id: string) => `/sites/${id}`,
   },
+  roles: {
+    list: "/roles",
+  },
   // These have no Spring Boot backend to mirror — the Next.js route handler *is*
   // the backend. Consumed by client components via clientApi ("/api" baseURL).
   inspections: {
@@ -91,5 +94,8 @@ export const BACKEND = {
     list:   "/api/v1/sites",
     create: "/api/v1/sites",
     byId:   (id: string) => `/api/v1/sites/${id}`,
+  },
+  roles: {
+    list: "/api/v1/roles",
   },
 } as const;

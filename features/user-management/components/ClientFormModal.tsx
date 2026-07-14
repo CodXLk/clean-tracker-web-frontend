@@ -80,7 +80,7 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
       description={
         isEdit
           ? "Update this client's details."
-          : "Select a client-company, then enter the client's details."
+          : "Select a client-company, then enter the client's details. They will receive an email with a temporary password and a setup link."
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -106,7 +106,13 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
         <TextField label="Client name" required error={errors.name?.message} {...register("name")} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField label="Contact number" error={errors.contactNumber?.message} {...register("contactNumber")} />
-          <TextField label="Email address" type="email" error={errors.email?.message} {...register("email")} />
+          <TextField
+            label="Email address"
+            type="email"
+            required
+            error={errors.email?.message}
+            {...register("email")}
+          />
         </div>
 
         {active.isError && (
