@@ -1,24 +1,65 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Plus, Pencil, Trash2, UserCog, Users } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { DataTable, type Column } from "./DataTable";
-import { RowActions } from "./RowActions";
+import { RowMenu } from "./RowMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
+import { AssignPeopleModal, type AssignOption } from "./AssignPeopleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
+import {
+  useSiteSupervisors,
+  useAssignSupervisors,
+  useSiteCleaners,
+  useAssignCleaners,
+} from "@/features/user-management/hooks/useSiteAssignments";
+import { useUsers } from "@/features/users/hooks/useUsers";
+import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import type { Site } from "@/features/user-management/schemas/site.schema";
+
+function personName(first?: string | null, last?: string | null): string {
+  return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
+}
 
 export function SiteManagement() {
   const query = useSites();
   const deleteMutation = useDeleteSite();
 
+  const usersQuery = useUsers();
+  const cleanersQuery = useCleaners();
+
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
   const [deleting, setDeleting] = useState<Site | null>(null);
+  const [supervisorsSite, setSupervisorsSite] = useState<Site | null>(null);
+  const [cleanersSite, setCleanersSite] = useState<Site | null>(null);
+
+  const siteSupervisors = useSiteSupervisors(supervisorsSite?.id);
+  const assignSupervisors = useAssignSupervisors();
+  const siteCleaners = useSiteCleaners(cleanersSite?.id);
+  const assignCleaners = useAssignCleaners();
+
+  const supervisorOptions: AssignOption[] = useMemo(
+    () =>
+      (usersQuery.data ?? [])
+        .filter((u) => u.role === "SUPERVISOR")
+        .map((u) => ({ id: u.id, label: personName(u.firstName, u.lastName), sublabel: u.email })),
+    [usersQuery.data],
+  );
+
+  const cleanerOptions: AssignOption[] = useMemo(
+    () =>
+      (cleanersQuery.data ?? []).map((c) => ({
+        id: c.id,
+        label: personName(c.firstName, c.lastName),
+        sublabel: c.email ?? undefined,
+      })),
+    [cleanersQuery.data],
+  );
 
   const rows = useMemo(() => {
     const list = query.data ?? [];
@@ -90,13 +131,37 @@ export function SiteManagement() {
       headerClassName: "text-right",
       cellClassName: "text-right",
       cell: (s) => (
-        <RowActions
-          onEdit={() => {
-            setEditing(s);
-            setFormOpen(true);
-          }}
-          onDelete={() => setDeleting(s)}
-        />
+        <div className="flex justify-end">
+          <RowMenu
+            label={`Actions for ${s.name}`}
+            items={[
+              {
+                label: "Assign Supervisors",
+                icon: UserCog,
+                onClick: () => setSupervisorsSite(s),
+              },
+              {
+                label: "Assign Cleaners",
+                icon: Users,
+                onClick: () => setCleanersSite(s),
+              },
+              {
+                label: "Edit",
+                icon: Pencil,
+                onClick: () => {
+                  setEditing(s);
+                  setFormOpen(true);
+                },
+              },
+              {
+                label: "Delete",
+                icon: Trash2,
+                destructive: true,
+                onClick: () => setDeleting(s),
+              },
+            ]}
+          />
+        </div>
       ),
     },
   ];
@@ -109,6 +174,22 @@ export function SiteManagement() {
   function confirmDelete() {
     if (!deleting) return;
     deleteMutation.mutate(deleting.id, { onSuccess: () => setDeleting(null) });
+  }
+
+  function handleSaveSupervisors(userIds: string[]) {
+    if (!supervisorsSite) return;
+    assignSupervisors.mutate(
+      { siteId: supervisorsSite.id, userIds },
+      { onSuccess: () => setSupervisorsSite(null) },
+    );
+  }
+
+  function handleSaveCleaners(cleanerIds: string[]) {
+    if (!cleanersSite) return;
+    assignCleaners.mutate(
+      { siteId: cleanersSite.id, cleanerIds },
+      { onSuccess: () => setCleanersSite(null) },
+    );
   }
 
   return (
@@ -149,6 +230,40 @@ export function SiteManagement() {
           setDeleting(null);
           deleteMutation.reset();
         }}
+      />
+
+      <AssignPeopleModal
+        open={!!supervisorsSite}
+        onClose={() => {
+          setSupervisorsSite(null);
+          assignSupervisors.reset();
+        }}
+        title="Assign Supervisors"
+        description={supervisorsSite ? `Supervisors for “${supervisorsSite.name}”` : undefined}
+        options={supervisorOptions}
+        initialSelectedIds={(siteSupervisors.data ?? []).map((u) => u.id)}
+        isLoading={siteSupervisors.isLoading || usersQuery.isLoading}
+        isSaving={assignSupervisors.isPending}
+        error={assignSupervisors.isError ? getErrorMessage(assignSupervisors.error) : undefined}
+        emptyMessage="No supervisors exist yet. Invite supervisors from User Management first."
+        onSave={handleSaveSupervisors}
+      />
+
+      <AssignPeopleModal
+        open={!!cleanersSite}
+        onClose={() => {
+          setCleanersSite(null);
+          assignCleaners.reset();
+        }}
+        title="Assign Cleaners"
+        description={cleanersSite ? `Cleaners for “${cleanersSite.name}”` : undefined}
+        options={cleanerOptions}
+        initialSelectedIds={(siteCleaners.data ?? []).map((c) => c.id)}
+        isLoading={siteCleaners.isLoading || cleanersQuery.isLoading}
+        isSaving={assignCleaners.isPending}
+        error={assignCleaners.isError ? getErrorMessage(assignCleaners.error) : undefined}
+        emptyMessage="No cleaners exist yet. Invite cleaners from User Management first."
+        onSave={handleSaveCleaners}
       />
     </div>
   );
