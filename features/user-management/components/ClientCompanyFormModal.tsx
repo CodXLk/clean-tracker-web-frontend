@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import {
@@ -35,6 +36,7 @@ export function ClientCompanyFormModal({ open, onClose, company }: ClientCompany
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<ClientCompanyFormInput>({
     resolver: zodResolver(ClientCompanyFormSchema),
@@ -84,7 +86,20 @@ export function ClientCompanyFormModal({ open, onClose, company }: ClientCompany
           {...register("name")}
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="Contact number" error={errors.contactNumber?.message} {...register("contactNumber")} />
+          <Controller
+            control={control}
+            name="contactNumber"
+            render={({ field }) => (
+              <PhoneNumberField
+                label="Contact number"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                error={errors.contactNumber?.message}
+              />
+            )}
+          />
           <TextField label="Email address" type="email" error={errors.email?.message} {...register("email")} />
         </div>
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalAuMobileSchema } from "@/lib/validators/phone";
 
 // Mirrors backend SiteResponse.
 export const SiteSchema = z.object({
@@ -24,7 +25,7 @@ export const SiteFormSchema = z.object({
   clientId: z.string().uuid("Please select a client"),
   name: z.string().min(2, "Name must be at least 2 characters").max(150, "Name is too long"),
   contactPersonName: z.string().max(120, "Name is too long").optional().or(z.literal("")),
-  contactNumber: z.string().max(30, "Contact number is too long").optional().or(z.literal("")),
+  contactNumber: optionalAuMobileSchema,
   googleMapsLink: z.string().max(2048, "Link is too long").optional().or(z.literal("")),
   streetAddress: z.string().max(1024, "Address is too long").optional().or(z.literal("")),
 });

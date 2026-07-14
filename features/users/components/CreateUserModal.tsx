@@ -1,9 +1,10 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
 import { CreateUserSchema, type CreateUserInput } from "@/features/users/schemas/user.schema";
 import { useCreateUser, getErrorMessage } from "@/features/users/hooks/useCreateUser";
@@ -22,6 +23,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<CreateUserInput>({
     resolver: zodResolver(CreateUserSchema),
@@ -82,7 +84,20 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
           <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
         </div>
         <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
-        <TextField label="Phone number" error={errors.phoneNumber?.message} {...register("phoneNumber")} />
+        <Controller
+          control={control}
+          name="phoneNumber"
+          render={({ field }) => (
+            <PhoneNumberField
+              label="Phone number"
+              value={field.value ?? ""}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              name={field.name}
+              error={errors.phoneNumber?.message}
+            />
+          )}
+        />
 
         {createUser.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { SearchableSelect, type SelectOption } from "./SearchableSelect";
@@ -173,7 +174,20 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             error={errors.contactPersonName?.message}
             {...register("contactPersonName")}
           />
-          <TextField label="Contact number" error={errors.contactNumber?.message} {...register("contactNumber")} />
+          <Controller
+            control={control}
+            name="contactNumber"
+            render={({ field }) => (
+              <PhoneNumberField
+                label="Contact number"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                error={errors.contactNumber?.message}
+              />
+            )}
+          />
         </div>
 
         <TextField
