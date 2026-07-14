@@ -106,7 +106,20 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
 
         <TextField label="Client name" required error={errors.name?.message} {...register("name")} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="Contact number" error={errors.contactNumber?.message} {...register("contactNumber")} />
+          <Controller
+            control={control}
+            name="contactNumber"
+            render={({ field }) => (
+              <PhoneNumberField
+                label="Contact number"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                name={field.name}
+                error={errors.contactNumber?.message}
+              />
+            )}
+          />
           <TextField
             label="Email address"
             type="email"

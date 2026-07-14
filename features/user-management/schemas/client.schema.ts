@@ -20,7 +20,7 @@ export const ClientListSchema = z.array(ClientSchema);
 export const ClientFormSchema = z.object({
   clientCompanyId: z.string().uuid("Please select a client-company"),
   name: z.string().min(2, "Name must be at least 2 characters").max(120, "Name is too long"),
-  contactNumber: z.string().max(30, "Contact number is too long").optional().or(z.literal("")),
+  contactNumber: optionalAuMobileSchema,
   email: z.string().min(1, "Email is required").email("Invalid email address"),
 });
 
