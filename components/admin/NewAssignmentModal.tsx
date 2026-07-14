@@ -2,77 +2,39 @@
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { X, Search, Check } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
+import { useSites } from "@/features/user-management/hooks/useSites";
+import { useFloors } from "@/features/user-management/hooks/useFloors";
+import { useAreas } from "@/features/user-management/hooks/useAreas";
+import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
+import { useCreateAssignment } from "@/features/workforce/hooks/useTaskAssignments";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import {
+  AssignmentFormSchema,
+  ASSIGNMENT_TYPE_LABELS,
+  RECURRENCE_TYPE_LABELS,
+  type AssignmentFormInput,
+  type AssignmentType,
+  type RecurrenceType,
+} from "@/features/workforce/schemas/assignment.schema";
 
-const assignmentSchema = z.object({
-  date: z.string().min(1, "Date required"),
-  time: z.string().min(1, "Time required"),
-  taskName: z.string().min(1, "Task name required"),
-  site: z.string().min(1, "Site required"),
-  floor: z.string().min(1, "Floor required"),
-  assignmentType: z.string().min(1, "Assignment type required"),
-  area: z.string().min(1, "Area required"),
-  durationHours: z.number().min(0.5, "Minimum 0.5 hours").max(24, "Maximum 24 hours"),
-  durationType: z.string(),
-  durationCount: z.number().min(1),
-  description: z.string(),
-  selectedCleaners: z.array(z.string()),
-});
+export type AssignmentFormData = AssignmentFormInput;
 
-export type AssignmentFormData = z.infer<typeof assignmentSchema>;
-
-const SITE_OPTIONS = ["Site A", "Site B", "Site C", "Site D"] as const;
-
-const FLOOR_OPTIONS = [
-  "Ground Floor",
-  "Floor 1",
-  "Floor 2",
-  "Floor 3",
-  "Floor 4",
-  "Floor 5",
-  "Basement",
-] as const;
-
-const AREA_OPTIONS = [
-  "Offices",
-  "Lobby",
-  "Restrooms",
-  "Break Room",
-  "Conference Room",
-  "Reception",
-  "Corridors",
-  "Parking Area",
-  "Stairwells",
-  "Warehouse",
-] as const;
-
-const ASSIGNMENT_TYPE_OPTIONS = ["General Task", "Periodical Task", "Work Orders"] as const;
-
-interface CleanerOption {
-  id: string;
-  initials: string;
-  name: string;
-  site: string;
-  tasks: number;
-  gradientFrom: string;
-  gradientTo: string;
-}
-
-const CLEANERS: CleanerOption[] = [
-  { id: "jd", initials: "JD", name: "Jane Doe",      site: "Site A", tasks: 5, gradientFrom: "#2B7FFF", gradientTo: "#155DFC" },
-  { id: "js", initials: "JS", name: "John Smith",    site: "Site A", tasks: 7, gradientFrom: "#AD46FF", gradientTo: "#9810FA" },
-  { id: "mg", initials: "MG", name: "Maria Garcia",  site: "Site B", tasks: 4, gradientFrom: "#F6339A", gradientTo: "#E60076" },
-  { id: "cw", initials: "CW", name: "Chen Wei",      site: "Site C", tasks: 6, gradientFrom: "#00BC7D", gradientTo: "#009966" },
-  { id: "sj", initials: "SJ", name: "Sarah Johnson", site: "Site B", tasks: 8, gradientFrom: "#FE9A00", gradientTo: "#E17100" },
+const CLEANER_GRADIENTS: Array<{ from: string; to: string }> = [
+  { from: "#2B7FFF", to: "#155DFC" },
+  { from: "#AD46FF", to: "#9810FA" },
+  { from: "#F6339A", to: "#E60076" },
+  { from: "#00BC7D", to: "#009966" },
+  { from: "#FE9A00", to: "#E17100" },
 ];
 
 interface NewAssignmentModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit?: (data: AssignmentFormData) => void;
+  onCreated?: () => void;
   defaultDate?: Date;
   defaultTime?: string;
 }
@@ -84,14 +46,45 @@ function formatDateForInput(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function cleanerName(c: { firstName?: string | null; lastName?: string | null }): string {
+  return [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || "Unnamed cleaner";
+}
+
+function cleanerInitials(c: { firstName?: string | null; lastName?: string | null }): string {
+  const first = c.firstName?.trim()?.[0] ?? "";
+  const last = c.lastName?.trim()?.[0] ?? "";
+  return (first + last).toUpperCase() || "?";
+}
+
+function buildDefaults(defaultDate?: Date, defaultTime = ""): AssignmentFormInput {
+  return {
+    date: defaultDate ? formatDateForInput(defaultDate) : "",
+    time: defaultTime,
+    name: "",
+    siteId: "",
+    floorId: "",
+    areaId: "",
+    assignmentType: "GENERAL_TASK",
+    durationHours: 1,
+    description: "",
+    cleanerIds: [],
+    recurrenceType: "DAILY",
+    recurrenceCount: 1,
+  };
+}
+
 export function NewAssignmentModal({
   open,
   onClose,
-  onSubmit,
+  onCreated,
   defaultDate,
   defaultTime = "",
 }: NewAssignmentModalProps) {
   const [cleanerSearch, setCleanerSearch] = useState("");
+
+  const sitesQuery = useSites();
+  const cleanersQuery = useCleaners();
+  const createMutation = useCreateAssignment();
 
   const {
     register,
@@ -101,46 +94,55 @@ export function NewAssignmentModal({
     setValue,
     reset,
     formState: { errors },
-  } = useForm<AssignmentFormData>({
-    resolver: zodResolver(assignmentSchema),
-    defaultValues: {
-      date: defaultDate ? formatDateForInput(defaultDate) : "",
-      time: defaultTime,
-      taskName: "",
-      site: "",
-      floor: "",
-      assignmentType: "",
-      area: "",
-      durationHours: 1,
-      durationType: "Daily",
-      durationCount: 1,
-      description: "",
-      selectedCleaners: [],
-    },
+  } = useForm<AssignmentFormInput>({
+    resolver: zodResolver(AssignmentFormSchema),
+    defaultValues: buildDefaults(defaultDate, defaultTime),
   });
 
+  const siteId = watch("siteId");
+  const floorId = watch("floorId");
   const assignmentType = watch("assignmentType");
-  const isPeriodical = assignmentType === "Periodical Task";
-  const selectedCleaners = watch("selectedCleaners");
+  const selectedCleaners = watch("cleanerIds");
+  const isPeriodical = assignmentType === "PERIODICAL_TASK";
+
+  const floorsQuery = useFloors(siteId || undefined);
+  const areasQuery = useAreas(floorId || undefined);
+
+  const siteOptions: SelectOption[] = useMemo(
+    () => (sitesQuery.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+    [sitesQuery.data],
+  );
+  const floorOptions: SelectOption[] = useMemo(
+    () => (floorsQuery.data ?? []).map((f) => ({ value: f.id, label: f.name })),
+    [floorsQuery.data],
+  );
+  const areaOptions: SelectOption[] = useMemo(
+    () => (areasQuery.data ?? []).map((a) => ({ value: a.id, label: a.name })),
+    [areasQuery.data],
+  );
+  const assignmentTypeOptions: SelectOption[] = useMemo(
+    () =>
+      (Object.keys(ASSIGNMENT_TYPE_LABELS) as AssignmentType[]).map((t) => ({
+        value: t,
+        label: ASSIGNMENT_TYPE_LABELS[t],
+      })),
+    [],
+  );
+
+  const cleaners = cleanersQuery.data ?? [];
+  const filteredCleaners = cleaners.filter((c) =>
+    cleanerName(c).toLowerCase().includes(cleanerSearch.toLowerCase()),
+  );
+  const allFilteredSelected =
+    filteredCleaners.length > 0 && filteredCleaners.every((c) => selectedCleaners?.includes(c.id));
 
   useEffect(() => {
     if (open) {
-      reset({
-        date: defaultDate ? formatDateForInput(defaultDate) : "",
-        time: defaultTime,
-        taskName: "",
-        site: "",
-        floor: "",
-        assignmentType: "",
-        area: "",
-        durationHours: 1,
-        durationType: "Daily",
-        durationCount: 1,
-        description: "",
-        selectedCleaners: [],
-      });
+      reset(buildDefaults(defaultDate, defaultTime));
       setCleanerSearch("");
+      createMutation.reset();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate, defaultTime, reset]);
 
   const handleClose = useCallback(() => {
@@ -155,17 +157,21 @@ export function NewAssignmentModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, handleClose]);
 
-  function handleFormSubmit(data: AssignmentFormData) {
-    onSubmit?.(data);
-    handleClose();
+  function handleFormSubmit(data: AssignmentFormInput) {
+    createMutation.mutate(data, {
+      onSuccess: () => {
+        onCreated?.();
+        handleClose();
+      },
+    });
   }
 
   function toggleCleaner(id: string) {
     const current = selectedCleaners ?? [];
     if (current.includes(id)) {
-      setValue("selectedCleaners", current.filter((c) => c !== id));
+      setValue("cleanerIds", current.filter((c) => c !== id), { shouldValidate: true });
     } else {
-      setValue("selectedCleaners", [...current, id]);
+      setValue("cleanerIds", [...current, id], { shouldValidate: true });
     }
   }
 
@@ -173,25 +179,14 @@ export function NewAssignmentModal({
     const allIds = filteredCleaners.map((c) => c.id);
     const allSelected = allIds.every((id) => selectedCleaners?.includes(id));
     if (allSelected) {
-      setValue(
-        "selectedCleaners",
-        (selectedCleaners ?? []).filter((id) => !allIds.includes(id)),
-      );
+      setValue("cleanerIds", (selectedCleaners ?? []).filter((id) => !allIds.includes(id)), {
+        shouldValidate: true,
+      });
     } else {
-      const existing = selectedCleaners ?? [];
-      const merged = Array.from(new Set([...existing, ...allIds]));
-      setValue("selectedCleaners", merged);
+      const merged = Array.from(new Set([...(selectedCleaners ?? []), ...allIds]));
+      setValue("cleanerIds", merged, { shouldValidate: true });
     }
   }
-
-  const filteredCleaners = CLEANERS.filter((c) =>
-    c.name.toLowerCase().includes(cleanerSearch.toLowerCase()) ||
-    c.site.toLowerCase().includes(cleanerSearch.toLowerCase()),
-  );
-
-  const allFilteredSelected =
-    filteredCleaners.length > 0 &&
-    filteredCleaners.every((c) => selectedCleaners?.includes(c.id));
 
   if (!open) return null;
 
@@ -202,16 +197,9 @@ export function NewAssignmentModal({
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={handleClose}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} aria-hidden="true" />
 
-      {/* Modal card */}
       <div className="relative z-10 w-full max-w-2xl rounded-3xl bg-surface shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 id="modal-title" className="text-lg font-medium text-primary">
             Create New Assignment
@@ -226,7 +214,6 @@ export function NewAssignmentModal({
           </button>
         </div>
 
-        {/* Scrollable form body */}
         <form onSubmit={handleSubmit(handleFormSubmit)}>
           <div className="max-h-[70vh] overflow-y-auto px-6 pb-2">
             {/* Row 1: Date + Time */}
@@ -244,9 +231,7 @@ export function NewAssignmentModal({
                     errors.date ? "border-danger" : "border-grey-300",
                   )}
                 />
-                {errors.date && (
-                  <p className="text-xs text-danger">{errors.date.message}</p>
-                )}
+                {errors.date && <p className="text-xs text-danger">{errors.date.message}</p>}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="assign-time" className="text-sm font-medium text-on-surface">
@@ -261,9 +246,7 @@ export function NewAssignmentModal({
                     errors.time ? "border-danger" : "border-grey-300",
                   )}
                 />
-                {errors.time && (
-                  <p className="text-xs text-danger">{errors.time.message}</p>
-                )}
+                {errors.time && <p className="text-xs text-danger">{errors.time.message}</p>}
               </div>
             </div>
 
@@ -276,107 +259,91 @@ export function NewAssignmentModal({
                 id="assign-task-name"
                 type="text"
                 placeholder="e.g., Weekly office cleaning"
-                {...register("taskName")}
+                {...register("name")}
                 className={cn(
                   "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                  errors.taskName ? "border-danger" : "border-grey-300",
+                  errors.name ? "border-danger" : "border-grey-300",
                 )}
               />
-              {errors.taskName && (
-                <p className="text-xs text-danger">{errors.taskName.message}</p>
-              )}
+              {errors.name && <p className="text-xs text-danger">{errors.name.message}</p>}
             </div>
 
-            {/* Row 3: Select Site + Select Floor */}
+            {/* Row 3: Site + Floor (dependent) */}
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="assign-site" className="text-sm font-medium text-on-surface">
-                  Select Site
-                </label>
-                <select
-                  id="assign-site"
-                  {...register("site")}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                    errors.site ? "border-danger" : "border-grey-300",
-                  )}
-                >
-                  <option value="">Select site</option>
-                  {SITE_OPTIONS.map((site) => (
-                    <option key={site} value={site}>{site}</option>
-                  ))}
-                </select>
-                {errors.site && (
-                  <p className="text-xs text-danger">{errors.site.message}</p>
+              <Controller
+                name="siteId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Select Site"
+                    options={siteOptions}
+                    value={field.value || null}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      setValue("floorId", "");
+                      setValue("areaId", "");
+                    }}
+                    loading={sitesQuery.isLoading}
+                    error={errors.siteId?.message}
+                    placeholder="Select site"
+                  />
                 )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="assign-floor" className="text-sm font-medium text-on-surface">
-                  Select Floor
-                </label>
-                <select
-                  id="assign-floor"
-                  {...register("floor")}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                    errors.floor ? "border-danger" : "border-grey-300",
-                  )}
-                >
-                  <option value="">Select floor</option>
-                  {FLOOR_OPTIONS.map((floor) => (
-                    <option key={floor} value={floor}>{floor}</option>
-                  ))}
-                </select>
-                {errors.floor && (
-                  <p className="text-xs text-danger">{errors.floor.message}</p>
+              />
+              <Controller
+                name="floorId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Select Floor"
+                    options={floorOptions}
+                    value={field.value || null}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      setValue("areaId", "");
+                    }}
+                    disabled={!siteId}
+                    loading={floorsQuery.isLoading && !!siteId}
+                    error={errors.floorId?.message}
+                    placeholder={siteId ? "Select floor" : "Select a site first"}
+                    emptyMessage="No floors for this site"
+                  />
                 )}
-              </div>
+              />
             </div>
 
-            {/* Row 4: Assignment Type + Select Area */}
+            {/* Row 4: Assignment Type + Area (dependent) */}
             <div className="mt-4 grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="assign-type" className="text-sm font-medium text-on-surface">
-                  Assignment Type
-                </label>
-                <select
-                  id="assign-type"
-                  {...register("assignmentType")}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                    errors.assignmentType ? "border-danger" : "border-grey-300",
-                  )}
-                >
-                  <option value="">Select type</option>
-                  {ASSIGNMENT_TYPE_OPTIONS.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-                {errors.assignmentType && (
-                  <p className="text-xs text-danger">{errors.assignmentType.message}</p>
+              <Controller
+                name="assignmentType"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Assignment Type"
+                    options={assignmentTypeOptions}
+                    value={field.value || null}
+                    onChange={(v) => field.onChange(v)}
+                    error={errors.assignmentType?.message}
+                    placeholder="Select type"
+                  />
                 )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="assign-area" className="text-sm font-medium text-on-surface">
-                  Select Area
-                </label>
-                <select
-                  id="assign-area"
-                  {...register("area")}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary",
-                    errors.area ? "border-danger" : "border-grey-300",
-                  )}
-                >
-                  <option value="">Select area</option>
-                  {AREA_OPTIONS.map((area) => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </select>
-                {errors.area && (
-                  <p className="text-xs text-danger">{errors.area.message}</p>
+              />
+              <Controller
+                name="areaId"
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Select Area"
+                    options={areaOptions}
+                    value={field.value || null}
+                    onChange={(v) => field.onChange(v)}
+                    disabled={!floorId}
+                    loading={areasQuery.isLoading && !!floorId}
+                    error={errors.areaId?.message}
+                    placeholder={floorId ? "Select area" : "Select a floor first"}
+                    emptyMessage="No areas for this floor"
+                  />
                 )}
-              </div>
+              />
             </div>
 
             {/* Row 5: Duration hours */}
@@ -409,42 +376,50 @@ export function NewAssignmentModal({
               )}
             </div>
 
-            {/* Row 6: Duration type + count (shown when Assignment Type is "Periodical Task") */}
+            {/* Row 6: Recurrence (Periodical Task only) */}
             {isPeriodical && (
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="assign-duration-type" className="text-sm font-medium text-on-surface">
-                    Duration Type
+                  <label htmlFor="assign-recurrence-type" className="text-sm font-medium text-on-surface">
+                    Recurrence Type
                   </label>
                   <select
-                    id="assign-duration-type"
-                    {...register("durationType")}
+                    id="assign-recurrence-type"
+                    {...register("recurrenceType")}
                     className="rounded-xl border border-grey-300 px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
                   >
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly</option>
-                    <option value="Monthly">Monthly</option>
+                    {(Object.keys(RECURRENCE_TYPE_LABELS) as RecurrenceType[]).map((r) => (
+                      <option key={r} value={r}>
+                        {RECURRENCE_TYPE_LABELS[r]}
+                      </option>
+                    ))}
                   </select>
+                  {errors.recurrenceType && (
+                    <p className="text-xs text-danger">{errors.recurrenceType.message}</p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="assign-duration-count" className="text-sm font-medium text-on-surface">
-                    Duration count
+                  <label htmlFor="assign-recurrence-count" className="text-sm font-medium text-on-surface">
+                    Recurrence Count
                   </label>
                   <Controller
-                    name="durationCount"
+                    name="recurrenceCount"
                     control={control}
                     render={({ field }) => (
                       <input
-                        id="assign-duration-count"
+                        id="assign-recurrence-count"
                         type="number"
                         min="1"
                         placeholder="1"
-                        value={field.value}
+                        value={field.value ?? 1}
                         onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 1)}
                         className="rounded-xl border border-grey-300 px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
                       />
                     )}
                   />
+                  {errors.recurrenceCount && (
+                    <p className="text-xs text-danger">{errors.recurrenceCount.message}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -467,7 +442,7 @@ export function NewAssignmentModal({
               <div className="mb-3 flex items-center gap-3">
                 <span className="text-sm font-medium text-on-surface">Select Cleaner</span>
                 <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                  {CLEANERS.length} available
+                  {cleanersQuery.isLoading ? "Loading…" : `${cleaners.length} available`}
                 </span>
                 <div className="ml-auto flex items-center gap-2 rounded-xl border border-grey-300 px-3 py-1.5">
                   <Search size={14} className="text-grey-500" aria-hidden="true" />
@@ -482,82 +457,87 @@ export function NewAssignmentModal({
                 </div>
               </div>
 
-              {/* Select All */}
-              <div className="mb-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={allFilteredSelected}
-                  onClick={toggleSelectAll}
-                  className={cn(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                    allFilteredSelected
-                      ? "border-primary bg-primary text-white"
-                      : "border-grey-300 bg-white",
-                  )}
-                >
-                  {allFilteredSelected && <Check size={10} aria-hidden="true" />}
-                </button>
-                <span className="text-xs text-grey-500 select-none cursor-pointer">
-                  Select All
-                </span>
-              </div>
+              {filteredCleaners.length > 0 && (
+                <div className="mb-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={allFilteredSelected}
+                    onClick={toggleSelectAll}
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      allFilteredSelected
+                        ? "border-primary bg-primary text-white"
+                        : "border-grey-300 bg-white",
+                    )}
+                  >
+                    {allFilteredSelected && <Check size={10} aria-hidden="true" />}
+                  </button>
+                  <span className="text-xs text-grey-500 select-none">Select All</span>
+                </div>
+              )}
 
-              {/* Cleaner grid */}
-              <div className="grid grid-cols-2 gap-2">
-                {filteredCleaners.map((cleaner) => {
-                  const isSelected = selectedCleaners?.includes(cleaner.id) ?? false;
-                  return (
-                    <button
-                      key={cleaner.id}
-                      type="button"
-                      onClick={() => toggleCleaner(cleaner.id)}
-                      aria-pressed={isSelected}
-                      className={cn(
-                        "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                        isSelected
-                          ? "border-primary bg-primary/5 ring-2 ring-primary"
-                          : "border-white/30 bg-white/60 hover:border-grey-300",
-                      )}
-                    >
-                      {/* Avatar with online dot */}
-                      <div className="relative shrink-0">
-                        <div
-                          className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold text-white"
-                          style={{
-                            background: `linear-gradient(135deg, ${cleaner.gradientFrom}, ${cleaner.gradientTo})`,
-                          }}
-                          aria-hidden="true"
-                        >
-                          {cleaner.initials}
+              {cleanersQuery.isLoading ? (
+                <p className="text-xs text-grey-500">Loading cleaners…</p>
+              ) : cleaners.length === 0 ? (
+                <p className="text-xs text-grey-500">No cleaners found.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredCleaners.map((cleaner, i) => {
+                    const isSelected = selectedCleaners?.includes(cleaner.id) ?? false;
+                    const gradient = CLEANER_GRADIENTS[i % CLEANER_GRADIENTS.length]!;
+                    return (
+                      <button
+                        key={cleaner.id}
+                        type="button"
+                        onClick={() => toggleCleaner(cleaner.id)}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          isSelected
+                            ? "border-primary bg-primary/5 ring-2 ring-primary"
+                            : "border-white/30 bg-white/60 hover:border-grey-300",
+                        )}
+                      >
+                        <div className="relative shrink-0">
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold text-white"
+                            style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+                            aria-hidden="true"
+                          >
+                            {cleanerInitials(cleaner)}
+                          </div>
                         </div>
-                        <span
-                          className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-success"
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-on-surface">
-                          {cleaner.name}
-                        </p>
-                        <p className="text-xs text-grey-500">
-                          {cleaner.site} · {cleaner.tasks} tasks
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-on-surface">
+                            {cleanerName(cleaner)}
+                          </p>
+                          {cleaner.email && (
+                            <p className="truncate text-xs text-grey-500">{cleaner.email}</p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {errors.cleanerIds && (
+                <p className="mt-2 text-xs text-danger">{errors.cleanerIds.message}</p>
+              )}
             </div>
           </div>
 
           {/* Footer */}
           <div className="px-6 pb-6 pt-4">
+            {createMutation.isError && (
+              <p className="mb-3 text-sm text-danger">{getErrorMessage(createMutation.error)}</p>
+            )}
             <button
               type="submit"
-              className="h-11 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              disabled={createMutation.isPending}
+              className="h-11 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Create Assignment
+              {createMutation.isPending ? "Creating…" : "Create Assignment"}
             </button>
           </div>
         </form>
