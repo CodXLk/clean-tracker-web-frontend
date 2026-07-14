@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { AUTH_COOKIE } from "@/lib/constants";
 
-const PROTECTED_PREFIX = "/dashboard";
-const AUTH_PAGES       = ["/login", "/register"];
-const AUTH_COOKIE      = "auth-token";
+const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
+const AUTH_PAGES = ["/login", "/register"];
 
 export function proxy(request: NextRequest) {
-  if (process.env.NODE_ENV === "development") return NextResponse.next();
-
   const { pathname } = request.nextUrl;
-  const token        = request.cookies.get(AUTH_COOKIE)?.value;
+  const token = request.cookies.get(AUTH_COOKIE)?.value;
 
-  const isProtected = pathname.startsWith(PROTECTED_PREFIX);
-  const isAuthPage  = AUTH_PAGES.includes(pathname);
+  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const isAuthPage = AUTH_PAGES.includes(pathname);
 
   if (isProtected && !token) {
     const loginUrl = new URL("/login", request.url);
@@ -21,7 +19,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL(PROTECTED_PREFIX, request.url));
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
   }
 
   return NextResponse.next();

@@ -1,10 +1,13 @@
+import { Suspense } from "react";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { LoginForm } from "@/features/auth/components/LoginForm";
+
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="w-full max-w-md rounded-lg border p-8 shadow-sm">
-        <h1 className="mb-6 text-2xl font-semibold">Sign in</h1>
-        {/* LoginForm will be added in features/auth/components/LoginForm.tsx */}
-      </div>
-    </main>
+    <AuthLayout title="Welcome back" subtitle="Sign in to your Primeway account to continue.">
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
+    </AuthLayout>
   );
 }
