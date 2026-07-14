@@ -55,7 +55,7 @@ export const CreateUserSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(50),
   lastName: z.string().max(50).optional().or(z.literal("")),
   email: z.string().email("A valid email is required"),
-  phoneNumber: optionalAuMobileSchema,
+  phoneNumber: z.string().max(30).optional().or(z.literal("")),
   role: RoleSchema,
 });
 

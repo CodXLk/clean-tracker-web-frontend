@@ -84,20 +84,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
           <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
         </div>
         <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
-        <Controller
-          control={control}
-          name="phoneNumber"
-          render={({ field }) => (
-            <PhoneNumberField
-              label="Phone number"
-              value={field.value ?? ""}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              name={field.name}
-              error={errors.phoneNumber?.message}
-            />
-          )}
-        />
+        <TextField label="Phone number" error={errors.phoneNumber?.message} {...register("phoneNumber")} />
 
         {createUser.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
