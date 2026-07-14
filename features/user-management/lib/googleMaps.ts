@@ -9,6 +9,15 @@ export const DEFAULT_MAP_CENTER: GoogleLatLngLiteral = { lat: -33.8688, lng: 151
 
 let loadPromise: Promise<GoogleMapsNamespace> | null = null;
 
+// This project loads the SDK via a plain <script> tag rather than Google's newer inline
+// bootstrap snippet, so the script's DOM `load` event only tells us the initial JS file
+// executed — not that Map/Marker/Geocoder/Places have actually been populated onto the
+// `google.maps` namespace (those load as separate async chunks after that). The `callback`
+// URL param is Google's long-documented, reliable signal that everything is truly ready;
+// relying on the `load` event instead is what caused `new maps.Geocoder()` to intermittently
+// throw on a fresh page load.
+const CALLBACK_NAME = "__primewayGoogleMapsReady";
+
 /** Load the Google Maps JS API exactly once and resolve with the maps namespace. */
 export function loadGoogleMaps(): Promise<GoogleMapsNamespace> {
   if (typeof window === "undefined") {
@@ -28,17 +37,23 @@ export function loadGoogleMaps(): Promise<GoogleMapsNamespace> {
     };
 
     if (existing) {
-      existing.addEventListener("load", onReady);
+      // Another mount already kicked off the load — piggyback on the same callback.
+      const previous = window[CALLBACK_NAME] as (() => void) | undefined;
+      window[CALLBACK_NAME] = () => {
+        previous?.();
+        onReady();
+      };
       existing.addEventListener("error", () => reject(new Error("Google Maps script failed to load")));
       return;
     }
 
+    window[CALLBACK_NAME] = onReady;
+
     const script = document.createElement("script");
     script.id = "google-maps-sdk";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=${CALLBACK_NAME}`;
     script.async = true;
     script.defer = true;
-    script.addEventListener("load", onReady);
     script.addEventListener("error", () => {
       loadPromise = null;
       reject(new Error("Google Maps script failed to load"));

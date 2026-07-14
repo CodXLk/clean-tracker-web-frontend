@@ -83,6 +83,7 @@ interface GooglePlacesNamespace {
 
 interface GoogleMapsEventNamespace {
   clearInstanceListeners(instance: object): void;
+  trigger(instance: object, eventName: string): void;
 }
 
 interface GoogleMapsNamespace {
@@ -95,4 +96,5 @@ interface GoogleMapsNamespace {
 
 interface Window {
   google?: { maps: GoogleMapsNamespace };
+  [key: `__primewayGoogleMaps${string}`]: (() => void) | undefined;
 }

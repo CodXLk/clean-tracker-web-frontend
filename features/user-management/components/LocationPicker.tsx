@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Crosshair, MapPin, Search } from "lucide-react";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import {
   DEFAULT_MAP_CENTER,
   buildMapsLink,
@@ -107,7 +108,20 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         }
 
         if (initial) applyLocation(initial.lat, initial.lng, false);
-        setReady(true);
+
+        // The map is constructed the instant the SDK resolves, which can race ahead of
+        // the browser actually painting the freshly-mounted modal — Google Maps then
+        // captures a stale/zero container size and renders broken/grey tiles. Wait two
+        // frames (guarantees a real paint happened), then force a resize + re-center
+        // before revealing the map, so it's never shown in a mis-sized state.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (cancelled) return;
+            maps.event.trigger(map, "resize");
+            map.setCenter(center);
+            setReady(true);
+          });
+        });
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -220,8 +234,9 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           <>
             <div ref={mapRef} className="h-full w-full" />
             {!ready && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-grey-500">
-                Loading map…
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-grey-100">
+                <LoadingSpinner size={24} />
+                <p className="text-sm text-grey-500">Loading map…</p>
               </div>
             )}
           </>
