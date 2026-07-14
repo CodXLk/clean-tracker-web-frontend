@@ -32,6 +32,16 @@ export const ENDPOINTS = {
     create: "/sites",
     byId:   (id: string) => `/sites/${id}`,
   },
+  floors: {
+    list:   "/floors",
+    create: "/floors",
+    byId:   (id: string) => `/floors/${id}`,
+  },
+  areas: {
+    list:   "/areas",
+    create: "/areas",
+    byId:   (id: string) => `/areas/${id}`,
+  },
   roles: {
     list: "/roles",
   },
@@ -94,6 +104,16 @@ export const BACKEND = {
     list:   "/api/v1/sites",
     create: "/api/v1/sites",
     byId:   (id: string) => `/api/v1/sites/${id}`,
+  },
+  floors: {
+    list:   "/api/v1/floors",
+    create: "/api/v1/floors",
+    byId:   (id: string) => `/api/v1/floors/${id}`,
+  },
+  areas: {
+    list:   "/api/v1/areas",
+    create: "/api/v1/areas",
+    byId:   (id: string) => `/api/v1/areas/${id}`,
   },
   roles: {
     list: "/api/v1/roles",

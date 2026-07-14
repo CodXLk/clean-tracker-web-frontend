@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
@@ -10,6 +10,8 @@ import { PillButton } from "@/components/shared/PillButton";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { SearchableSelect, type SelectOption } from "./SearchableSelect";
 import { LocationPicker } from "./LocationPicker";
+import { FloorsSection } from "./FloorsSection";
+import { FloorsModal } from "./FloorsModal";
 import { SiteFormSchema, type Site, type SiteFormInput } from "@/features/user-management/schemas/site.schema";
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
@@ -37,6 +39,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
   const createMutation = useCreateSite();
   const updateMutation = useUpdateSite();
   const active = isEdit ? updateMutation : createMutation;
+
+  // On create, chain straight into a dedicated Floors modal (whose own "manage areas"
+  // action opens a further Areas modal) instead of showing floors inline in this modal.
+  const [floorsModalSite, setFloorsModalSite] = useState<Site | null>(null);
 
   const {
     register,
@@ -84,6 +90,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     );
     createMutation.reset();
     updateMutation.reset();
+    setFloorsModalSite(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, site]);
 
@@ -111,17 +118,23 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     if (isEdit && site) {
       updateMutation.mutate({ id: site.id, input: values }, { onSuccess: onClose });
     } else {
-      createMutation.mutate(values, { onSuccess: onClose });
+      createMutation.mutate(values, {
+        onSuccess: (created) => {
+          onClose();
+          setFloorsModalSite(created);
+        },
+      });
     }
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={isEdit ? "Edit site" : "Add a site"}
-      description="Select a client-company and client, then enter the site details."
-    >
+    <>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title={isEdit ? "Edit site" : "Add a site"}
+        description="Select a client-company and client, then enter the site details."
+      >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         <Controller
           control={control}
@@ -225,6 +238,20 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           </PillButton>
         </div>
       </form>
-    </Modal>
+
+      {isEdit && site && (
+        <div className="mt-5 flex flex-col gap-3">
+          <FloorsSection siteId={site.id} />
+        </div>
+      )}
+      </Modal>
+
+      <FloorsModal
+        open={!!floorsModalSite}
+        onClose={() => setFloorsModalSite(null)}
+        siteId={floorsModalSite?.id ?? ""}
+        siteName={floorsModalSite?.name}
+      />
+    </>
   );
 }

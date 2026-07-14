@@ -9,7 +9,7 @@ import {
   type Site,
   type SiteFormInput,
 } from "@/features/user-management/schemas/site.schema";
-import { siteKeys } from "./keys";
+import { areaKeys, floorKeys, siteKeys } from "./keys";
 
 function toPayload(input: SiteFormInput): Record<string, unknown> {
   const payload: Record<string, unknown> = {
@@ -64,6 +64,12 @@ export function useDeleteSite() {
     mutationFn: async (id: string) => {
       await clientApi.delete(ENDPOINTS.sites.byId(id));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: siteKeys.lists() }),
+    // Deleting a site cascades conceptually to its floors and areas — the backend blocks
+    // the delete while floors exist, but keep both lists fresh regardless.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: floorKeys.all });
+      queryClient.invalidateQueries({ queryKey: areaKeys.all });
+    },
   });
 }
