@@ -16,7 +16,6 @@ async function createUser(input: CreateUserInput): Promise<User> {
   };
   if (input.lastName) payload.lastName = input.lastName;
   if (input.phoneNumber) payload.phoneNumber = input.phoneNumber;
-  if (input.companyId) payload.companyId = input.companyId;
 
   const { data } = await clientApi.post(ENDPOINTS.users.create, payload);
   return UserSchema.parse(data);

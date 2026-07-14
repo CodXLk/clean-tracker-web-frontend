@@ -1,10 +1,12 @@
 import type { Role } from "@/features/users/schemas/user.schema";
 
 // Mirrors the backend role-creation hierarchy in UserService.
+// CLIENT is deliberately excluded from every entry: client users are only ever
+// provisioned via Client Management, never manually invited from this form.
 const CREATABLE_ROLES: Record<Role, Role[]> = {
-  SUPER_ADMIN: ["COMPANY_ADMIN"],
-  COMPANY_ADMIN: ["CLIENT_SERVICE_MANAGER", "CLIENT", "SUPERVISOR", "CLEANER"],
-  CLIENT_SERVICE_MANAGER: ["CLIENT", "SUPERVISOR", "CLEANER"],
+  SUPER_ADMIN: ["COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER"],
+  COMPANY_ADMIN: ["CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER"],
+  CLIENT_SERVICE_MANAGER: ["SUPERVISOR", "CLEANER"],
   CLIENT: [],
   SUPERVISOR: [],
   CLEANER: [],
