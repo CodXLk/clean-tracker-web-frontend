@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import {
+  useTaskAssignments,
+  useRescheduleAssignment,
+  useUpdateAssignment,
+  useDeleteAssignment,
+  type DateRange,
+} from "@/features/workforce/hooks/useTaskAssignments";
+import type { TaskAssignment } from "@/features/workforce/schemas/assignment.schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -132,19 +140,41 @@ export const EVENT_COLORS: Array<{ color: string; textColor: string; hex: string
   { color: "bg-red-500",    textColor: "text-white", hex: "#EF4444", label: "Red"    },
 ];
 
-function buildInitialEvents(): CalendarEvent[] {
-  const today = new Date();
-  const weekStart = getWeekStart(today);
+// Default calendar colour per assignment type (falls back when no colorHex is stored).
+const ASSIGNMENT_TYPE_COLOR: Record<string, string> = {
+  GENERAL_TASK: "#0B585A",
+  PERIODICAL_TASK: "#A855F7",
+  WORK_ORDER: "#F97316",
+};
 
-  const sun = formatDate(new Date(weekStart));
-  const mon = formatDate(new Date(weekStart.getTime() + 86400000));
-  const tue = formatDate(new Date(weekStart.getTime() + 86400000 * 2));
+function normalizeTime(time: string): string {
+  return time.length >= 5 ? time.slice(0, 5) : time;
+}
 
-  return [
-    { id: "1", title: "Jane Doe",     subtitle: "Floor 3",    startTime: "08:00", endTime: "10:00", date: sun, color: "bg-[#0B585A]",  textColor: "text-white" },
-    { id: "2", title: "Maria Garcia", subtitle: "Conference", startTime: "09:00", endTime: "10:30", date: tue, color: "bg-pink-500",   textColor: "text-white" },
-    { id: "3", title: "John Smith",   subtitle: "Lobby",      startTime: "10:00", endTime: "13:00", date: mon, color: "bg-purple-500", textColor: "text-white" },
-  ];
+/** Resolve a Tailwind colour class pair for an assignment's stored hex / type default. */
+function resolveEventColor(hex: string | null | undefined, assignmentType: string): {
+  color: string;
+  textColor: string;
+} {
+  const target = (hex ?? ASSIGNMENT_TYPE_COLOR[assignmentType] ?? "#0B585A").toUpperCase();
+  const match = EVENT_COLORS.find((c) => c.hex.toUpperCase() === target);
+  if (match) return { color: match.color, textColor: match.textColor };
+  // Unknown hex — render via an arbitrary Tailwind value so any colour still shows.
+  return { color: `bg-[${target}]`, textColor: "text-white" };
+}
+
+function mapAssignmentToEvent(task: TaskAssignment): CalendarEvent {
+  const { color, textColor } = resolveEventColor(task.colorHex, task.assignmentType);
+  return {
+    id: task.id,
+    title: task.name,
+    subtitle: [task.siteName, task.areaName].filter(Boolean).join(" · "),
+    startTime: normalizeTime(task.startTime),
+    endTime: normalizeTime(task.endTime),
+    date: task.scheduledDate,
+    color,
+    textColor,
+  };
 }
 
 // ── Event Detail Modal ────────────────────────────────────────────────────────
@@ -836,18 +866,31 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
 
 // ── Main WorkforceCalendar Component ──────────────────────────────────────────
 
+// A pending drag/resize awaiting the user's confirmation before it is persisted.
+interface PendingReschedule {
+  id: string;
+  scheduledDate: string;
+  startTime: string;
+  durationMinutes: number;
+  message: string;
+  previous: CalendarEvent;
+}
+
+function hexFromColorClass(colorClass: string): string | undefined {
+  return EVENT_COLORS.find((c) => c.color === colorClass)?.hex;
+}
+
 export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   const today = formatDate(new Date());
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(buildInitialEvents);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState<QuickAddState>({
     show: false, date: "", time: "", x: 0, y: 0,
   });
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-
-  const nextEventColorRef = useRef(0);
+  const [pendingReschedule, setPendingReschedule] = useState<PendingReschedule | null>(null);
 
   const weekStart    = getWeekStart(currentDate);
   const weekDates    = getDayDates(weekStart);
@@ -858,6 +901,38 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     month: "long",
     year:  "numeric",
   });
+
+  // Visible date range → drives the backend fetch.
+  const range = useMemo<DateRange>(() => {
+    if (viewMode === "week") {
+      return { from: weekDates[0]!, to: weekDates[6]! };
+    }
+    const weeks = getMonthWeeks(currentYear, currentMonth);
+    return { from: weeks[0]![0]!, to: weeks[weeks.length - 1]![6]! };
+  }, [viewMode, weekDates, currentYear, currentMonth]);
+
+  const assignmentsQuery = useTaskAssignments(range);
+  const rescheduleMutation = useRescheduleAssignment();
+  const updateMutation = useUpdateAssignment();
+  const deleteMutation = useDeleteAssignment();
+
+  // Mirror server data into local state so drag/resize can update optimistically.
+  // Sync during render (React's approved "adjust state on prop change" pattern)
+  // rather than in an effect, which avoids a cascading commit.
+  const serverEvents = assignmentsQuery.data;
+  const [syncedFrom, setSyncedFrom] = useState<typeof serverEvents>(undefined);
+  if (serverEvents !== syncedFrom) {
+    setSyncedFrom(serverEvents);
+    setEvents((serverEvents ?? []).map(mapAssignmentToEvent));
+  }
+
+  // Keep the latest events available to the resize mouseup handler.
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
+
+  function revertToServer() {
+    setEvents((serverEvents ?? []).map(mapAssignmentToEvent));
+  }
 
   function navigatePrev() {
     const d = new Date(currentDate);
@@ -893,7 +968,9 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     e.preventDefault();
     const eventId = e.dataTransfer.getData("eventId");
     const ev = events.find((x) => x.id === eventId);
-    if (!ev) { setDraggingId(null); return; }
+    setDraggingId(null);
+    if (!ev) return;
+    if (ev.date === date && ev.startTime === slotTime) return;
     const duration = timeDiff(ev.startTime, ev.endTime);
     const newEnd = addMinutes(slotTime, duration);
     setEvents((prev) =>
@@ -901,7 +978,14 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
         x.id === eventId ? { ...x, date, startTime: slotTime, endTime: newEnd } : x,
       ),
     );
-    setDraggingId(null);
+    setPendingReschedule({
+      id: eventId,
+      scheduledDate: date,
+      startTime: slotTime,
+      durationMinutes: duration,
+      message: `Move “${ev.title}” to ${formatDateLong(date)} at ${formatTimeDisplay(slotTime)}?`,
+      previous: ev,
+    });
   }
 
   // Resize handlers
@@ -927,6 +1011,18 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
       const onMouseUp = () => {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        const current = eventsRef.current.find((x) => x.id === event.id);
+        if (!current) return;
+        const duration = timeDiff(current.startTime, current.endTime);
+        if (duration === timeDiff(event.startTime, event.endTime)) return;
+        setPendingReschedule({
+          id: event.id,
+          scheduledDate: current.date,
+          startTime: current.startTime,
+          durationMinutes: duration,
+          message: `Update “${current.title}” to ${formatTimeDisplay(current.startTime)} – ${formatTimeDisplay(current.endTime)}?`,
+          previous: event,
+        });
       };
 
       document.addEventListener("mousemove", onMouseMove);
@@ -935,9 +1031,33 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     [],
   );
 
+  function handleConfirmReschedule() {
+    if (!pendingReschedule) return;
+    const { id, scheduledDate, startTime, durationMinutes } = pendingReschedule;
+    rescheduleMutation.mutate(
+      { id, input: { scheduledDate, startTime: normalizeTime(startTime), durationMinutes } },
+      {
+        onSuccess: () => setPendingReschedule(null),
+        onError: () => {
+          revertToServer();
+          setPendingReschedule(null);
+        },
+      },
+    );
+  }
+
+  function handleCancelReschedule() {
+    if (pendingReschedule) {
+      const prev = pendingReschedule.previous;
+      setEvents((list) => list.map((x) => (x.id === prev.id ? prev : x)));
+    }
+    setPendingReschedule(null);
+  }
+
   function handleDeleteEvent(id: string) {
     setEvents((prev) => prev.filter((e) => e.id !== id));
     if (selectedEvent?.id === id) setSelectedEvent(null);
+    deleteMutation.mutate(id, { onError: revertToServer });
   }
 
   function handleEventClick(event: CalendarEvent) {
@@ -948,6 +1068,20 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   function handleEventUpdate(updated: CalendarEvent) {
     setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     setSelectedEvent(null);
+    updateMutation.mutate(
+      {
+        id: updated.id,
+        input: {
+          name: updated.title,
+          scheduledDate: updated.date,
+          startTime: normalizeTime(updated.startTime),
+          durationMinutes: timeDiff(updated.startTime, updated.endTime),
+          description: updated.subtitle,
+          colorHex: hexFromColorClass(updated.color),
+        },
+      },
+      { onError: revertToServer },
+    );
   }
 
   function handleSlotClick(date: string, time: string, x: number, y: number) {
@@ -955,21 +1089,10 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     setQuickAdd({ show: true, date, time, x, y });
   }
 
-  function handleQuickAddConfirm(title: string) {
-    const colorEntry = EVENT_COLORS[nextEventColorRef.current % EVENT_COLORS.length]!;
-    nextEventColorRef.current++;
-    const newEvent: CalendarEvent = {
-      id:        `event-${Date.now()}`,
-      title,
-      subtitle:  "",
-      startTime: quickAdd.time,
-      endTime:   addMinutes(quickAdd.time, 60),
-      date:      quickAdd.date,
-      color:     colorEntry.color,
-      textColor: colorEntry.textColor,
-    };
-    setEvents((prev) => [...prev, newEvent]);
-    setQuickAdd((s) => ({ ...s, show: false }));
+  // Inline quick-add can't satisfy the required fields (site/floor/area/cleaners),
+  // so it hands off to the full assignment modal, prefilled with the chosen slot.
+  function handleQuickAddConfirm() {
+    handleQuickAddOpenForm();
   }
 
   function handleQuickAddOpenForm() {
@@ -1098,6 +1221,46 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           onSave={handleEventUpdate}
           onDelete={handleDeleteEvent}
         />
+      )}
+
+      {/* Reschedule confirmation (drag-move / resize) */}
+      {pendingReschedule && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reschedule-title"
+        >
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={handleCancelReschedule}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-surface p-5 shadow-2xl ring-1 ring-grey-200">
+            <h2 id="reschedule-title" className="text-base font-semibold text-on-surface">
+              Update assignment
+            </h2>
+            <p className="mt-2 text-sm text-grey-500">{pendingReschedule.message}</p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={handleCancelReschedule}
+                disabled={rescheduleMutation.isPending}
+                className="flex-1 rounded-xl border border-grey-300 py-2 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReschedule}
+                disabled={rescheduleMutation.isPending}
+                className="flex-1 rounded-xl bg-primary py-2 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              >
+                {rescheduleMutation.isPending ? "Saving…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

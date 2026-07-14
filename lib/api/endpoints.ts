@@ -42,6 +42,17 @@ export const ENDPOINTS = {
     create: "/areas",
     byId:   (id: string) => `/areas/${id}`,
   },
+  cleaners: {
+    list: "/cleaners",
+    byId: (id: string) => `/cleaners/${id}`,
+  },
+  taskAssignments: {
+    list:       "/task-assignments",
+    create:     "/task-assignments",
+    stats:      "/task-assignments/stats",
+    byId:       (id: string) => `/task-assignments/${id}`,
+    reschedule: (id: string) => `/task-assignments/${id}/reschedule`,
+  },
   roles: {
     list: "/roles",
   },
@@ -114,6 +125,17 @@ export const BACKEND = {
     list:   "/api/v1/areas",
     create: "/api/v1/areas",
     byId:   (id: string) => `/api/v1/areas/${id}`,
+  },
+  cleaners: {
+    list: "/api/v1/cleaners",
+    byId: (id: string) => `/api/v1/cleaners/${id}`,
+  },
+  taskAssignments: {
+    list:       "/api/v1/task-assignments",
+    create:     "/api/v1/task-assignments",
+    stats:      "/api/v1/task-assignments/stats",
+    byId:       (id: string) => `/api/v1/task-assignments/${id}`,
+    reschedule: (id: string) => `/api/v1/task-assignments/${id}/reschedule`,
   },
   roles: {
     list: "/api/v1/roles",
