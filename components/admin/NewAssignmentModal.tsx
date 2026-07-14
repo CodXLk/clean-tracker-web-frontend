@@ -9,7 +9,7 @@ import { SearchableSelect, type SelectOption } from "@/features/user-management/
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
-import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
+import { useSiteCleaners } from "@/features/user-management/hooks/useSiteAssignments";
 import { useCreateAssignment } from "@/features/workforce/hooks/useTaskAssignments";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import {
@@ -83,7 +83,6 @@ export function NewAssignmentModal({
   const [cleanerSearch, setCleanerSearch] = useState("");
 
   const sitesQuery = useSites();
-  const cleanersQuery = useCleaners();
   const createMutation = useCreateAssignment();
 
   const {
@@ -107,6 +106,8 @@ export function NewAssignmentModal({
 
   const floorsQuery = useFloors(siteId || undefined);
   const areasQuery = useAreas(floorId || undefined);
+  // Only cleaners assigned to the selected site can be picked.
+  const cleanersQuery = useSiteCleaners(siteId || undefined);
 
   const siteOptions: SelectOption[] = useMemo(
     () => (sitesQuery.data ?? []).map((s) => ({ value: s.id, label: s.name })),
@@ -282,6 +283,8 @@ export function NewAssignmentModal({
                       field.onChange(v);
                       setValue("floorId", "");
                       setValue("areaId", "");
+                      // Assigned cleaners are site-specific — reset the selection.
+                      setValue("cleanerIds", []);
                     }}
                     loading={sitesQuery.isLoading}
                     error={errors.siteId?.message}
@@ -442,7 +445,11 @@ export function NewAssignmentModal({
               <div className="mb-3 flex items-center gap-3">
                 <span className="text-sm font-medium text-on-surface">Select Cleaner</span>
                 <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                  {cleanersQuery.isLoading ? "Loading…" : `${cleaners.length} available`}
+                  {!siteId
+                    ? "Select a site"
+                    : cleanersQuery.isLoading
+                      ? "Loading…"
+                      : `${cleaners.length} available`}
                 </span>
                 <div className="ml-auto flex items-center gap-2 rounded-xl border border-grey-300 px-3 py-1.5">
                   <Search size={14} className="text-grey-500" aria-hidden="true" />
@@ -477,10 +484,12 @@ export function NewAssignmentModal({
                 </div>
               )}
 
-              {cleanersQuery.isLoading ? (
+              {!siteId ? (
+                <p className="text-xs text-grey-500">Select a site to see its assigned cleaners.</p>
+              ) : cleanersQuery.isLoading ? (
                 <p className="text-xs text-grey-500">Loading cleaners…</p>
               ) : cleaners.length === 0 ? (
-                <p className="text-xs text-grey-500">No cleaners found.</p>
+                <p className="text-xs text-grey-500">No cleaners are assigned to this site.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {filteredCleaners.map((cleaner, i) => {
