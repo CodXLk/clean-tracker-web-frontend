@@ -1,3 +1,9 @@
+/** Today's date as a `yyyy-MM-dd` string, for date-only API params (e.g. task-assignment ranges). */
+export function todayISODate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function formatDate(value: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat("en-US", {

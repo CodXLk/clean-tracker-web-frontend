@@ -18,12 +18,16 @@ async function fetchAreas(floorId?: string): Promise<Area[]> {
   return AreaListSchema.parse(data);
 }
 
-/** List areas. Pass a floorId to load only that floor's areas. */
-export function useAreas(floorId?: string) {
+/**
+ * List areas. Pass a floorId to load only that floor's areas (the default dependent-select
+ * behavior). Pass `{ enabled: true }` without a floorId to load every area visible to the
+ * caller (the backend role-scopes this — e.g. a supervisor only gets their assigned sites').
+ */
+export function useAreas(floorId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: areaKeys.list(floorId),
     queryFn: () => fetchAreas(floorId),
-    enabled: !!floorId,
+    enabled: options?.enabled ?? !!floorId,
   });
 }
 

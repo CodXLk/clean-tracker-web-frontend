@@ -5,57 +5,119 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Clock, Star, Users2 } from "lucide-react";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { ErrorMessage } from "@/components/shared/ErrorMessage";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useInspections } from "@/features/inspections/hooks/useInspections";
-import { useStartTask } from "@/features/inspections/hooks/useStartTask";
-import { useCompleteMyTask } from "@/features/inspections/hooks/useCompleteMyTask";
 import { useCompleteAreaInspection } from "@/features/inspections/hooks/useCompleteAreaInspection";
 import { AreaInspectionCard } from "@/features/inspections/components/AreaInspectionCard";
 import { MyTaskCard } from "@/features/inspections/components/MyTaskCard";
 import { SitePerformanceCard } from "@/features/inspections/components/SitePerformanceCard";
 import { CleanerRankingTable } from "@/features/inspections/components/CleanerRankingTable";
-import { CompleteTaskModal, type CompleteTaskTarget } from "@/features/inspections/components/CompleteTaskModal";
 import { InspectingTaskModal } from "@/features/inspections/components/InspectingTaskModal";
-import type { AreaInspection, MyTask } from "@/features/inspections/types";
+import type { AreaInspection, MyTask, SitePerformance } from "@/features/inspections/types";
+import { useSites } from "@/features/user-management/hooks/useSites";
+import { useAreas } from "@/features/user-management/hooks/useAreas";
+import {
+  useTaskAssignments,
+  useUpdateAssignment,
+} from "@/features/workforce/hooks/useTaskAssignments";
+import { ASSIGNMENT_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
+import { todayISODate } from "@/lib/utils/format";
+
+// ── Static KPI placeholders ──────────────────────────────────────────────────────
+// No real backing data exists yet for these (completion rate, avg duration, satisfaction,
+// active-cleaner count as a "rating" concept) — left as static placeholders rather than
+// fabricating a derivation. Matches the same treatment as Workforce's "Avg. Rating" card.
+const KPIS = {
+  taskCompletionRate: 96.5,
+  avgTaskDurationHours: 2.3,
+  customerSatisfaction: 9.1,
+  activeCleaners: 45,
+};
+
+// Placeholder metrics repeated across every real, role-scoped site — no real
+// per-site completion/time/rating data exists yet.
+const SITE_PERFORMANCE_PLACEHOLDER = { completion: 90, avgTime: "2.1h", rating: 8.5 };
 
 export default function InspectionsPage() {
   const router = useRouter();
-  const { data, isLoading, isError } = useInspections();
-  const startTaskMutation      = useStartTask();
-  const completeTaskMutation   = useCompleteMyTask();
-  const completeAreaMutation   = useCompleteAreaInspection();
+  const today = todayISODate();
 
-  const [areaFilter, setAreaFilter]         = useState<string>("all");
-  const [selectedArea, setSelectedArea]     = useState<AreaInspection | null>(null);
-  const [completeTarget, setCompleteTarget] = useState<CompleteTaskTarget | null>(null);
-  const [completeSource, setCompleteSource] = useState<"task" | "area" | null>(null);
+  // Cleaner Performance Rankings has no real per-site visibility mapping yet
+  // (out of scope — see plan) — kept on the mock feed for that section only.
+  const { data: mockData } = useInspections();
+  const completeAreaMutation = useCompleteAreaInspection();
 
-  const areas = useMemo(() => data?.areas ?? [], [data]);
-  const sites = useMemo(() => Array.from(new Set(areas.map((a) => a.site))), [areas]);
-  const filteredAreas = areaFilter === "all" ? areas : areas.filter((a) => a.site === areaFilter);
+  const sitesQuery = useSites();
+  const areasQuery = useAreas(undefined, { enabled: true });
+  const tasksQuery = useTaskAssignments({ from: today, to: today });
+  const updateAssignment = useUpdateAssignment();
 
-  const pendingCount    = (data?.myTasks ?? []).filter((t) => t.status === "pending").length;
-  const inProgressCount = (data?.myTasks ?? []).filter((t) => t.status === "in_progress").length;
+  const [areaFilter, setAreaFilter] = useState<string>("all");
+  const [selectedArea, setSelectedArea] = useState<AreaInspection | null>(null);
 
-  function handleFinishTask(task: MyTask) {
-    setCompleteSource("task");
-    setCompleteTarget({ id: task.id, title: `${task.site} - ${task.area}`, subtitle: task.description });
+  const isLoading = sitesQuery.isLoading || areasQuery.isLoading || tasksQuery.isLoading;
+  const isError = sitesQuery.isError || areasQuery.isError || tasksQuery.isError;
+
+  const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
+  const areas = useMemo(() => areasQuery.data ?? [], [areasQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+
+  const filteredAreas = areaFilter === "all" ? areas : areas.filter((a) => a.siteId === areaFilter);
+
+  const areaInspections: AreaInspection[] = useMemo(
+    () =>
+      filteredAreas.map((a) => ({
+        id: a.id,
+        site: a.siteName,
+        area: `${a.floorName} - ${a.name}`,
+        reportedAgo: "—",
+        priority: "medium" as const,
+      })),
+    [filteredAreas],
+  );
+
+  const myTasks: MyTask[] = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.status === "SCHEDULED" || t.status === "ACTIVE" || t.status === "IN_PROGRESS")
+        .map((t) => ({
+          id: t.id,
+          site: t.siteName,
+          area: `${t.floorName} - ${t.areaName}`,
+          taskType: ASSIGNMENT_TYPE_LABELS[t.assignmentType],
+          description: t.description ?? "",
+          status: t.status === "SCHEDULED" ? "pending" : "in_progress",
+          dueTime: t.startTime.slice(0, 5),
+        })),
+    [tasks],
+  );
+
+  const sitePerformance: SitePerformance[] = useMemo(
+    () => sites.map((s) => ({ site: s.name, ...SITE_PERFORMANCE_PLACEHOLDER })),
+    [sites],
+  );
+
+  const pendingCount = myTasks.filter((t) => t.status === "pending").length;
+  const inProgressCount = myTasks.filter((t) => t.status === "in_progress").length;
+
+  function handleAreaClick(area: AreaInspection) {
+    setSelectedArea(area);
   }
 
-  function handleCompleteArea(area: AreaInspection, data_: { notes: string; qualityRating: number }) {
-    completeAreaMutation.mutate({ id: area.id, data: data_ });
+  function handleCompleteArea(area: AreaInspection, data: { notes: string; qualityRating: number }) {
+    completeAreaMutation.mutate({ id: area.id, data });
   }
 
   function handleAddComplaint() {
     router.push("/admin/complaints");
   }
 
-  function handleCompleteSubmit(id: string, formData: { notes: string; qualityRating: number }) {
-    if (completeSource === "task") {
-      completeTaskMutation.mutate({ id, data: formData });
-    }
-    setCompleteSource(null);
+  function handleStartTask(id: string) {
+    updateAssignment.mutate({ id, input: { status: "IN_PROGRESS" } });
+  }
+
+  function handleFinishTask(task: MyTask) {
+    updateAssignment.mutate({ id: task.id, input: { status: "COMPLETED" } });
   }
 
   if (isLoading) {
@@ -66,10 +128,10 @@ export default function InspectionsPage() {
     );
   }
 
-  if (isError || !data) {
+  if (isError) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <ErrorMessage message="Failed to load inspections." />
+        <EmptyState title="Failed to load inspections" description="Please try refreshing the page." />
       </div>
     );
   }
@@ -90,21 +152,21 @@ export default function InspectionsPage() {
             icon={CheckCircle2}
             iconBg="bg-primary/10"
             iconColor="text-primary"
-            value={`${data.kpis.taskCompletionRate}%`}
+            value={`${KPIS.taskCompletionRate}%`}
             label="Task Completion Rate"
           />
           <AdminStatCard
             icon={Clock}
             iconBg="bg-[#ED5F25]/10"
             iconColor="text-[#ED5F25]"
-            value={`${data.kpis.avgTaskDurationHours}h`}
+            value={`${KPIS.avgTaskDurationHours}h`}
             label="Avg. Task Duration"
           />
           <AdminStatCard
             icon={Star}
             iconBg="bg-success/10"
             iconColor="text-success"
-            value={data.kpis.customerSatisfaction}
+            value={KPIS.customerSatisfaction}
             label="Customer Satisfaction"
             badge="+0.3"
             badgeColor="text-success"
@@ -113,7 +175,7 @@ export default function InspectionsPage() {
             icon={Users2}
             iconBg="bg-purple-100"
             iconColor="text-purple-600"
-            value={data.kpis.activeCleaners}
+            value={KPIS.activeCleaners}
             label="Active Cleaners"
             badge="+2"
             badgeColor="text-purple-600"
@@ -131,17 +193,17 @@ export default function InspectionsPage() {
               className="rounded-xl border border-grey-300 px-3 py-2 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
               <option value="all">All Sites</option>
-              {sites.map((site) => (
-                <option key={site} value={site}>{site}</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
-          {filteredAreas.length === 0 ? (
+          {areaInspections.length === 0 ? (
             <EmptyState title="No areas need inspection" description="You're all caught up." />
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2">
-              {filteredAreas.map((area) => (
-                <AreaInspectionCard key={area.id} area={area} onClick={() => setSelectedArea(area)} />
+              {areaInspections.map((area) => (
+                <AreaInspectionCard key={area.id} area={area} onClick={() => handleAreaClick(area)} />
               ))}
             </div>
           )}
@@ -158,15 +220,15 @@ export default function InspectionsPage() {
               {inProgressCount} In Progress
             </span>
           </div>
-          {data.myTasks.length === 0 ? (
+          {myTasks.length === 0 ? (
             <EmptyState title="No tasks assigned" description="New tasks will appear here." />
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2">
-              {data.myTasks.map((task) => (
+              {myTasks.map((task) => (
                 <MyTaskCard
                   key={task.id}
                   task={task}
-                  onStart={(id) => startTaskMutation.mutate(id)}
+                  onStart={handleStartTask}
                   onFinish={handleFinishTask}
                 />
               ))}
@@ -177,17 +239,21 @@ export default function InspectionsPage() {
         {/* Site Performance */}
         <div className="mb-6">
           <h2 className="mb-3 text-base font-semibold text-on-surface">Site Performance</h2>
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {data.sitePerformance.map((site) => (
-              <SitePerformanceCard key={site.site} site={site} />
-            ))}
-          </div>
+          {sitePerformance.length === 0 ? (
+            <EmptyState title="No sites yet" />
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {sitePerformance.map((site) => (
+                <SitePerformanceCard key={site.site} site={site} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Cleaner Performance Rankings */}
         <div className="rounded-2xl bg-surface p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold text-on-surface">Cleaner Performance Rankings</h2>
-          <CleanerRankingTable rankings={data.cleanerRankings} />
+          <CleanerRankingTable rankings={mockData?.cleanerRankings ?? []} />
         </div>
       </div>
 
@@ -202,18 +268,6 @@ export default function InspectionsPage() {
           setSelectedArea(null);
         }}
         onAddComplaint={handleAddComplaint}
-      />
-
-      {/* Complete Task modal (reused by My Tasks "Finish") */}
-      <CompleteTaskModal
-        key={completeTarget?.id ?? "complete-task-closed"}
-        open={completeTarget !== null}
-        onClose={() => {
-          setCompleteTarget(null);
-          setCompleteSource(null);
-        }}
-        target={completeTarget}
-        onSubmit={handleCompleteSubmit}
       />
     </div>
   );
