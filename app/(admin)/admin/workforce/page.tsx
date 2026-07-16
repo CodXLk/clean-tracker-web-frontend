@@ -8,6 +8,7 @@ import { WorkforceCalendar } from "@/components/admin/WorkforceCalendar";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { useWorkforceStats, useTaskAssignments } from "@/features/workforce/hooks/useTaskAssignments";
 import { ASSIGNMENT_TYPE_LABELS, type TaskAssignment } from "@/features/workforce/schemas/assignment.schema";
+import { todayISODate } from "@/lib/utils/format";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -27,11 +28,6 @@ interface WorkforceStatData {
   label: string;
   badge: string;
   badgeColor: string;
-}
-
-function todayString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function nowMinutes(): number {
@@ -61,7 +57,7 @@ export default function WorkforcePage() {
   const [defaultDate, setDefaultDate] = useState<Date | undefined>();
   const [defaultTime, setDefaultTime] = useState<string>("");
 
-  const today = todayString();
+  const today = todayISODate();
   const statsQuery = useWorkforceStats();
   const todaysQuery = useTaskAssignments({ from: today, to: today });
 

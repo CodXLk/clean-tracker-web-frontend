@@ -62,8 +62,6 @@ export const ENDPOINTS = {
   // the backend. Consumed by client components via clientApi ("/api" baseURL).
   inspections: {
     list:         "/inspections",
-    startTask:    (id: string) => `/inspections/tasks/${id}/start`,
-    completeTask: (id: string) => `/inspections/tasks/${id}/complete`,
     completeArea: (id: string) => `/inspections/areas/${id}/complete`,
   },
   complaints: {

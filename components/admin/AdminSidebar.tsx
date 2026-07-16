@@ -159,6 +159,10 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const me = useMe();
   const logout = useLogout();
 
+  // Clients don't get an Inspections view — supervisor/admin-only surface.
+  const navItems =
+    me.data?.role === "CLIENT" ? NAV_ITEMS.filter((item) => item.label !== "Inspections") : NAV_ITEMS;
+
   function isItemActive(item: NavItemConfig): boolean {
     if (!item.href) return false;
     return pathname === item.href || pathname.startsWith(item.href + "/");
@@ -183,7 +187,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
       {/* Navigation */}
       <nav aria-label="Admin navigation" className="mt-2 flex flex-col gap-1 px-3">
-        {NAV_ITEMS.map((item) =>
+        {navItems.map((item) =>
           item.children ? (
             <SidebarNavGroup
               key={item.label}
