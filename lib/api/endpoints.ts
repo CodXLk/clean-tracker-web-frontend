@@ -48,12 +48,12 @@ export const ENDPOINTS = {
     list: "/cleaners",
     byId: (id: string) => `/cleaners/${id}`,
   },
-  taskAssignments: {
-    list:       "/task-assignments",
-    create:     "/task-assignments",
-    stats:      "/task-assignments/stats",
-    byId:       (id: string) => `/task-assignments/${id}`,
-    reschedule: (id: string) => `/task-assignments/${id}/reschedule`,
+  assignments: {
+    create:      "/assignments",
+    occurrences: "/assignments/occurrences",
+    stats:       "/assignments/stats",
+    byId:        (id: string) => `/assignments/${id}`,
+    occurrence:  (taskId: string, date: string) => `/assignments/tasks/${taskId}/occurrences/${date}`,
   },
   roles: {
     list: "/roles",
@@ -132,12 +132,12 @@ export const BACKEND = {
     list: "/api/v1/cleaners",
     byId: (id: string) => `/api/v1/cleaners/${id}`,
   },
-  taskAssignments: {
-    list:       "/api/v1/task-assignments",
-    create:     "/api/v1/task-assignments",
-    stats:      "/api/v1/task-assignments/stats",
-    byId:       (id: string) => `/api/v1/task-assignments/${id}`,
-    reschedule: (id: string) => `/api/v1/task-assignments/${id}/reschedule`,
+  assignments: {
+    create:      "/api/v1/assignments",
+    occurrences: "/api/v1/assignments/occurrences",
+    stats:       "/api/v1/assignments/stats",
+    byId:        (id: string) => `/api/v1/assignments/${id}`,
+    occurrence:  (taskId: string, date: string) => `/api/v1/assignments/tasks/${taskId}/occurrences/${date}`,
   },
   roles: {
     list: "/api/v1/roles",

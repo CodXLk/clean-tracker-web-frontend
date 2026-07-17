@@ -17,10 +17,10 @@ import type { AreaInspection, MyTask, SitePerformance } from "@/features/inspect
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
 import {
-  useTaskAssignments,
-  useUpdateAssignment,
-} from "@/features/workforce/hooks/useTaskAssignments";
-import { ASSIGNMENT_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
+  useOccurrences,
+  useEditOccurrence,
+} from "@/features/workforce/hooks/useAssignments";
+import { WORK_TYPE_LABELS, type TaskStatus } from "@/features/workforce/schemas/assignment.schema";
 import { todayISODate } from "@/lib/utils/format";
 
 // ── Static KPI placeholders ──────────────────────────────────────────────────────
@@ -49,8 +49,8 @@ export default function InspectionsPage() {
 
   const sitesQuery = useSites();
   const areasQuery = useAreas(undefined, { enabled: true });
-  const tasksQuery = useTaskAssignments({ from: today, to: today });
-  const updateAssignment = useUpdateAssignment();
+  const tasksQuery = useOccurrences({ from: today, to: today });
+  const editOccurrence = useEditOccurrence();
 
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [selectedArea, setSelectedArea] = useState<AreaInspection | null>(null);
@@ -81,10 +81,12 @@ export default function InspectionsPage() {
       tasks
         .filter((t) => t.status === "SCHEDULED" || t.status === "ACTIVE" || t.status === "IN_PROGRESS")
         .map((t) => ({
-          id: t.id,
+          // Occurrences are computed, not stored — the composite id carries what
+          // the status mutation needs (taskId + original series date).
+          id: `${t.taskId}|${t.occurrenceDate}`,
           site: t.siteName,
           area: `${t.floorName} - ${t.areaName}`,
-          taskType: ASSIGNMENT_TYPE_LABELS[t.assignmentType],
+          taskType: WORK_TYPE_LABELS[t.assignmentType],
           description: t.description ?? "",
           status: t.status === "SCHEDULED" ? "pending" : "in_progress",
           dueTime: t.startTime.slice(0, 5),
@@ -112,12 +114,19 @@ export default function InspectionsPage() {
     router.push("/admin/complaints");
   }
 
+  function mutateStatus(compositeId: string, status: TaskStatus) {
+    const [taskId, occurrenceDate] = compositeId.split("|");
+    if (!taskId || !occurrenceDate) return;
+    // Status changes apply to this day's occurrence only, never the whole series.
+    editOccurrence.mutate({ taskId, occurrenceDate, input: { scope: "THIS", status } });
+  }
+
   function handleStartTask(id: string) {
-    updateAssignment.mutate({ id, input: { status: "IN_PROGRESS" } });
+    mutateStatus(id, "IN_PROGRESS");
   }
 
   function handleFinishTask(task: MyTask) {
-    updateAssignment.mutate({ id: task.id, input: { status: "COMPLETED" } });
+    mutateStatus(task.id, "COMPLETED");
   }
 
   if (isLoading) {

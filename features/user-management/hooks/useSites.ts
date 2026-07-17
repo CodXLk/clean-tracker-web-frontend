@@ -21,6 +21,9 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   if (input.contactNumber) payload.contactNumber = input.contactNumber.trim();
   if (input.googleMapsLink) payload.googleMapsLink = input.googleMapsLink.trim();
   if (input.streetAddress) payload.streetAddress = input.streetAddress.trim();
+  if (input.startDate) payload.startDate = input.startDate;
+  if (input.endDate) payload.endDate = input.endDate;
+  payload.workingDays = input.workingDays ?? [];
   return payload;
 }
 

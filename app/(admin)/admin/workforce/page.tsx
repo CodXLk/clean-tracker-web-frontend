@@ -6,8 +6,8 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { ActiveTaskCard } from "@/components/admin/ActiveTaskCard";
 import { WorkforceCalendar } from "@/components/admin/WorkforceCalendar";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
-import { useWorkforceStats, useTaskAssignments } from "@/features/workforce/hooks/useTaskAssignments";
-import { ASSIGNMENT_TYPE_LABELS, type TaskAssignment } from "@/features/workforce/schemas/assignment.schema";
+import { useWorkforceStats, useOccurrences } from "@/features/workforce/hooks/useAssignments";
+import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import { todayISODate } from "@/lib/utils/format";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ export default function WorkforcePage() {
 
   const today = todayISODate();
   const statsQuery = useWorkforceStats();
-  const todaysQuery = useTaskAssignments({ from: today, to: today });
+  const todaysQuery = useOccurrences({ from: today, to: today });
 
   const stats: WorkforceStatData[] = useMemo(() => {
     const s = statsQuery.data;
@@ -108,11 +108,11 @@ export default function WorkforcePage() {
     const list = todaysQuery.data ?? [];
     const now = nowMinutes();
     return list
-      .filter((t) => t.scheduledDate === today && timeToMinutes(t.endTime) > now)
+      .filter((t) => t.date === today && timeToMinutes(t.endTime) > now)
       .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
   }, [todaysQuery.data, today]);
 
-  function statusOf(task: TaskAssignment): "Active" | "Scheduled" {
+  function statusOf(task: TaskOccurrence): "Active" | "Scheduled" {
     const now = nowMinutes();
     return timeToMinutes(task.startTime) <= now && now < timeToMinutes(task.endTime)
       ? "Active"
@@ -170,7 +170,7 @@ export default function WorkforcePage() {
                 const gradient = CARD_GRADIENTS[i % CARD_GRADIENTS.length]!;
                 return (
                   <ActiveTaskCard
-                    key={task.id}
+                    key={`${task.taskId}_${task.occurrenceDate}`}
                     cleaner={{
                       initials: initialsOf(cleaner?.firstName, cleaner?.lastName),
                       name: cleanerNameOf(cleaner?.firstName, cleaner?.lastName),
@@ -180,7 +180,7 @@ export default function WorkforcePage() {
                     site={task.siteName}
                     area={`${task.floorName} - ${task.areaName}`}
                     time={task.startTime.slice(0, 5)}
-                    category={ASSIGNMENT_TYPE_LABELS[task.assignmentType]}
+                    category={WORK_TYPE_LABELS[task.assignmentType]}
                     priority="medium"
                     status={statusOf(task)}
                   />
