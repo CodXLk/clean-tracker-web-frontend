@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { use } from "react";
+import { Square, SquareCheck } from "lucide-react";
 import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { TaskDetailModal } from "@/components/modals/TaskDetailModal";
@@ -50,9 +51,28 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const [selectedTask,     setSelectedTask]     = useState<AreaTask | null>(null);
   const [taskStates,       setTaskStates]       = useState<Record<string, TaskDetailState>>({});
   const [calendarOpen,     setCalendarOpen]     = useState(false);
+  const [selectedIds,      setSelectedIds]      = useState<Set<string>>(new Set());
+
+  const allSelected = selectedIds.size > 0 && selectedIds.size === AREA_TASKS.length;
 
   function getTaskState(taskId: string): TaskDetailState {
     return taskStates[taskId] ?? "start";
+  }
+
+  function toggleTaskSelected(taskId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(AREA_TASKS.map((t) => t.id)));
   }
 
   function handleStart(taskId: string) {
@@ -80,16 +100,47 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
       />
 
       <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl -mt-5">
-        <div className="flex flex-col gap-3 pt-5">
+        <div className="flex items-center justify-end pt-5 pb-3">
+          <button
+            onClick={toggleSelectAll}
+            aria-pressed={allSelected}
+            className="flex items-center gap-2 text-sm text-grey-700 transition-colors hover:text-primary"
+          >
+            {allSelected ? (
+              <SquareCheck size={20} className="text-primary" />
+            ) : (
+              <Square size={20} className="text-grey-500" />
+            )}
+            Select All
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-3">
           {AREA_TASKS.map((task) => {
-            const state = getTaskState(task.id);
+            const state    = getTaskState(task.id);
+            const selected = selectedIds.has(task.id);
             return (
-              <button
+              <div
                 key={task.id}
-                onClick={() => setSelectedTask(task)}
-                className="w-full rounded-2xl bg-white p-4 shadow-sm text-left transition-shadow hover:shadow-md"
+                className="flex w-full items-start gap-3 rounded-2xl bg-white p-4 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-3">
+                <button
+                  onClick={() => toggleTaskSelected(task.id)}
+                  aria-pressed={selected}
+                  aria-label={`Select ${task.title}`}
+                  className="mt-0.5 shrink-0"
+                >
+                  {selected ? (
+                    <SquareCheck size={20} className="text-primary" />
+                  ) : (
+                    <Square size={20} className="text-grey-500" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setSelectedTask(task)}
+                  className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
+                >
                   <div className="flex flex-col gap-1 min-w-0">
                     <span className="text-sm font-semibold text-[#1A1A1A] leading-snug">
                       {task.title}
@@ -105,8 +156,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
                   >
                     {STATUS_LABEL_MAP[state === "completed" ? "completed" : task.status]}
                   </span>
-                </div>
-              </button>
+                </button>
+              </div>
             );
           })}
         </div>
