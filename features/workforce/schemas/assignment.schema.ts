@@ -1,27 +1,30 @@
 import { z } from "zod";
+import { DayOfWeekSchema } from "@/features/user-management/schemas/site.schema";
 
 // ── Enums (mirror the Spring Boot enums) ────────────────────────────────────────
 
-export const AssignmentTypeSchema = z.enum([
+export const WorkTypeSchema = z.enum([
   "GENERAL_TASK",
   "PERIODICAL_TASK",
   "WORK_ORDER",
+  "OTHER",
 ]);
-export type AssignmentType = z.infer<typeof AssignmentTypeSchema>;
+export type WorkType = z.infer<typeof WorkTypeSchema>;
 
-export const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = {
-  GENERAL_TASK: "General Task",
-  PERIODICAL_TASK: "Periodical Task",
+export const WORK_TYPE_LABELS: Record<WorkType, string> = {
+  GENERAL_TASK: "General",
+  PERIODICAL_TASK: "Periodical",
   WORK_ORDER: "Work Order",
+  OTHER: "Other",
 };
 
 export const RecurrenceTypeSchema = z.enum(["DAILY", "WEEKLY", "MONTHLY"]);
 export type RecurrenceType = z.infer<typeof RecurrenceTypeSchema>;
 
 export const RECURRENCE_TYPE_LABELS: Record<RecurrenceType, string> = {
-  DAILY: "Daily",
-  WEEKLY: "Weekly",
-  MONTHLY: "Monthly",
+  DAILY: "Day",
+  WEEKLY: "Week",
+  MONTHLY: "Month",
 };
 
 export const TaskStatusSchema = z.enum([
@@ -33,16 +36,26 @@ export const TaskStatusSchema = z.enum([
 ]);
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
-// ── Response (mirrors backend TaskAssignmentResponse) ───────────────────────────
+export const OccurrenceScopeSchema = z.enum(["THIS", "THIS_AND_FOLLOWING", "ALL"]);
+export type OccurrenceScope = z.infer<typeof OccurrenceScopeSchema>;
+
+// ── Responses (mirror backend DTOs) ─────────────────────────────────────────────
 
 export const AssignmentCleanerSchema = z.object({
   id: z.string().uuid(),
   firstName: z.string().nullable().optional(),
   lastName: z.string().nullable().optional(),
 });
+export type AssignmentCleaner = z.infer<typeof AssignmentCleanerSchema>;
 
-export const TaskAssignmentSchema = z.object({
-  id: z.string().uuid(),
+/** One expanded calendar occurrence (backend TaskOccurrenceResponse). */
+export const TaskOccurrenceSchema = z.object({
+  assignmentId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  /** Original series date — identifies the occurrence for edit/delete calls. */
+  occurrenceDate: z.string(),
+  /** Displayed date (differs from occurrenceDate when moved by an override). */
+  date: z.string(),
   name: z.string(),
   siteId: z.string().uuid(),
   siteName: z.string(),
@@ -50,25 +63,57 @@ export const TaskAssignmentSchema = z.object({
   floorName: z.string(),
   areaId: z.string().uuid(),
   areaName: z.string(),
-  assignmentType: AssignmentTypeSchema,
-  scheduledDate: z.string(), // ISO date (yyyy-MM-dd)
+  assignmentType: WorkTypeSchema,
   startTime: z.string(), // HH:mm[:ss]
   endTime: z.string(),
   durationMinutes: z.number(),
   status: TaskStatusSchema,
   description: z.string().nullable().optional(),
   colorHex: z.string().nullable().optional(),
-  recurrenceType: RecurrenceTypeSchema.nullable().optional(),
-  recurrenceCount: z.number().nullable().optional(),
   cleaners: z.array(AssignmentCleanerSchema),
+  recurring: z.boolean(),
+  overridden: z.boolean(),
+});
+export const TaskOccurrenceListSchema = z.array(TaskOccurrenceSchema);
+export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;
+
+/** Backend AssignmentResponse (returned by create/update/detail). */
+export const AssignmentSchema = z.object({
+  id: z.string().uuid(),
+  siteId: z.string().uuid(),
+  siteName: z.string(),
+  assignmentType: WorkTypeSchema,
+  startDate: z.string(),
+  startTime: z.string(),
+  expectedEndTime: z.string(),
+  seriesEndDate: z.string().nullable().optional(),
+  recurrenceType: RecurrenceTypeSchema.nullable().optional(),
+  recurrenceInterval: z.number().nullable().optional(),
+  daysOfWeek: z.array(DayOfWeekSchema).default([]),
+  dayOfMonth: z.number().nullable().optional(),
+  otherRepeatWorkingDays: z.boolean(),
+  otherUseRecurrence: z.boolean(),
+  recurring: z.boolean(),
+  tasks: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      durationMinutes: z.number().nullable().optional(),
+      floorId: z.string().uuid(),
+      floorName: z.string(),
+      areaId: z.string().uuid(),
+      areaName: z.string(),
+      description: z.string().nullable().optional(),
+      colorHex: z.string().nullable().optional(),
+      orderIndex: z.number(),
+      endDate: z.string().nullable().optional(),
+      cleaners: z.array(AssignmentCleanerSchema),
+    }),
+  ),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
-
-export const TaskAssignmentListSchema = z.array(TaskAssignmentSchema);
-
-export type TaskAssignment = z.infer<typeof TaskAssignmentSchema>;
-export type AssignmentCleaner = z.infer<typeof AssignmentCleanerSchema>;
+export type Assignment = z.infer<typeof AssignmentSchema>;
 
 // ── Stats (mirrors backend WorkforceStatsResponse) ──────────────────────────────
 
@@ -79,40 +124,145 @@ export const WorkforceStatsSchema = z.object({
 });
 export type WorkforceStats = z.infer<typeof WorkforceStatsSchema>;
 
-// ── Form (outbound create/update payload, id-based) ─────────────────────────────
+// ── Create-assignment form ──────────────────────────────────────────────────────
+
+/** Scheduling length assumed for tasks without an explicit duration (matches backend). */
+export const DEFAULT_TASK_DURATION_MINUTES = 30;
+
+export const AssignmentTaskFormSchema = z.object({
+  name: z.string().min(2, "Task name must be at least 2 characters").max(150, "Name is too long"),
+  /** Minutes; empty string in the input maps to undefined (optional per spec). */
+  durationMinutes: z
+    .number()
+    .min(5, "Minimum 5 minutes")
+    .max(24 * 60, "Maximum 24 hours")
+    .optional(),
+  floorId: z.string().uuid("Please select a floor"),
+  areaId: z.string().uuid("Please select an area"),
+  description: z.string().max(2048, "Description is too long").optional().or(z.literal("")),
+  /** Per-task cleaners — only used when assignPerTask is on. */
+  cleanerIds: z.array(z.string().uuid()),
+});
+export type AssignmentTaskFormInput = z.infer<typeof AssignmentTaskFormSchema>;
 
 export const AssignmentFormSchema = z
   .object({
-    date: z.string().min(1, "Date is required"),
-    time: z.string().min(1, "Time is required"),
-    name: z.string().min(2, "Task name must be at least 2 characters").max(150, "Name is too long"),
+    workType: WorkTypeSchema,
     siteId: z.string().uuid("Please select a site"),
-    floorId: z.string().uuid("Please select a floor"),
-    areaId: z.string().uuid("Please select an area"),
-    assignmentType: AssignmentTypeSchema,
-    durationHours: z.number().min(0.5, "Minimum 0.5 hours").max(24, "Maximum 24 hours"),
-    description: z.string().max(2048, "Description is too long"),
-    cleanerIds: z.array(z.string().uuid()).min(1, "Select at least one cleaner"),
+    date: z.string().min(1, "Date is required"),
+    startTime: z.string().min(1, "Expected start time is required"),
+    tasks: z.array(AssignmentTaskFormSchema).min(1, "Add at least one task"),
+    /** Assignment-level cleaner selection (applies to all tasks unless assignPerTask). */
+    cleanerIds: z.array(z.string().uuid()),
+    assignPerTask: z.boolean(),
+    // Recurrence — Periodical, or Other with custom recurrence enabled.
     recurrenceType: RecurrenceTypeSchema.optional(),
     recurrenceCount: z.number().min(1, "Must be at least 1").optional(),
+    daysOfWeek: z.array(DayOfWeekSchema),
+    dayOfMonth: z.number().min(1).max(31).optional(),
+    // Other-type behaviour toggles.
+    otherRepeatWorkingDays: z.boolean(),
+    otherUseRecurrence: z.boolean(),
   })
   .superRefine((val, ctx) => {
-    if (val.assignmentType === "PERIODICAL_TASK") {
+    const usesRecurrence =
+      val.workType === "PERIODICAL_TASK" || (val.workType === "OTHER" && val.otherUseRecurrence);
+
+    if (usesRecurrence) {
       if (!val.recurrenceType) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Recurrence type is required for periodical tasks",
+          message: "Recurrence type is required",
           path: ["recurrenceType"],
         });
       }
       if (val.recurrenceCount == null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Recurrence count is required for periodical tasks",
+          message: "Recurrence count is required",
           path: ["recurrenceCount"],
         });
       }
+      if (val.recurrenceType === "WEEKLY" && val.daysOfWeek.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select at least one day of the week",
+          path: ["daysOfWeek"],
+        });
+      }
+      if (val.recurrenceType === "MONTHLY" && val.dayOfMonth == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Select a day of the month",
+          path: ["dayOfMonth"],
+        });
+      }
+    }
+
+    if (val.assignPerTask) {
+      val.tasks.forEach((task, i) => {
+        if (task.cleanerIds.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Assign at least one cleaner to this task",
+            path: ["tasks", i, "cleanerIds"],
+          });
+        }
+      });
+    } else if (val.cleanerIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select at least one cleaner",
+        path: ["cleanerIds"],
+      });
     }
   });
 
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
+
+/** Map the form to the backend CreateAssignmentRequest payload. */
+export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<string, unknown> {
+  const usesRecurrence =
+    input.workType === "PERIODICAL_TASK" ||
+    (input.workType === "OTHER" && input.otherUseRecurrence);
+
+  const payload: Record<string, unknown> = {
+    siteId: input.siteId,
+    assignmentType: input.workType,
+    startDate: input.date,
+    startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
+    tasks: input.tasks.map((task) => ({
+      name: task.name.trim(),
+      ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
+      floorId: task.floorId,
+      areaId: task.areaId,
+      ...(task.description?.trim() ? { description: task.description.trim() } : {}),
+      cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+    })),
+  };
+
+  if (usesRecurrence) {
+    payload.recurrenceType = input.recurrenceType;
+    payload.recurrenceInterval = input.recurrenceCount;
+    if (input.recurrenceType === "WEEKLY") payload.daysOfWeek = input.daysOfWeek;
+    if (input.recurrenceType === "MONTHLY") payload.dayOfMonth = input.dayOfMonth;
+  }
+  if (input.workType === "OTHER") {
+    payload.otherRepeatWorkingDays = input.otherRepeatWorkingDays;
+    payload.otherUseRecurrence = input.otherUseRecurrence;
+  }
+  return payload;
+}
+
+/** Expected end time (HH:mm) = start + Σ task durations (default per task when unset). */
+export function computeExpectedEndTime(startTime: string, tasks: AssignmentTaskFormInput[]): string | null {
+  if (!startTime || tasks.length === 0) return null;
+  const [h, m] = startTime.split(":").map(Number);
+  if (h == null || Number.isNaN(h)) return null;
+  const total = tasks.reduce(
+    (sum, t) => sum + (t.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES),
+    0,
+  );
+  const end = (h * 60 + (m ?? 0) + total) % (24 * 60);
+  return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+}

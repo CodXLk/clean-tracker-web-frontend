@@ -12,6 +12,7 @@ import { SearchableSelect, type SelectOption } from "./SearchableSelect";
 import { LocationPicker } from "./LocationPicker";
 import { FloorsSection } from "./FloorsSection";
 import { FloorsModal } from "./FloorsModal";
+import { WorkingDaysSelector } from "./WorkingDaysSelector";
 import { SiteFormSchema, type Site, type SiteFormInput } from "@/features/user-management/schemas/site.schema";
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
@@ -31,6 +32,9 @@ const EMPTY: SiteFormInput = {
   contactNumber: "",
   googleMapsLink: "",
   streetAddress: "",
+  startDate: "",
+  endDate: "",
+  workingDays: [],
 };
 
 export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
@@ -85,6 +89,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             contactNumber: site.contactNumber ?? "",
             googleMapsLink: site.googleMapsLink ?? "",
             streetAddress: site.streetAddress ?? "",
+            startDate: site.startDate ?? "",
+            endDate: site.endDate ?? "",
+            workingDays: site.workingDays ?? [],
           }
         : EMPTY,
     );
@@ -218,6 +225,39 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
         </div>
 
         <TextField label="Street address" error={errors.streetAddress?.message} {...register("streetAddress")} />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextField
+            label="Site start date"
+            type="date"
+            error={errors.startDate?.message}
+            {...register("startDate")}
+          />
+          <TextField
+            label="Site end date"
+            type="date"
+            error={errors.endDate?.message}
+            {...register("endDate")}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-on-surface">Working days</span>
+          <Controller
+            control={control}
+            name="workingDays"
+            render={({ field }) => (
+              <WorkingDaysSelector
+                value={field.value ?? []}
+                onChange={field.onChange}
+                error={errors.workingDays?.message}
+              />
+            )}
+          />
+          <p className="text-xs text-grey-500">
+            General assignments are scheduled only on these days, until the site end date.
+          </p>
+        </div>
 
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

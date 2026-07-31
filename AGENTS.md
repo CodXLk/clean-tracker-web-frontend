@@ -1162,6 +1162,7 @@ Every time a new reusable component is built, add it to the table below so futur
 | `PillButton` | `PillButton.tsx` | `variant`: `"orange"` `"teal"` `"success"` | Full-width pill-shaped action buttons |
 | `SlideButton` | `SlideButton.tsx` | `variant`: `"orange"` `"teal"` — always completes to green | Slide-to-confirm interactions |
 | `TaskCard` | `TaskCard.tsx` | `description`, `onClose`, `children` | White card with description label + close button |
+| `TaskSummaryCard` | `TaskSummaryCard.tsx` | `title`, `category`, `priority`, `status`, `dueLabel`, `icon`, `onClick?` | Task summary card with priority badge, category icon box, status + due time row — used by Periodical Task lists and the Calendar modal |
 | `StatusDot` | `StatusDot.tsx` | `variant`: `"active"` `"pending"` `"inactive"` `"error"` · `size`: `"sm"` `"md"` `"lg"` · `showLabel` | Colored status indicator dot |
 | `LoadingSpinner` | `LoadingSpinner.tsx` | `size`, `className` | Animated loading indicator |
 | `ErrorMessage` | `ErrorMessage.tsx` | `message`, `className` | Inline field or section error text |

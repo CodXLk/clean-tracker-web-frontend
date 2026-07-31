@@ -8,6 +8,7 @@ import { DataTable, type Column } from "./DataTable";
 import { RowMenu } from "./RowMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
+import { WorkingDaysSelector } from "./WorkingDaysSelector";
 import { AssignPeopleModal, type AssignOption } from "./AssignPeopleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import {
@@ -107,6 +108,19 @@ export function SiteManagement() {
         <div>
           <span className="text-on-surface">{s.contactPersonName ?? "—"}</span>
           {s.contactNumber && <span className="block text-xs text-grey-500">{s.contactNumber}</span>}
+        </div>
+      ),
+    },
+    {
+      header: "Schedule",
+      cell: (s) => (
+        <div className="flex flex-col gap-1">
+          <WorkingDaysSelector value={s.workingDays ?? []} readOnly size="sm" />
+          {(s.startDate || s.endDate) && (
+            <span className="text-xs text-grey-500">
+              {s.startDate ?? "—"} → {s.endDate ?? "open"}
+            </span>
+          )}
         </div>
       ),
     },
