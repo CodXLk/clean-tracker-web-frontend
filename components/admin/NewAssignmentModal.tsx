@@ -4,12 +4,13 @@ import {
   useForm,
   useFormContext,
   useFieldArray,
+  useWatch,
   Controller,
   FormProvider,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Search, Check, Plus, Trash2, Clock } from "lucide-react";
-import { useEffect, useCallback, useMemo, useState } from "react";
+import { X, Search, Check, Plus, Trash2, Clock, MapPin } from "lucide-react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { WorkingDaysSelector } from "@/features/user-management/components/WorkingDaysSelector";
@@ -18,13 +19,17 @@ import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
 import { useSiteCleaners } from "@/features/user-management/hooks/useSiteAssignments";
 import { useCreateAssignment } from "@/features/workforce/hooks/useAssignments";
+import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
+import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
 import {
   AssignmentFormSchema,
   WORK_TYPE_LABELS,
   RECURRENCE_TYPE_LABELS,
+  WEEK_OF_MONTH_OPTIONS,
   computeExpectedEndTime,
+  allTasksOf,
   type AssignmentFormInput,
   type WorkType,
   type RecurrenceType,
@@ -46,6 +51,12 @@ interface NewAssignmentModalProps {
   onCreated?: () => void;
   defaultDate?: Date;
   defaultTime?: string;
+  /** Prefill the site + first group's floor/area (used by the scope view "+" cells). */
+  defaultSiteId?: string;
+  defaultFloorId?: string;
+  defaultAreaId?: string;
+  /** When set, load this draft's saved form state instead of a blank form. */
+  loadedDraft?: { id: string; payload: unknown } | null;
 }
 
 function formatDateForInput(date: Date): string {
@@ -65,28 +76,40 @@ function cleanerInitials(c: { firstName?: string | null; lastName?: string | nul
   return (first + last).toUpperCase() || "?";
 }
 
-const EMPTY_TASK = {
-  name: "",
-  durationMinutes: undefined,
-  floorId: "",
-  areaId: "",
-  description: "",
-  cleanerIds: [] as string[],
-};
+function emptyGroup(floorId = "", areaId = "") {
+  return { floorId, areaId, tasks: [] as AssignmentFormInput["groups"][number]["tasks"] };
+}
 
-function buildDefaults(defaultDate?: Date, defaultTime = ""): AssignmentFormInput {
+interface Prefill {
+  defaultDate?: Date;
+  defaultTime?: string;
+  defaultSiteId?: string;
+  defaultFloorId?: string;
+  defaultAreaId?: string;
+}
+
+function buildDefaults({
+  defaultDate,
+  defaultTime = "",
+  defaultSiteId = "",
+  defaultFloorId = "",
+  defaultAreaId = "",
+}: Prefill): AssignmentFormInput {
   return {
     workType: "GENERAL_TASK",
-    siteId: "",
+    siteId: defaultSiteId,
     date: defaultDate ? formatDateForInput(defaultDate) : "",
     startTime: defaultTime,
-    tasks: [{ ...EMPTY_TASK }],
+    groups: [emptyGroup(defaultFloorId, defaultAreaId)],
     cleanerIds: [],
     assignPerTask: false,
     recurrenceType: "DAILY",
     recurrenceCount: 1,
     daysOfWeek: [],
+    monthlyMode: "DAY_OF_MONTH",
     dayOfMonth: undefined,
+    weekOfMonth: undefined,
+    monthlyWeekday: undefined,
     otherRepeatWorkingDays: false,
     otherUseRecurrence: false,
   };
@@ -95,10 +118,152 @@ function buildDefaults(defaultDate?: Date, defaultTime = ""): AssignmentFormInpu
 const inputClass =
   "rounded-xl border px-3 py-2 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary";
 
-// ── Task card (own component so each row can load areas for its floor) ─────────
+function formatDuration(minutes?: number): string {
+  if (minutes == null) return "—";
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
 
-interface TaskCardProps {
-  index: number;
+// ── Per-task expected inventory items (optional) ──────────────────────────────
+
+interface TaskItemsEditorProps {
+  groupIndex: number;
+  taskIndex: number;
+}
+
+function TaskItemsEditor({ groupIndex, taskIndex }: TaskItemsEditorProps) {
+  const { control } = useFormContext<AssignmentFormInput>();
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `groups.${groupIndex}.tasks.${taskIndex}.items`,
+  });
+  const itemsQuery = useInventoryItems(true);
+  const values = useWatch({ control, name: `groups.${groupIndex}.tasks.${taskIndex}.items` }) ?? [];
+
+  const [expanded, setExpanded] = useState(false);
+  const [selItem, setSelItem] = useState<string | null>(null);
+  const [qty, setQty] = useState("1");
+
+  const catalog = itemsQuery.data ?? [];
+  const chosenIds = values.map((v) => v?.itemId);
+  const options: SelectOption[] = catalog
+    .filter((it) => !chosenIds.includes(it.id))
+    .map((it) => ({ value: it.id, label: `${it.name} (${it.unit})` }));
+
+  const itemById = (id: string) => catalog.find((it) => it.id === id);
+
+  function addItem() {
+    if (!selItem) return;
+    const q = parseFloat(qty);
+    if (!Number.isFinite(q) || q <= 0) return;
+    append({ itemId: selItem, quantity: q });
+    setSelItem(null);
+    setQty("1");
+  }
+
+  const showList = fields.length > 0;
+
+  if (!expanded && !showList) {
+    return (
+      <div className="mt-2 pl-7">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-grey-300 px-2.5 py-1 text-[11px] font-medium text-grey-600 transition-colors hover:border-primary hover:text-primary"
+        >
+          <Plus size={12} aria-hidden="true" />
+          Add items
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 pl-7">
+      <p className="mb-1.5 text-[11px] font-medium text-grey-500">Expected items (optional)</p>
+
+      {showList && (
+        <ul className="mb-2 flex flex-col gap-1">
+          {fields.map((field, i) => {
+            const value = values[i];
+            const item = value?.itemId ? itemById(value.itemId) : undefined;
+            return (
+              <li
+                key={field.id}
+                className="flex items-center gap-2 rounded-lg border border-grey-200 bg-white px-2.5 py-1.5 text-[11px]"
+              >
+                <span className="min-w-0 flex-1 truncate text-on-surface">
+                  {item?.name ?? "Item"}
+                </span>
+                <span className="shrink-0 rounded-md bg-grey-100 px-1.5 py-0.5 font-medium text-grey-600">
+                  {value?.quantity} {item?.unit ?? ""}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Remove item"
+                  onClick={() => remove(i)}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-red-50 hover:text-danger"
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <SearchableSelect
+            label="Item"
+            options={options}
+            value={selItem}
+            onChange={setSelItem}
+            loading={itemsQuery.isLoading}
+            placeholder="Select an item"
+            emptyMessage="No items available"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-on-surface">Quantity</label>
+          <div className="flex items-stretch gap-1.5">
+            <input
+              type="number"
+              min="0.001"
+              step="any"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              aria-label="Expected quantity"
+              className={cn("w-full bg-white sm:w-20", inputClass, "border-grey-300")}
+            />
+            <span
+              aria-label="Quantity unit"
+              className="flex min-w-[3.25rem] shrink-0 items-center justify-center rounded-xl border border-grey-200 bg-grey-100 px-2 text-xs font-medium text-grey-600"
+            >
+              {(selItem && itemById(selItem)?.unit) || "unit"}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={!selItem}
+          className="flex h-[38px] shrink-0 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-[13px] font-medium text-white transition-colors hover:bg-primary-variant disabled:opacity-50"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Location group card: floor + area, then quick-add many tasks ──────────────
+
+interface LocationGroupCardProps {
+  groupIndex: number;
   siteId: string;
   floorOptions: SelectOption[];
   floorsLoading: boolean;
@@ -108,8 +273,8 @@ interface TaskCardProps {
   cleaners: Cleaner[];
 }
 
-function AssignmentTaskCard({
-  index,
+function LocationGroupCard({
+  groupIndex,
   siteId,
   floorOptions,
   floorsLoading,
@@ -117,100 +282,97 @@ function AssignmentTaskCard({
   onRemove,
   assignPerTask,
   cleaners,
-}: TaskCardProps) {
+}: LocationGroupCardProps) {
   const {
-    register,
     control,
     watch,
     setValue,
     formState: { errors },
   } = useFormContext<AssignmentFormInput>();
 
-  const floorId = watch(`tasks.${index}.floorId`);
-  const selectedCleaners = watch(`tasks.${index}.cleanerIds`) ?? [];
+  const floorId = watch(`groups.${groupIndex}.floorId`);
   const areasQuery = useAreas(floorId || undefined);
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `groups.${groupIndex}.tasks`,
+  });
+
+  const [qName, setQName] = useState("");
+  const [qDuration, setQDuration] = useState("");
+  const [qDesc, setQDesc] = useState("");
+  const [qError, setQError] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const areaOptions: SelectOption[] = useMemo(
     () => (areasQuery.data ?? []).map((a) => ({ value: a.id, label: a.name })),
     [areasQuery.data],
   );
 
-  const taskErrors = errors.tasks?.[index];
+  const groupErrors = errors.groups?.[groupIndex];
 
-  function toggleTaskCleaner(id: string) {
-    const next = selectedCleaners.includes(id)
-      ? selectedCleaners.filter((c) => c !== id)
-      : [...selectedCleaners, id];
-    setValue(`tasks.${index}.cleanerIds`, next, { shouldValidate: true });
+  function addTask() {
+    const name = qName.trim();
+    if (name.length < 2) {
+      setQError(true);
+      nameRef.current?.focus();
+      return;
+    }
+    const duration = qDuration ? parseInt(qDuration, 10) : undefined;
+    append({
+      name,
+      durationMinutes: duration && duration > 0 ? duration : undefined,
+      description: qDesc.trim(),
+      cleanerIds: [],
+      items: [],
+    });
+    setQName("");
+    setQDuration("");
+    setQDesc("");
+    setQError(false);
+    nameRef.current?.focus();
+  }
+
+  function onQuickKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTask();
+    }
+  }
+
+  function toggleTaskCleaner(taskIndex: number, cleanerId: string) {
+    const current = watch(`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds`) ?? [];
+    const next = current.includes(cleanerId)
+      ? current.filter((c) => c !== cleanerId)
+      : [...current, cleanerId];
+    setValue(`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds`, next, { shouldValidate: true });
   }
 
   return (
-    <div className="rounded-2xl border border-grey-200 bg-white/60 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-on-surface">Task {index + 1}</span>
+    <div className="rounded-2xl border border-grey-200 bg-white/70 p-4">
+      {/* Header */}
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <MapPin size={13} aria-hidden="true" />
+        </span>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+          {fields.length} task{fields.length === 1 ? "" : "s"}
+        </span>
         {canRemove && (
           <button
             type="button"
-            aria-label={`Remove task ${index + 1}`}
+            aria-label={`Remove location ${groupIndex + 1}`}
             onClick={onRemove}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Trash2 size={14} aria-hidden="true" />
           </button>
         )}
       </div>
 
-      {/* Row 1: name + duration */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_160px]">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`task-name-${index}`} className="text-sm font-medium text-on-surface">
-            Task Name
-          </label>
-          <input
-            id={`task-name-${index}`}
-            type="text"
-            placeholder="e.g., Vacuum office floor"
-            {...register(`tasks.${index}.name`)}
-            className={cn(inputClass, taskErrors?.name ? "border-danger" : "border-grey-300")}
-          />
-          {taskErrors?.name && <p className="text-xs text-danger">{taskErrors.name.message}</p>}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`task-duration-${index}`} className="text-sm font-medium text-on-surface">
-            Duration (min)
-          </label>
-          <Controller
-            name={`tasks.${index}.durationMinutes`}
-            control={control}
-            render={({ field }) => (
-              <input
-                id={`task-duration-${index}`}
-                type="number"
-                min="5"
-                step="5"
-                placeholder="Optional"
-                value={field.value ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  field.onChange(v === "" ? undefined : parseInt(v, 10));
-                }}
-                className={cn(
-                  inputClass,
-                  taskErrors?.durationMinutes ? "border-danger" : "border-grey-300",
-                )}
-              />
-            )}
-          />
-          {taskErrors?.durationMinutes && (
-            <p className="text-xs text-danger">{taskErrors.durationMinutes.message}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Row 2: floor + area */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      {/* Floor + Area */}
+      <div className="grid grid-cols-2 gap-4">
         <Controller
-          name={`tasks.${index}.floorId`}
+          name={`groups.${groupIndex}.floorId`}
           control={control}
           render={({ field }) => (
             <SearchableSelect
@@ -219,18 +381,18 @@ function AssignmentTaskCard({
               value={field.value || null}
               onChange={(v) => {
                 field.onChange(v);
-                setValue(`tasks.${index}.areaId`, "");
+                setValue(`groups.${groupIndex}.areaId`, "");
               }}
               disabled={!siteId}
               loading={floorsLoading && !!siteId}
-              error={taskErrors?.floorId?.message}
+              error={groupErrors?.floorId?.message}
               placeholder={siteId ? "Select floor" : "Select a site first"}
               emptyMessage="No floors for this site"
             />
           )}
         />
         <Controller
-          name={`tasks.${index}.areaId`}
+          name={`groups.${groupIndex}.areaId`}
           control={control}
           render={({ field }) => (
             <SearchableSelect
@@ -240,7 +402,7 @@ function AssignmentTaskCard({
               onChange={(v) => field.onChange(v)}
               disabled={!floorId}
               loading={areasQuery.isLoading && !!floorId}
-              error={taskErrors?.areaId?.message}
+              error={groupErrors?.areaId?.message}
               placeholder={floorId ? "Select area" : "Select a floor first"}
               emptyMessage="No areas for this floor"
             />
@@ -248,53 +410,145 @@ function AssignmentTaskCard({
         />
       </div>
 
-      {/* Row 3: description */}
-      <div className="mt-4 flex flex-col gap-1.5">
-        <label htmlFor={`task-description-${index}`} className="text-sm font-medium text-on-surface">
-          Description <span className="font-normal text-grey-500">(optional)</span>
-        </label>
-        <textarea
-          id={`task-description-${index}`}
-          rows={2}
-          {...register(`tasks.${index}.description`)}
-          className={cn("resize-none", inputClass, "border-grey-300")}
+      {/* Quick add — sits directly under floor/area so it never moves out of reach */}
+      <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="flex-1">
+            <input
+              ref={nameRef}
+              type="text"
+              value={qName}
+              onChange={(e) => {
+                setQName(e.target.value);
+                if (qError) setQError(false);
+              }}
+              onKeyDown={onQuickKeyDown}
+              placeholder="Task name — e.g. Vacuum & mop floor"
+              aria-label="New task name"
+              className={cn(
+                "w-full bg-white",
+                inputClass,
+                qError ? "border-danger" : "border-grey-300",
+              )}
+            />
+          </div>
+          <input
+            type="number"
+            min="5"
+            step="5"
+            value={qDuration}
+            onChange={(e) => setQDuration(e.target.value)}
+            onKeyDown={onQuickKeyDown}
+            placeholder="Mins"
+            aria-label="Estimated duration in minutes (optional)"
+            className={cn("w-full bg-white sm:w-24", inputClass, "border-grey-300")}
+          />
+          <button
+            type="button"
+            onClick={addTask}
+            className="flex h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Plus size={15} aria-hidden="true" />
+            Add
+          </button>
+        </div>
+        <input
+          type="text"
+          value={qDesc}
+          onChange={(e) => setQDesc(e.target.value)}
+          onKeyDown={onQuickKeyDown}
+          placeholder="Description (optional)"
+          aria-label="Task description (optional)"
+          className={cn("mt-2 w-full bg-white", inputClass, "border-grey-300")}
         />
+        <p className="mt-1.5 text-[11px] text-grey-500">
+          Duration &amp; description are optional. Press <kbd className="rounded bg-white px-1">Enter</kbd> to
+          add and keep going.
+        </p>
       </div>
 
-      {/* Per-task cleaner chips (only in per-task assignment mode) */}
-      {assignPerTask && (
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-grey-500">Cleaners for this task</p>
-          {cleaners.length === 0 ? (
-            <p className="text-xs text-grey-500">No cleaners are assigned to this site.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {cleaners.map((cleaner) => {
-                const isSelected = selectedCleaners.includes(cleaner.id);
-                return (
+      {/* Added tasks */}
+      {fields.length > 0 ? (
+        <ul className="mt-3 flex flex-col gap-1.5">
+          {fields.map((field, taskIndex) => {
+            const task = watch(`groups.${groupIndex}.tasks.${taskIndex}`);
+            const selected = task?.cleanerIds ?? [];
+            const taskCleanerError =
+              groupErrors?.tasks?.[taskIndex]?.cleanerIds?.message;
+            return (
+              <li
+                key={field.id}
+                className="rounded-xl border border-grey-200 bg-white px-3 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-primary">
+                    {taskIndex + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={task?.name}>
+                    {task?.name}
+                  </span>
+                  <span className="shrink-0 rounded-md bg-grey-100 px-1.5 py-0.5 text-[11px] font-medium text-grey-500">
+                    {formatDuration(task?.durationMinutes ?? undefined)}
+                  </span>
                   <button
-                    key={cleaner.id}
                     type="button"
-                    onClick={() => toggleTaskCleaner(cleaner.id)}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                      isSelected
-                        ? "border-primary bg-primary text-white"
-                        : "border-grey-300 bg-white text-on-surface hover:border-primary",
-                    )}
+                    aria-label={`Remove task ${task?.name}`}
+                    onClick={() => remove(taskIndex)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    {isSelected && <Check size={12} aria-hidden="true" />}
-                    {cleanerName(cleaner)}
+                    <X size={13} aria-hidden="true" />
                   </button>
-                );
-              })}
-            </div>
-          )}
-          {taskErrors?.cleanerIds && (
-            <p className="mt-1.5 text-xs text-danger">{taskErrors.cleanerIds.message}</p>
-          )}
-        </div>
+                </div>
+                {task?.description && (
+                  <p className="mt-0.5 pl-7 text-xs text-grey-500">{task.description}</p>
+                )}
+
+                {assignPerTask && (
+                  <div className="mt-2 pl-7">
+                    {cleaners.length === 0 ? (
+                      <p className="text-[11px] text-grey-500">No cleaners on this site.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {cleaners.map((cleaner) => {
+                          const isSelected = selected.includes(cleaner.id);
+                          return (
+                            <button
+                              key={cleaner.id}
+                              type="button"
+                              onClick={() => toggleTaskCleaner(taskIndex, cleaner.id)}
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                                isSelected
+                                  ? "border-primary bg-primary text-white"
+                                  : "border-grey-300 bg-white text-on-surface hover:border-primary",
+                              )}
+                            >
+                              {isSelected && <Check size={10} aria-hidden="true" />}
+                              {cleanerName(cleaner)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {taskCleanerError && (
+                      <p className="mt-1 text-[11px] text-danger">{taskCleanerError}</p>
+                    )}
+                  </div>
+                )}
+
+                <TaskItemsEditor groupIndex={groupIndex} taskIndex={taskIndex} />
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-3 text-xs text-grey-500">
+          No tasks yet — add one above. Great for many tasks on the same floor &amp; area.
+        </p>
+      )}
+      {groupErrors?.tasks?.message && (
+        <p className="mt-2 text-xs text-danger">{groupErrors.tasks.message}</p>
       )}
     </div>
   );
@@ -308,15 +562,23 @@ export function NewAssignmentModal({
   onCreated,
   defaultDate,
   defaultTime = "",
+  defaultSiteId,
+  defaultFloorId,
+  defaultAreaId,
+  loadedDraft,
 }: NewAssignmentModalProps) {
   const [cleanerSearch, setCleanerSearch] = useState("");
+  const [activeDraftId, setActiveDraftId] = useState<string | undefined>();
+  const [showClosePrompt, setShowClosePrompt] = useState(false);
 
   const sitesQuery = useSites();
   const createMutation = useCreateAssignment();
+  const saveDraftMutation = useSaveDraft();
+  const deleteDraftMutation = useDeleteDraft();
 
   const methods = useForm<AssignmentFormInput>({
     resolver: zodResolver(AssignmentFormSchema),
-    defaultValues: buildDefaults(defaultDate, defaultTime),
+    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId }),
   });
   const {
     register,
@@ -324,19 +586,24 @@ export function NewAssignmentModal({
     control,
     watch,
     setValue,
+    getValues,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = methods;
 
-  const { fields, append, remove } = useFieldArray({ control, name: "tasks" });
+  const { fields: groupFields, append: appendGroup, remove: removeGroup } = useFieldArray({
+    control,
+    name: "groups",
+  });
 
   const workType = watch("workType");
   const siteId = watch("siteId");
   const startTime = watch("startTime");
-  const tasks = watch("tasks");
+  const groups = watch("groups");
   const selectedCleaners = watch("cleanerIds");
   const assignPerTask = watch("assignPerTask");
   const recurrenceType = watch("recurrenceType");
+  const monthlyMode = watch("monthlyMode");
   const otherRepeatWorkingDays = watch("otherRepeatWorkingDays");
   const otherUseRecurrence = watch("otherUseRecurrence");
 
@@ -371,9 +638,11 @@ export function NewAssignmentModal({
     [],
   );
 
+  const allTasks = useMemo(() => allTasksOf({ groups: groups ?? [] }), [groups]);
+  const totalTasks = allTasks.length;
   const expectedEndTime = useMemo(
-    () => computeExpectedEndTime(startTime, tasks ?? []),
-    [startTime, tasks],
+    () => computeExpectedEndTime(startTime, allTasks),
+    [startTime, allTasks],
   );
 
   const cleaners = cleanersQuery.data ?? [];
@@ -385,16 +654,31 @@ export function NewAssignmentModal({
 
   useEffect(() => {
     if (open) {
-      reset(buildDefaults(defaultDate, defaultTime));
+      if (loadedDraft?.payload) {
+        // Merge over defaults so any newly-added form fields are still present.
+        const base = buildDefaults({});
+        reset({ ...base, ...(loadedDraft.payload as Partial<AssignmentFormInput>) } as AssignmentFormInput);
+        setActiveDraftId(loadedDraft.id);
+      } else {
+        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId }));
+        setActiveDraftId(undefined);
+      }
       setCleanerSearch("");
+      setShowClosePrompt(false);
       createMutation.reset();
+      saveDraftMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate, defaultTime, reset]);
+  }, [open, defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, loadedDraft, reset]);
 
+  // Close directly when there's nothing to lose; otherwise offer to save a draft.
   const handleClose = useCallback(() => {
+    if (isDirty && !createMutation.isPending && !saveDraftMutation.isPending) {
+      setShowClosePrompt(true);
+      return;
+    }
     onClose();
-  }, [onClose]);
+  }, [isDirty, createMutation.isPending, saveDraftMutation.isPending, onClose]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -404,11 +688,46 @@ export function NewAssignmentModal({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, handleClose]);
 
+  function draftTitle(values: AssignmentFormInput): string {
+    const site = (sitesQuery.data ?? []).find((s) => s.id === values.siteId);
+    const count = allTasksOf({ groups: values.groups ?? [] }).length;
+    return [
+      WORK_TYPE_LABELS[values.workType],
+      site?.name ?? "No site",
+      `${count} task${count === 1 ? "" : "s"}`,
+    ].join(" · ");
+  }
+
+  function saveDraftNow(closeAfter: boolean) {
+    const values = getValues();
+    saveDraftMutation.mutate(
+      {
+        id: activeDraftId,
+        input: {
+          title: draftTitle(values),
+          siteId: values.siteId || undefined,
+          payload: values,
+        },
+      },
+      {
+        onSuccess: (saved) => {
+          setActiveDraftId(saved.id);
+          if (closeAfter) {
+            setShowClosePrompt(false);
+            onClose();
+          }
+        },
+      },
+    );
+  }
+
   function handleFormSubmit(data: AssignmentFormInput) {
     createMutation.mutate(data, {
       onSuccess: () => {
+        // A draft that has become a real assignment no longer needs to linger.
+        if (activeDraftId) deleteDraftMutation.mutate(activeDraftId);
         onCreated?.();
-        handleClose();
+        onClose();
       },
     });
   }
@@ -463,7 +782,7 @@ export function NewAssignmentModal({
 
         <FormProvider {...methods}>
           <form onSubmit={handleSubmit(handleFormSubmit)}>
-            <div className="max-h-[70vh] overflow-y-auto px-6 pb-2">
+            <div className="max-h-[72vh] overflow-y-auto px-6 pb-2">
               {/* Row 1: Work Type + Site */}
               <div className="grid grid-cols-2 gap-4">
                 <Controller
@@ -490,13 +809,9 @@ export function NewAssignmentModal({
                       value={field.value || null}
                       onChange={(v) => {
                         field.onChange(v);
-                        // Floors/areas/cleaners are site-specific — reset dependants.
+                        // Floors/areas/cleaners are site-specific — reset to one blank group.
                         setValue("cleanerIds", []);
-                        (tasks ?? []).forEach((_, i) => {
-                          setValue(`tasks.${i}.floorId`, "");
-                          setValue(`tasks.${i}.areaId`, "");
-                          setValue(`tasks.${i}.cleanerIds`, []);
-                        });
+                        setValue("groups", [emptyGroup()], { shouldValidate: false });
                       }}
                       loading={sitesQuery.isLoading}
                       error={errors.siteId?.message}
@@ -568,9 +883,7 @@ export function NewAssignmentModal({
               {/* General (or Other + working-day fill): show the site's working days */}
               {showWorkingDays && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-primary/5 p-4">
-                  <p className="mb-2 text-sm font-medium text-on-surface">
-                    Site working days
-                  </p>
+                  <p className="mb-2 text-sm font-medium text-on-surface">Site working days</p>
                   {!siteId ? (
                     <p className="text-xs text-grey-500">
                       Select a site to see the days these tasks will repeat on.
@@ -587,8 +900,8 @@ export function NewAssignmentModal({
                     </>
                   ) : (
                     <p className="text-xs font-medium text-[#E17100]">
-                      This site has no working days configured — tasks will repeat every day.
-                      Set working days in Site Management first if that is not intended.
+                      This site has no working days configured — tasks will repeat every day. Set
+                      working days in Site Management first if that is not intended.
                     </p>
                   )}
                 </div>
@@ -681,81 +994,160 @@ export function NewAssignmentModal({
                   )}
 
                   {recurrenceType === "MONTHLY" && (
-                    <div className="mt-3 flex flex-col gap-1.5">
-                      <label
-                        htmlFor="assign-day-of-month"
-                        className="text-sm font-medium text-on-surface"
-                      >
-                        Day of the month
-                      </label>
-                      <Controller
-                        name="dayOfMonth"
-                        control={control}
-                        render={({ field }) => (
-                          <select
-                            id="assign-day-of-month"
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
-                            }
-                            className={cn(inputClass, "w-40 border-grey-300 bg-white")}
+                    <div className="mt-3">
+                      {/* Mode toggle: on a date vs on an ordinal weekday */}
+                      <div className="mb-3 inline-flex overflow-hidden rounded-xl border border-grey-300">
+                        {(
+                          [
+                            ["DAY_OF_MONTH", "On a date"],
+                            ["DAY_OF_WEEK", "On a weekday"],
+                          ] as const
+                        ).map(([mode, label]) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setValue("monthlyMode", mode, { shouldValidate: true })}
+                            className={cn(
+                              "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                              monthlyMode === mode
+                                ? "bg-primary text-white"
+                                : "bg-white text-on-surface hover:bg-grey-100",
+                            )}
                           >
-                            <option value="">Select day</option>
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                              <option key={d} value={d}>
-                                {d}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      />
-                      {errors.dayOfMonth && (
-                        <p className="text-xs text-danger">{errors.dayOfMonth.message}</p>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {monthlyMode === "DAY_OF_MONTH" ? (
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor="assign-day-of-month"
+                            className="text-sm font-medium text-on-surface"
+                          >
+                            Day of the month
+                          </label>
+                          <Controller
+                            name="dayOfMonth"
+                            control={control}
+                            render={({ field }) => (
+                              <select
+                                id="assign-day-of-month"
+                                value={field.value ?? ""}
+                                onChange={(e) =>
+                                  field.onChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
+                                }
+                                className={cn(inputClass, "w-40 border-grey-300 bg-white")}
+                              >
+                                <option value="">Select day</option>
+                                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                                  <option key={d} value={d}>
+                                    {d}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          />
+                          {errors.dayOfMonth && (
+                            <p className="text-xs text-danger">{errors.dayOfMonth.message}</p>
+                          )}
+                          <p className="text-xs text-grey-500">
+                            Days beyond a month&apos;s length fall on its last day (e.g. 31 → Feb 28).
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <label className="text-sm font-medium text-on-surface">
+                            On the…
+                          </label>
+                          {/* Ordinal 1st–4th */}
+                          <Controller
+                            name="weekOfMonth"
+                            control={control}
+                            render={({ field }) => (
+                              <div className="flex gap-1.5">
+                                {WEEK_OF_MONTH_OPTIONS.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => field.onChange(opt.value)}
+                                    aria-pressed={field.value === opt.value}
+                                    className={cn(
+                                      "h-9 w-11 rounded-lg text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                                      field.value === opt.value
+                                        ? "bg-primary text-white"
+                                        : "bg-white text-on-surface ring-1 ring-grey-300 hover:bg-grey-100",
+                                    )}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          />
+                          {errors.weekOfMonth && (
+                            <p className="text-xs text-danger">{errors.weekOfMonth.message}</p>
+                          )}
+                          {/* Weekday circles (single-select) */}
+                          <Controller
+                            name="monthlyWeekday"
+                            control={control}
+                            render={({ field }) => (
+                              <WorkingDaysSelector
+                                value={field.value ? [field.value] : []}
+                                singleSelect
+                                onChange={(days) => field.onChange(days[0])}
+                                error={errors.monthlyWeekday?.message}
+                              />
+                            )}
+                          />
+                          <p className="text-xs text-grey-500">
+                            e.g. the 2nd Wednesday of every{" "}
+                            {recurrenceType === "MONTHLY" ? "month" : "period"}.
+                          </p>
+                        </div>
                       )}
-                      <p className="text-xs text-grey-500">
-                        Days beyond a month&apos;s length fall on its last day (e.g. 31 → Feb 28).
-                      </p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Tasks */}
+              {/* Tasks — grouped by floor & area */}
               <div className="mt-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-on-surface">
-                    Tasks
-                    <span className="ml-2 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                      {fields.length}
-                    </span>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-sm font-medium text-on-surface">Tasks by location</span>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {totalTasks} total
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => append({ ...EMPTY_TASK })}
-                    className="flex items-center gap-1.5 rounded-xl border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    Add Task
-                  </button>
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  {fields.map((field, index) => (
-                    <AssignmentTaskCard
+                  {groupFields.map((field, index) => (
+                    <LocationGroupCard
                       key={field.id}
-                      index={index}
+                      groupIndex={index}
                       siteId={siteId}
                       floorOptions={floorOptions}
                       floorsLoading={floorsQuery.isLoading}
-                      canRemove={fields.length > 1}
-                      onRemove={() => remove(index)}
+                      canRemove={groupFields.length > 1}
+                      onRemove={() => removeGroup(index)}
                       assignPerTask={assignPerTask}
                       cleaners={cleaners}
                     />
                   ))}
                 </div>
-                {errors.tasks?.message && (
-                  <p className="mt-2 text-xs text-danger">{errors.tasks.message}</p>
+
+                <button
+                  type="button"
+                  onClick={() => appendGroup(emptyGroup())}
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                  Add another floor / area
+                </button>
+
+                {typeof errors.groups?.message === "string" && (
+                  <p className="mt-2 text-xs text-danger">{errors.groups.message}</p>
                 )}
               </div>
 
@@ -767,9 +1159,7 @@ export function NewAssignmentModal({
                     Expected End Time:{" "}
                     <span className="font-semibold text-primary">{expectedEndTime}</span>
                   </span>
-                  <span className="ml-auto text-xs text-grey-500">
-                    start + total task durations
-                  </span>
+                  <span className="ml-auto text-xs text-grey-500">start + total task durations</span>
                 </div>
               )}
 
@@ -797,7 +1187,7 @@ export function NewAssignmentModal({
                   </div>
                 </div>
 
-                {fields.length > 1 && (
+                {totalTasks > 1 && (
                   <label className="mb-3 flex items-center gap-2 text-sm text-on-surface">
                     <input
                       type="checkbox"
@@ -805,13 +1195,13 @@ export function NewAssignmentModal({
                       className="h-4 w-4 rounded border-grey-300 accent-[#0B585A]"
                     />
                     Assign cleaners per task (otherwise the selection below applies to all{" "}
-                    {fields.length} tasks)
+                    {totalTasks} tasks)
                   </label>
                 )}
 
                 {assignPerTask ? (
                   <p className="text-xs text-grey-500">
-                    Pick cleaners on each task card above.
+                    Pick cleaners on each task in the location cards above.
                   </p>
                 ) : (
                   <>
@@ -844,9 +1234,7 @@ export function NewAssignmentModal({
                     ) : cleanersQuery.isLoading ? (
                       <p className="text-xs text-grey-500">Loading cleaners…</p>
                     ) : cleaners.length === 0 ? (
-                      <p className="text-xs text-grey-500">
-                        No cleaners are assigned to this site.
-                      </p>
+                      <p className="text-xs text-grey-500">No cleaners are assigned to this site.</p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
                         {filteredCleaners.map((cleaner, i) => {
@@ -899,19 +1287,84 @@ export function NewAssignmentModal({
 
             {/* Footer */}
             <div className="px-6 pb-6 pt-4">
+              {activeDraftId && (
+                <p className="mb-2 text-xs text-grey-500">Editing a saved draft.</p>
+              )}
               {createMutation.isError && (
                 <p className="mb-3 text-sm text-danger">{getErrorMessage(createMutation.error)}</p>
               )}
-              <button
-                type="submit"
-                disabled={createMutation.isPending}
-                className="h-11 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {createMutation.isPending ? "Creating…" : "Create Assignment"}
-              </button>
+              {saveDraftMutation.isError && (
+                <p className="mb-3 text-sm text-danger">{getErrorMessage(saveDraftMutation.error)}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => saveDraftNow(false)}
+                  disabled={saveDraftMutation.isPending || createMutation.isPending}
+                  className="h-11 shrink-0 rounded-xl border border-primary px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saveDraftMutation.isPending
+                    ? "Saving…"
+                    : saveDraftMutation.isSuccess && !isDirty
+                      ? "Draft saved"
+                      : activeDraftId
+                        ? "Update draft"
+                        : "Save as draft"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  className="h-11 flex-1 rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {createMutation.isPending
+                    ? "Creating…"
+                    : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
+                </button>
+              </div>
             </div>
           </form>
         </FormProvider>
+
+        {/* Close-with-unsaved-changes prompt */}
+        {showClosePrompt && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-3xl bg-black/40 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-2xl ring-1 ring-grey-200">
+              <h3 className="text-base font-semibold text-on-surface">Save as draft?</h3>
+              <p className="mt-1.5 text-sm text-grey-500">
+                You have unsaved changes. Save them as a draft to finish later, or discard.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveDraftNow(true)}
+                  disabled={saveDraftMutation.isPending}
+                  className="h-10 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                >
+                  {saveDraftMutation.isPending ? "Saving…" : "Save as draft"}
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClosePrompt(false)}
+                    className="h-10 flex-1 rounded-xl border border-grey-300 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    Keep editing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowClosePrompt(false);
+                      onClose();
+                    }}
+                    className="h-10 flex-1 rounded-xl border border-grey-300 text-sm font-medium text-danger transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

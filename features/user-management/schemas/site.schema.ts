@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalAuMobileSchema } from "@/lib/validators/phone";
+import { optionalAuPhoneSchema } from "@/lib/validators/phone";
 
 // Java DayOfWeek names, ordered Monday-first to match the backend enum.
 export const DAY_OF_WEEK_VALUES = [
@@ -27,6 +27,11 @@ export const SiteSchema = z.object({
   contactNumber: z.string().nullable().optional(),
   googleMapsLink: z.string().nullable().optional(),
   streetAddress: z.string().nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  geofenceRadiusMeters: z.number().nullable().optional(),
+  nfcTagId: z.string().nullable().optional(),
+  nfcRegistered: z.boolean().optional(),
   startDate: z.string().nullable().optional(), // ISO date (yyyy-MM-dd)
   endDate: z.string().nullable().optional(),
   workingDays: z.array(DayOfWeekSchema).default([]),
@@ -43,9 +48,18 @@ export const SiteFormSchema = z
     clientId: z.string().uuid("Please select a client"),
     name: z.string().min(2, "Name must be at least 2 characters").max(150, "Name is too long"),
     contactPersonName: z.string().max(120, "Name is too long").optional().or(z.literal("")),
-    contactNumber: optionalAuMobileSchema,
+    contactNumber: optionalAuPhoneSchema,
     googleMapsLink: z.string().max(2048, "Link is too long").optional().or(z.literal("")),
     streetAddress: z.string().max(1024, "Address is too long").optional().or(z.literal("")),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    geofenceRadiusMeters: z
+      .number()
+      .int()
+      .positive("Radius must be a positive number of meters")
+      .nullable()
+      .optional(),
+    nfcTagId: z.string().max(128, "NFC tag id is too long").optional().or(z.literal("")),
     startDate: z.string().optional().or(z.literal("")),
     endDate: z.string().optional().or(z.literal("")),
     workingDays: z.array(DayOfWeekSchema),

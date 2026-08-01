@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, Clock, CheckCircle2, MessageSquare, Plus } from "lucide-react";
+import { AlertCircle, Clock, CheckCircle2, MessageSquare } from "lucide-react";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { SearchInput } from "@/components/shared/SearchInput";
@@ -9,11 +9,9 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
-import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useResolveComplaint } from "@/features/complaints/hooks/useResolveComplaint";
 import { ComplaintRow } from "@/features/complaints/components/ComplaintRow";
 import { AdminComplaintDetailModal } from "@/features/complaints/components/AdminComplaintDetailModal";
-import { AddComplaintModal } from "@/features/complaints/components/AddComplaintModal";
 import type { Complaint } from "@/features/complaints/types";
 
 type FilterOption = "All" | "Open" | "In progress" | "Resolved";
@@ -26,13 +24,11 @@ const FILTER_STATUS_MAP: Record<Exclude<FilterOption, "All">, Complaint["status"
 
 export default function ComplaintsPage() {
   const { data, isLoading, isError } = useComplaints();
-  const createComplaintMutation = useCreateComplaint();
   const resolveComplaintMutation = useResolveComplaint();
 
   const [filter, setFilter]     = useState<FilterOption>("All");
   const [search, setSearch]     = useState("");
   const [selected, setSelected] = useState<Complaint | null>(null);
-  const [addOpen, setAddOpen]   = useState(false);
 
   const filtered = useMemo(() => {
     const complaints = data?.complaints ?? [];
@@ -67,17 +63,8 @@ export default function ComplaintsPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-on-surface">Complaints</h1>
-            <p className="mt-1 text-sm text-grey-500">View and manage complaints</p>
+            <p className="text-sm text-grey-500">View and manage complaints</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="flex shrink-0 items-center gap-2 rounded-xl bg-[#ED5F25] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED5F25] focus-visible:ring-offset-2"
-          >
-            <Plus size={16} aria-hidden="true" />
-            Add Complaints
-          </button>
         </div>
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -149,12 +136,6 @@ export default function ComplaintsPage() {
         onClose={() => setSelected(null)}
         complaint={selected}
         onResolve={(id) => resolveComplaintMutation.mutate(id)}
-      />
-
-      <AddComplaintModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSubmit={(input) => createComplaintMutation.mutate(input)}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalAuMobileSchema } from "@/lib/validators/phone";
+import { optionalAuPhoneSchema } from "@/lib/validators/phone";
 
 // Mirrors backend ClientResponse.
 export const ClientSchema = z.object({
@@ -20,7 +20,7 @@ export const ClientListSchema = z.array(ClientSchema);
 export const ClientFormSchema = z.object({
   clientCompanyId: z.string().uuid("Please select a client-company"),
   name: z.string().min(2, "Name must be at least 2 characters").max(120, "Name is too long"),
-  contactNumber: optionalAuMobileSchema,
+  contactNumber: optionalAuPhoneSchema,
   email: z.string().min(1, "Email is required").email("Invalid email address"),
 });
 

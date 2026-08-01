@@ -2,35 +2,33 @@
 
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { PillButton } from "@/components/shared/PillButton";
-import { SlideButton } from "@/components/shared/SlideButton";
+import { PriorityBadge } from "@/components/shared/PriorityBadge";
+import type { Complaint } from "@/features/complaints/types";
 
-export type ComplaintDetailState = "open" | "in_progress" | "completed" | "closed";
+const STATUS_LABEL: Record<Complaint["status"], string> = {
+  open:        "Open",
+  in_progress: "In Progress",
+  resolved:    "Resolved",
+  closed:      "Closed",
+};
+
+const STATUS_CLASSES: Record<Complaint["status"], string> = {
+  open:        "bg-[#ED5F25]/15 text-[#ED5F25]",
+  in_progress: "bg-primary/15 text-primary",
+  resolved:    "bg-success/15 text-success",
+  closed:      "bg-grey-200 text-grey-700",
+};
 
 interface ComplaintDetailModalProps {
-  open:              boolean;
-  onClose:           () => void;
-  title:             string;
-  location:          string;
-  ticketId:          string;
-  state?:            ComplaintDetailState;
-  onStartWorking?:   () => void;
-  onUploadPhoto?:    () => void;
-  onMarkComplete?:   () => void;
+  open:      boolean;
+  onClose:   () => void;
+  complaint: Complaint | null;
 }
 
-export function ComplaintDetailModal({
-  open,
-  onClose,
-  title,
-  location,
-  ticketId,
-  state = "open",
-  onStartWorking,
-  onUploadPhoto,
-  onMarkComplete,
-}: ComplaintDetailModalProps) {
-  if (!open) return null;
+export function ComplaintDetailModal({ open, onClose, complaint }: ComplaintDetailModalProps) {
+  if (!open || !complaint) return null;
+
+  const location = [complaint.floor, complaint.area].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -48,7 +46,7 @@ export function ComplaintDetailModal({
         aria-label="Complaint detail"
         className={cn(
           "fixed z-50 bg-white p-6",
-          "inset-x-0 bottom-0 rounded-t-3xl",
+          "inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl",
           "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
         )}
       >
@@ -64,51 +62,66 @@ export function ComplaintDetailModal({
           </button>
         </div>
 
-        {/* Description block */}
-        <div className="mb-5">
-          <p className="text-sm font-semibold text-on-surface leading-snug">{title}</p>
-          <p className="mt-1 text-xs text-grey-500">{location}</p>
-          <p className="text-xs text-grey-500">{ticketId}</p>
+        {/* Status + priority */}
+        <div className="mb-3 flex items-center gap-2">
+          <span className={cn("rounded-xl px-2.5 py-1 text-xs font-medium", STATUS_CLASSES[complaint.status])}>
+            {STATUS_LABEL[complaint.status]}
+          </span>
+          <PriorityBadge priority={complaint.priority} />
         </div>
 
-        {/* Actions per state */}
-        <div className="flex flex-col gap-3">
-          {state === "open" && (
-            <SlideButton
-              label="Start working"
-              variant="teal"
-              onComplete={onStartWorking ?? onClose}
-            />
-          )}
-
-          {state === "in_progress" && (
-            <>
-              <PillButton variant="orange" onClick={onUploadPhoto}>
-                Upload a photo
-              </PillButton>
-              <SlideButton
-                label="Slide to mark as complete"
-                variant="teal"
-                onComplete={onMarkComplete ?? onClose}
-              />
-            </>
-          )}
-
-          {state === "completed" && (
-            <PillButton variant="success" disabled>
-              Completed
-            </PillButton>
-          )}
-
-          {state === "closed" && (
-            <button
-              disabled
-              className="flex h-14 w-full items-center justify-center rounded-full bg-[#607D8B] text-sm font-semibold text-white cursor-not-allowed opacity-70"
-            >
-              Closed
-            </button>
-          )}
+        {/* Title + location */}
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-on-surface leading-snug">{complaint.title}</p>
+          {location && <p className="mt-1 text-xs text-grey-500">{location}</p>}
+          <p className="text-xs text-grey-500">{complaint.site}</p>
+          <p className="text-xs text-grey-400">{complaint.code}</p>
         </div>
+
+        {/* Description / note */}
+        {complaint.description && (
+          <div className="mb-4">
+            <p className="mb-1 text-xs font-medium text-grey-500">Note</p>
+            <p className="text-sm text-on-surface whitespace-pre-line">{complaint.description}</p>
+          </div>
+        )}
+
+        {/* Affected tasks */}
+        {complaint.tasks.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-1.5 text-xs font-medium text-grey-500">Tasks</p>
+            <ul className="flex flex-col gap-1.5">
+              {complaint.tasks.map((t) => (
+                <li
+                  key={`${t.taskId}-${t.date}`}
+                  className="rounded-xl bg-grey-100 px-3 py-2 text-xs text-on-surface"
+                >
+                  <span className="font-medium">{t.taskName}</span>
+                  {t.floor && <span className="text-grey-500"> · {t.floor}</span>}
+                  {t.area && <span className="text-grey-500"> · {t.area}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Photos */}
+        {complaint.photos.length > 0 && (
+          <div className="mb-2">
+            <p className="mb-1.5 text-xs font-medium text-grey-500">Photos</p>
+            <div className="grid grid-cols-3 gap-2">
+              {complaint.photos.map((p) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={p.id}
+                  src={`/api/complaints/photos/${p.id}`}
+                  alt="Complaint attachment"
+                  className="aspect-square w-full rounded-xl object-cover"
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

@@ -32,10 +32,21 @@ interface GoogleMap {
   addListener(eventName: string, handler: (event: GoogleMapMouseEvent) => void): void;
 }
 
+interface GoogleSymbol {
+  path: number;
+  scale?: number;
+  fillColor?: string;
+  fillOpacity?: number;
+  strokeColor?: string;
+  strokeWeight?: number;
+}
+
 interface GoogleMarkerOptions {
   position: GoogleLatLngLiteral;
   map: GoogleMap;
   draggable?: boolean;
+  title?: string;
+  icon?: GoogleSymbol | string;
 }
 
 interface GoogleMarker {
@@ -92,6 +103,7 @@ interface GoogleMapsNamespace {
   Geocoder: new () => GoogleGeocoder;
   places: GooglePlacesNamespace;
   event: GoogleMapsEventNamespace;
+  SymbolPath: { readonly CIRCLE: number };
 }
 
 interface Window {

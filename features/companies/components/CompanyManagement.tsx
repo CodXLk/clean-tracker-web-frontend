@@ -21,8 +21,7 @@ export function CompanyManagement() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-on-surface">Client Companies</h1>
-            <p className="mt-1 text-sm text-grey-500">Businesses that engage Primeway for cleaning services</p>
+            <p className="text-sm text-grey-500">Businesses that engage Primeway for cleaning services</p>
           </div>
           {canManage && (
             <button

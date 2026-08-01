@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronRight,
   ClipboardCheck,
   Clock,
   FileText,
   Key,
+  LogOut,
   Pencil,
   Bell,
   Star,
@@ -18,6 +20,7 @@ import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
 import { ResetPasswordModal } from "@/components/modals/ResetPasswordModal";
 import { NotificationsModal } from "@/components/modals/NotificationsModal";
+import { useLogout } from "@/features/auth/hooks/useAuth";
 import { cn } from "@/lib/utils/cn";
 import type { LucideIcon } from "lucide-react";
 
@@ -53,6 +56,15 @@ export default function ProfilePage() {
   const [editProfileOpen,   setEditProfileOpen]   = useState(false);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const router = useRouter();
+  const logout = useLogout();
+
+  function handleSignOut() {
+    logout.mutate(undefined, {
+      onSettled: () => router.replace("/login"),
+    });
+  }
 
   function handleSettingsClick(id: string) {
     if (id === "editProfile")   { setEditProfileOpen(true);   return; }
@@ -126,6 +138,21 @@ export default function ProfilePage() {
                 );
               })}
             </div>
+
+            {/* Sign out */}
+            <button
+              onClick={handleSignOut}
+              disabled={logout.isPending}
+              className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm text-left transition-shadow hover:shadow-md disabled:opacity-60"
+            >
+              <div className="flex items-center gap-3">
+                <LogOut size={18} className="text-danger" />
+                <span className="text-sm font-medium text-danger">
+                  {logout.isPending ? "Signing out…" : "Sign out"}
+                </span>
+              </div>
+              <ChevronRight size={16} className="text-grey-500" />
+            </button>
           </div>
 
           {/* Right column — Stats grid */}

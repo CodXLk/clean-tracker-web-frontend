@@ -8,9 +8,11 @@ import {
   MessageSquare,
   Package,
   User,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useAuthStore } from "@/features/auth/store/auth.store";
 
 interface NavItemConfig {
   label: string;
@@ -25,6 +27,13 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inventory",  href: "/dashboard/inventory",   icon: Package },
   { label: "Profile",    href: "/dashboard/profile",     icon: User },
 ];
+
+/** Supervisors get an extra entry point into the Workforce & Management console. */
+const SUPERVISOR_ITEM: NavItemConfig = {
+  label: "Workforce",
+  href:  "/admin/workforce",
+  icon:  UsersRound,
+};
 
 interface NavItemProps {
   item:     NavItemConfig;
@@ -97,6 +106,11 @@ function SidebarItem({ item, isActive }: NavItemProps) {
 
 export function BottomNavBar() {
   const pathname = usePathname();
+  const role = useAuthStore((s) => s.user?.role);
+  const items =
+    role === "SUPERVISOR"
+      ? [...NAV_ITEMS.slice(0, 4), SUPERVISOR_ITEM, NAV_ITEMS[4]]
+      : NAV_ITEMS;
 
   function isItemActive(item: NavItemConfig): boolean {
     if (item.href === "/dashboard") {
@@ -117,7 +131,7 @@ export function BottomNavBar() {
           <span className="text-lg font-bold text-primary">CleanTracker</span>
         </div>
 
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <SidebarItem
             key={item.href}
             item={item}
@@ -131,7 +145,7 @@ export function BottomNavBar() {
         aria-label="Main navigation"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-grey-300 bg-surface"
       >
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <NavItem
             key={item.href}
             item={item}
