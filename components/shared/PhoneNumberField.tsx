@@ -23,7 +23,7 @@ function digitsOf(value: string): string {
   return raw.replace(/\D/g, "").slice(0, MAX_DIGITS);
 }
 
-/** Fixed "+61" prefix + numeric-only entry for the remaining Australian mobile digits. */
+/** Fixed "+61" prefix + numeric-only entry for the remaining 9 Australian phone digits (landline or mobile). */
 export function PhoneNumberField({
   label,
   required,
@@ -66,7 +66,7 @@ export function PhoneNumberField({
           value={digits}
           onChange={handleChange}
           onBlur={onBlur}
-          placeholder="412345678"
+          placeholder="412345678 or 298765432"
           maxLength={MAX_DIGITS}
           aria-invalid={!!error}
           aria-describedby={error ? `${inputId}-error` : undefined}

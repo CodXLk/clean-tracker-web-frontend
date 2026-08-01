@@ -27,6 +27,14 @@ export const RECURRENCE_TYPE_LABELS: Record<RecurrenceType, string> = {
   MONTHLY: "Month",
 };
 
+/** Ordinal week within a month for the monthly "nth weekday" mode. */
+export const WEEK_OF_MONTH_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 1, label: "1st" },
+  { value: 2, label: "2nd" },
+  { value: 3, label: "3rd" },
+  { value: 4, label: "4th" },
+];
+
 export const TaskStatusSchema = z.enum([
   "SCHEDULED",
   "ACTIVE",
@@ -91,6 +99,8 @@ export const AssignmentSchema = z.object({
   recurrenceInterval: z.number().nullable().optional(),
   daysOfWeek: z.array(DayOfWeekSchema).default([]),
   dayOfMonth: z.number().nullable().optional(),
+  weekOfMonth: z.number().nullable().optional(),
+  monthlyWeekday: DayOfWeekSchema.nullable().optional(),
   otherRepeatWorkingDays: z.boolean(),
   otherUseRecurrence: z.boolean(),
   recurring: z.boolean(),
@@ -108,6 +118,16 @@ export const AssignmentSchema = z.object({
       orderIndex: z.number(),
       endDate: z.string().nullable().optional(),
       cleaners: z.array(AssignmentCleanerSchema),
+      items: z
+        .array(
+          z.object({
+            itemId: z.string().uuid(),
+            itemName: z.string(),
+            unit: z.string().nullable().optional(),
+            quantity: z.number(),
+          }),
+        )
+        .default([]),
     }),
   ),
   createdAt: z.string().nullable().optional(),
@@ -129,21 +149,38 @@ export type WorkforceStats = z.infer<typeof WorkforceStatsSchema>;
 /** Scheduling length assumed for tasks without an explicit duration (matches backend). */
 export const DEFAULT_TASK_DURATION_MINUTES = 30;
 
-export const AssignmentTaskFormSchema = z.object({
+/**
+ * One task inside a location group. Floor/area live on the group, so a task only
+ * carries what changes per task — enabling the "quick add many" flow.
+ */
+export const GroupTaskFormSchema = z.object({
   name: z.string().min(2, "Task name must be at least 2 characters").max(150, "Name is too long"),
-  /** Minutes; empty string in the input maps to undefined (optional per spec). */
+  /** Minutes; empty input maps to undefined (optional per spec). */
   durationMinutes: z
     .number()
     .min(5, "Minimum 5 minutes")
     .max(24 * 60, "Maximum 24 hours")
     .optional(),
-  floorId: z.string().uuid("Please select a floor"),
-  areaId: z.string().uuid("Please select an area"),
   description: z.string().max(2048, "Description is too long").optional().or(z.literal("")),
   /** Per-task cleaners — only used when assignPerTask is on. */
   cleanerIds: z.array(z.string().uuid()),
+  /** Optional expected inventory items consumed when the task completes. */
+  items: z.array(
+    z.object({
+      itemId: z.string().uuid("Select an item"),
+      quantity: z.number().positive("Quantity must be greater than zero"),
+    }),
+  ),
 });
-export type AssignmentTaskFormInput = z.infer<typeof AssignmentTaskFormSchema>;
+export type GroupTaskFormInput = z.infer<typeof GroupTaskFormSchema>;
+
+/** A floor+area with its own list of tasks. */
+export const LocationGroupFormSchema = z.object({
+  floorId: z.string().uuid("Please select a floor"),
+  areaId: z.string().uuid("Please select an area"),
+  tasks: z.array(GroupTaskFormSchema),
+});
+export type LocationGroupFormInput = z.infer<typeof LocationGroupFormSchema>;
 
 export const AssignmentFormSchema = z
   .object({
@@ -151,7 +188,7 @@ export const AssignmentFormSchema = z
     siteId: z.string().uuid("Please select a site"),
     date: z.string().min(1, "Date is required"),
     startTime: z.string().min(1, "Expected start time is required"),
-    tasks: z.array(AssignmentTaskFormSchema).min(1, "Add at least one task"),
+    groups: z.array(LocationGroupFormSchema).min(1, "Add a floor and area"),
     /** Assignment-level cleaner selection (applies to all tasks unless assignPerTask). */
     cleanerIds: z.array(z.string().uuid()),
     assignPerTask: z.boolean(),
@@ -159,7 +196,11 @@ export const AssignmentFormSchema = z
     recurrenceType: RecurrenceTypeSchema.optional(),
     recurrenceCount: z.number().min(1, "Must be at least 1").optional(),
     daysOfWeek: z.array(DayOfWeekSchema),
+    // Monthly: pick a day-of-month, OR an ordinal weekday (e.g. 2nd Wednesday).
+    monthlyMode: z.enum(["DAY_OF_MONTH", "DAY_OF_WEEK"]),
     dayOfMonth: z.number().min(1).max(31).optional(),
+    weekOfMonth: z.number().min(1).max(4).optional(),
+    monthlyWeekday: DayOfWeekSchema.optional(),
     // Other-type behaviour toggles.
     otherRepeatWorkingDays: z.boolean(),
     otherUseRecurrence: z.boolean(),
@@ -190,24 +231,66 @@ export const AssignmentFormSchema = z
           path: ["daysOfWeek"],
         });
       }
-      if (val.recurrenceType === "MONTHLY" && val.dayOfMonth == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Select a day of the month",
-          path: ["dayOfMonth"],
-        });
+      if (val.recurrenceType === "MONTHLY") {
+        if (val.monthlyMode === "DAY_OF_MONTH" && val.dayOfMonth == null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Select a day of the month",
+            path: ["dayOfMonth"],
+          });
+        }
+        if (val.monthlyMode === "DAY_OF_WEEK") {
+          if (val.weekOfMonth == null) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Select which week (1st–4th)",
+              path: ["weekOfMonth"],
+            });
+          }
+          if (!val.monthlyWeekday) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Select a weekday",
+              path: ["monthlyWeekday"],
+            });
+          }
+        }
       }
     }
 
+    // At least one task overall.
+    const totalTasks = val.groups.reduce((sum, g) => sum + g.tasks.length, 0);
+    if (totalTasks === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Add at least one task",
+        path: ["groups"],
+      });
+    }
+
+    // Each group must have at least one task.
+    val.groups.forEach((group, gi) => {
+      if (group.tasks.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Add at least one task, or remove this floor/area",
+          path: ["groups", gi, "tasks"],
+        });
+      }
+    });
+
+    // Cleaner requirements.
     if (val.assignPerTask) {
-      val.tasks.forEach((task, i) => {
-        if (task.cleanerIds.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Assign at least one cleaner to this task",
-            path: ["tasks", i, "cleanerIds"],
-          });
-        }
+      val.groups.forEach((group, gi) => {
+        group.tasks.forEach((task, ti) => {
+          if (task.cleanerIds.length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Assign at least one cleaner to this task",
+              path: ["groups", gi, "tasks", ti, "cleanerIds"],
+            });
+          }
+        });
       });
     } else if (val.cleanerIds.length === 0) {
       ctx.addIssue({
@@ -220,7 +303,12 @@ export const AssignmentFormSchema = z
 
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
 
-/** Map the form to the backend CreateAssignmentRequest payload. */
+/** All tasks across all groups, flattened — used for totals/end-time. */
+export function allTasksOf(input: Pick<AssignmentFormInput, "groups">): GroupTaskFormInput[] {
+  return input.groups.flatMap((g) => g.tasks);
+}
+
+/** Map the form to the backend CreateAssignmentRequest payload (flattens groups → tasks). */
 export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<string, unknown> {
   const usesRecurrence =
     input.workType === "PERIODICAL_TASK" ||
@@ -231,21 +319,33 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
     assignmentType: input.workType,
     startDate: input.date,
     startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
-    tasks: input.tasks.map((task) => ({
-      name: task.name.trim(),
-      ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
-      floorId: task.floorId,
-      areaId: task.areaId,
-      ...(task.description?.trim() ? { description: task.description.trim() } : {}),
-      cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
-    })),
+    tasks: input.groups.flatMap((group) =>
+      group.tasks.map((task) => ({
+        name: task.name.trim(),
+        ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
+        floorId: group.floorId,
+        areaId: group.areaId,
+        ...(task.description?.trim() ? { description: task.description.trim() } : {}),
+        cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+        ...((task.items ?? []).length > 0
+          ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
+          : {}),
+      })),
+    ),
   };
 
   if (usesRecurrence) {
     payload.recurrenceType = input.recurrenceType;
     payload.recurrenceInterval = input.recurrenceCount;
     if (input.recurrenceType === "WEEKLY") payload.daysOfWeek = input.daysOfWeek;
-    if (input.recurrenceType === "MONTHLY") payload.dayOfMonth = input.dayOfMonth;
+    if (input.recurrenceType === "MONTHLY") {
+      if (input.monthlyMode === "DAY_OF_WEEK") {
+        payload.weekOfMonth = input.weekOfMonth;
+        payload.monthlyWeekday = input.monthlyWeekday;
+      } else {
+        payload.dayOfMonth = input.dayOfMonth;
+      }
+    }
   }
   if (input.workType === "OTHER") {
     payload.otherRepeatWorkingDays = input.otherRepeatWorkingDays;
@@ -255,7 +355,7 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
 }
 
 /** Expected end time (HH:mm) = start + Σ task durations (default per task when unset). */
-export function computeExpectedEndTime(startTime: string, tasks: AssignmentTaskFormInput[]): string | null {
+export function computeExpectedEndTime(startTime: string, tasks: GroupTaskFormInput[]): string | null {
   if (!startTime || tasks.length === 0) return null;
   const [h, m] = startTime.split(":").map(Number);
   if (h == null || Number.isNaN(h)) return null;

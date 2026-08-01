@@ -140,8 +140,7 @@ export default function AdminDashboardPage() {
       <div className="mx-auto max-w-7xl">
         {/* Page header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-on-surface">Dashboard</h1>
-          <p className="mt-1 text-sm text-grey-500">Site A operational view</p>
+          <p className="text-sm text-grey-500">Site A operational view</p>
         </div>
 
         {/* All Sites Overview */}

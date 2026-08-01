@@ -5,14 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  Building2,
   UsersRound,
   ContactRound,
   ChevronDown,
   ClipboardCheck,
   MessageSquare,
   Package,
-  Menu,
+  Footprints,
   X,
   LogOut,
   type LucideIcon,
@@ -21,6 +20,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
+import { useUIStore } from "@/store/ui.store";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 
 interface NavChild {
@@ -40,11 +40,11 @@ interface NavItemConfig {
 const NAV_ITEMS: NavItemConfig[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Companies", href: "/admin/companies", icon: Building2 },
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
   { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
-  { label: "Inventory",   href: "/admin/deliveries",  icon: Package },
+  { label: "Inventory",   href: "/admin/inventory",  icon: Package },
+  { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   {
     label: "Client Management",
     icon: ContactRound,
@@ -78,7 +78,7 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
       )}
     >
       <Icon size={20} strokeWidth={isActive ? 2.5 : 1.75} aria-hidden="true" />
-      {item.label}
+      <span className="flex-1">{item.label}</span>
     </Link>
   );
 }
@@ -160,8 +160,20 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const logout = useLogout();
 
   // Clients don't get an Inspections view — supervisor/admin-only surface.
+  // Supervisors get the Workforce & Management surfaces (Workforce, Client
+  // Management, Cleaner Logs) in the admin console, alongside the cleaner app.
+  const role = me.data?.role;
+  const SUPERVISOR_ITEMS = new Set(["/admin/workforce", "/admin/cleaner-logs"]);
   const navItems =
-    me.data?.role === "CLIENT" ? NAV_ITEMS.filter((item) => item.label !== "Inspections") : NAV_ITEMS;
+    role === "SUPERVISOR"
+      ? NAV_ITEMS.filter(
+          (item) =>
+            (item.href && SUPERVISOR_ITEMS.has(item.href)) ||
+            item.label === "Client Management",
+        )
+      : role === "CLIENT"
+        ? NAV_ITEMS.filter((item) => item.label !== "Inspections")
+        : NAV_ITEMS;
 
   function isItemActive(item: NavItemConfig): boolean {
     if (!item.href) return false;
@@ -236,7 +248,8 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 }
 
 export function AdminSidebar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileOpen = useUIStore((s) => s.mobileNavOpen);
+  const setMobileNav = useUIStore((s) => s.setMobileNav);
 
   // Close the drawer on Escape, and if the viewport is resized up to desktop
   // while it's open (avoids a stuck open drawer behind the persistent sidebar).
@@ -244,11 +257,11 @@ export function AdminSidebar() {
     if (!mobileOpen) return;
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileOpen(false);
+      if (e.key === "Escape") setMobileNav(false);
     }
     const desktopQuery = window.matchMedia("(min-width: 1024px)");
     function onViewportChange(e: MediaQueryListEvent) {
-      if (e.matches) setMobileOpen(false);
+      if (e.matches) setMobileNav(false);
     }
 
     document.addEventListener("keydown", onKeyDown);
@@ -272,29 +285,11 @@ export function AdminSidebar() {
         <SidebarContent />
       </aside>
 
-      {/* Mobile/tablet top bar — sits in normal document flow so it reserves its
-          own space and never overlaps the page title or content below it. */}
-      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-grey-200 bg-white px-4 shadow-sm lg:hidden">
-        <button
-          type="button"
-          aria-label="Open navigation"
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen(true)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <Menu size={20} aria-hidden="true" />
-        </button>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-on-surface">Primeway</p>
-          <p className="truncate text-xs text-grey-500">Cleaning Management</p>
-        </div>
-      </header>
-
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => setMobileNav(false)}
           aria-hidden="true"
         />
       )}
@@ -312,12 +307,12 @@ export function AdminSidebar() {
           <button
             type="button"
             aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => setMobileNav(false)}
             className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
           >
             <X size={18} aria-hidden="true" />
           </button>
-          <SidebarContent onLinkClick={() => setMobileOpen(false)} />
+          <SidebarContent onLinkClick={() => setMobileNav(false)} />
         </div>
       </aside>
     </>

@@ -11,9 +11,16 @@ import {
   type EditOccurrenceInput,
 } from "@/features/workforce/hooks/useAssignments";
 import { useSites } from "@/features/user-management/hooks/useSites";
-import { WeekScheduleGrid } from "@/components/admin/WeekScheduleGrid";
+import { useFloors, useCreateFloor, useUpdateFloor, useDeleteFloor } from "@/features/user-management/hooks/useFloors";
+import { useAreas, useCreateArea, useUpdateArea, useDeleteArea } from "@/features/user-management/hooks/useAreas";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
+import { NameFormModal } from "@/components/admin/NameFormModal";
+import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
+import type { Floor } from "@/features/user-management/schemas/floor.schema";
+import type { Area } from "@/features/user-management/schemas/area.schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,8 +41,17 @@ export interface CalendarEvent {
   textColor: string;
 }
 
+/** Prefill for the New Assignment modal, opened from a calendar slot or a scope cell. */
+export interface AssignmentPrefill {
+  date?: Date;
+  time?: string;
+  siteId?: string;
+  floorId?: string;
+  areaId?: string;
+}
+
 interface WorkforceCalendarProps {
-  onNewAssignment?: (date: Date, time: string) => void;
+  onNewAssignment?: (prefill: AssignmentPrefill) => void;
 }
 
 interface QuickAddState {
@@ -1134,8 +1150,8 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
 
 export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   const today = formatDate(new Date());
-  // Main toggle: time-grid calendar vs the table-like weekly scope view.
-  const [mainView, setMainView] = useState<"calendar" | "scope">("calendar");
+  // Main toggle: the table-like weekly scope view (default) vs the time-grid calendar.
+  const [mainView, setMainView] = useState<"calendar" | "scope">("scope");
   const [calendarMode, setCalendarMode] = useState<"week" | "month">("week");
   const viewMode: "week" | "month" | "schedule" =
     mainView === "scope" ? "schedule" : calendarMode;
@@ -1149,6 +1165,13 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [scopeDialog, setScopeDialog] = useState<ScopeDialogState | null>(null);
 
+  // Floor/area management (scope view, single site selected).
+  const [floorModal, setFloorModal] = useState<{ mode: "add" | "edit"; floor?: Floor } | null>(null);
+  const [areaModal, setAreaModal] = useState<{ mode: "add" | "edit"; floor?: Floor; area?: Area } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: "floor"; floor: Floor } | { kind: "area"; area: Area } | null
+  >(null);
+
   const weekStart    = getWeekStart(currentDate);
   const weekDates    = getDayDates(weekStart);
   const currentMonth = currentDate.getMonth();
@@ -1160,6 +1183,12 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   });
 
   const sitesQuery = useSites();
+  // Exactly one site is always selected (no "all sites"). Auto-pick the first once
+  // sites load, or if the current selection is no longer present.
+  const sites = sitesQuery.data;
+  if (sites && sites.length > 0 && !sites.some((s) => s.id === siteFilter)) {
+    setSiteFilter(sites[0]!.id);
+  }
   const selectedSite = useMemo(
     () => (sitesQuery.data ?? []).find((s) => s.id === siteFilter),
     [sitesQuery.data, siteFilter],
@@ -1169,6 +1198,33 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     selectedSite && (selectedSite.workingDays?.length ?? 0) > 0
       ? selectedSite.workingDays
       : null;
+
+  // ── Scope-view management: full floor/area structure of the selected site ────
+  const managing = mainView === "scope" && !!siteFilter;
+  const floorsQuery = useFloors(managing ? siteFilter : undefined);
+  // One query for all areas the user can see; filtered to the site's floors below.
+  const allAreasQuery = useAreas(undefined, { enabled: managing });
+
+  const floors = useMemo(
+    () => (floorsQuery.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
+    [floorsQuery.data],
+  );
+  const areasByFloor = useMemo(() => {
+    const map = new Map<string, Area[]>();
+    for (const floor of floors) map.set(floor.id, []);
+    for (const area of allAreasQuery.data ?? []) {
+      if (map.has(area.floorId)) map.get(area.floorId)!.push(area);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+    return map;
+  }, [floors, allAreasQuery.data]);
+
+  const createFloor = useCreateFloor();
+  const updateFloor = useUpdateFloor();
+  const deleteFloor = useDeleteFloor();
+  const createArea = useCreateArea();
+  const updateArea = useUpdateArea();
+  const deleteArea = useDeleteArea();
 
   // Visible date range → drives the backend fetch. The schedule grid is weekly too.
   const range = useMemo<OccurrenceQuery>(() => {
@@ -1420,8 +1476,65 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   function handleQuickAddOpenForm() {
     setQuickAdd((s) => ({ ...s, show: false }));
     const dateObj = new Date(quickAdd.date + "T00:00:00");
-    onNewAssignment?.(dateObj, quickAdd.time);
+    onNewAssignment?.({ date: dateObj, time: quickAdd.time });
   }
+
+  // ── Scope view: add assignment prefilled with floor/area/date ──────────────
+  function handleScopeAddAssignment(target: AddAssignmentTarget) {
+    onNewAssignment?.({
+      date: new Date(target.date + "T00:00:00"),
+      time: "09:00",
+      siteId: siteFilter,
+      floorId: target.floorId,
+      areaId: target.areaId,
+    });
+  }
+
+  // ── Scope view: floor/area create / rename / delete ────────────────────────
+  function handleFloorSubmit(name: string) {
+    if (!floorModal) return;
+    if (floorModal.mode === "add") {
+      createFloor.mutate(
+        { siteId: siteFilter, input: { name } },
+        { onSuccess: () => setFloorModal(null) },
+      );
+    } else if (floorModal.floor) {
+      updateFloor.mutate(
+        { id: floorModal.floor.id, input: { name } },
+        { onSuccess: () => setFloorModal(null) },
+      );
+    }
+  }
+
+  function handleAreaSubmit(name: string) {
+    if (!areaModal) return;
+    if (areaModal.mode === "add" && areaModal.floor) {
+      createArea.mutate(
+        { floorId: areaModal.floor.id, input: { name } },
+        { onSuccess: () => setAreaModal(null) },
+      );
+    } else if (areaModal.area) {
+      updateArea.mutate(
+        { id: areaModal.area.id, input: { name } },
+        { onSuccess: () => setAreaModal(null) },
+      );
+    }
+  }
+
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    if (deleteTarget.kind === "floor") {
+      deleteFloor.mutate(deleteTarget.floor.id, { onSuccess: () => setDeleteTarget(null) });
+    } else {
+      deleteArea.mutate(deleteTarget.area.id, { onSuccess: () => setDeleteTarget(null) });
+    }
+  }
+
+  const floorMutation = floorModal?.mode === "edit" ? updateFloor : createFloor;
+  const areaMutation = areaModal?.mode === "edit" ? updateArea : createArea;
+  const deleteMut = deleteTarget?.kind === "floor" ? deleteFloor : deleteArea;
+  // Monday of the visible week (weekDates is Sunday-first).
+  const mondayDate = weekDates[1];
 
   // Close quick-add on outside click
   useEffect(() => {
@@ -1481,14 +1594,14 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           className="rounded-lg border border-grey-200 bg-surface px-2.5 py-1 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
         />
 
-        {/* Site filter */}
+        {/* Site selector — exactly one site is always in view */}
         <select
-          aria-label="Filter by site"
+          aria-label="Select site"
           value={siteFilter}
           onChange={(e) => setSiteFilter(e.target.value)}
           className="rounded-lg border border-grey-200 bg-surface px-2.5 py-1.5 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <option value="">All sites</option>
+          {(sitesQuery.data ?? []).length === 0 && <option value="">No sites</option>}
           {(sitesQuery.data ?? []).map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -1572,6 +1685,18 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           workingDays={workingDays}
           isLoading={occurrencesQuery.isLoading}
           onOccurrenceClick={(occurrence) => handleEventClick(mapOccurrenceToEvent(occurrence))}
+          siteId={managing ? siteFilter : undefined}
+          floors={managing ? floors : undefined}
+          areasByFloor={managing ? areasByFloor : undefined}
+          mondayDate={mondayDate}
+          structureLoading={managing && (floorsQuery.isLoading || allAreasQuery.isLoading)}
+          onAddAssignment={handleScopeAddAssignment}
+          onAddFloor={() => setFloorModal({ mode: "add" })}
+          onEditFloor={(floor) => setFloorModal({ mode: "edit", floor })}
+          onDeleteFloor={(floor) => setDeleteTarget({ kind: "floor", floor })}
+          onAddArea={(floor) => setAreaModal({ mode: "add", floor })}
+          onEditArea={(area) => setAreaModal({ mode: "edit", area })}
+          onDeleteArea={(area) => setDeleteTarget({ kind: "area", area })}
         />
       ) : viewMode === "week" ? (
         <WeekView
@@ -1629,6 +1754,73 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           onCancel={handleScopeCancel}
         />
       )}
+
+      {/* Floor add / rename */}
+      <NameFormModal
+        open={!!floorModal}
+        title={floorModal?.mode === "edit" ? "Rename floor" : "Add floor"}
+        description={
+          floorModal?.mode === "edit"
+            ? undefined
+            : selectedSite
+              ? `New floor for ${selectedSite.name}.`
+              : undefined
+        }
+        label="Floor name"
+        initialValue={floorModal?.mode === "edit" ? floorModal.floor?.name : ""}
+        submitLabel={floorModal?.mode === "edit" ? "Save changes" : "Add floor"}
+        isPending={floorMutation.isPending}
+        error={floorMutation.isError ? getErrorMessage(floorMutation.error) : undefined}
+        onSubmit={handleFloorSubmit}
+        onClose={() => {
+          setFloorModal(null);
+          createFloor.reset();
+          updateFloor.reset();
+        }}
+      />
+
+      {/* Area add / rename */}
+      <NameFormModal
+        open={!!areaModal}
+        title={areaModal?.mode === "edit" ? "Rename area" : "Add area"}
+        description={
+          areaModal?.mode === "add" && areaModal.floor
+            ? `New area on ${areaModal.floor.name}.`
+            : undefined
+        }
+        label="Area name"
+        initialValue={areaModal?.mode === "edit" ? areaModal.area?.name : ""}
+        submitLabel={areaModal?.mode === "edit" ? "Save changes" : "Add area"}
+        isPending={areaMutation.isPending}
+        error={areaMutation.isError ? getErrorMessage(areaMutation.error) : undefined}
+        onSubmit={handleAreaSubmit}
+        onClose={() => {
+          setAreaModal(null);
+          createArea.reset();
+          updateArea.reset();
+        }}
+      />
+
+      {/* Floor / area delete */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={deleteTarget?.kind === "floor" ? "Delete floor" : "Delete area"}
+        description={
+          deleteTarget?.kind === "floor"
+            ? `Delete “${deleteTarget.floor.name}”? Its areas and assignments must be removed first.`
+            : deleteTarget?.kind === "area"
+              ? `Delete “${deleteTarget.area.name}”? Its assignments must be removed first.`
+              : ""
+        }
+        isPending={deleteMut.isPending}
+        error={deleteMut.isError ? getErrorMessage(deleteMut.error) : undefined}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteTarget(null);
+          deleteFloor.reset();
+          deleteArea.reset();
+        }}
+      />
     </div>
   );
 }

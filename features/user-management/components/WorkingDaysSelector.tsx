@@ -19,6 +19,8 @@ interface WorkingDaysSelectorProps {
   onChange?: (next: DayOfWeek[]) => void;
   /** Render as a non-interactive display (e.g. table rows, assignment modal). */
   readOnly?: boolean;
+  /** Only one day may be selected at a time (used by monthly "nth weekday"). */
+  singleSelect?: boolean;
   size?: "sm" | "md";
   error?: string;
   className?: string;
@@ -32,6 +34,7 @@ export function WorkingDaysSelector({
   value,
   onChange,
   readOnly = false,
+  singleSelect = false,
   size = "md",
   error,
   className,
@@ -40,6 +43,10 @@ export function WorkingDaysSelector({
 
   function toggle(day: DayOfWeek) {
     if (readOnly || !onChange) return;
+    if (singleSelect) {
+      onChange(value.includes(day) ? [] : [day]);
+      return;
+    }
     onChange(value.includes(day) ? value.filter((d) => d !== day) : [...value, day]);
   }
 

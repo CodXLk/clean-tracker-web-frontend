@@ -1,16 +1,11 @@
-import { NextResponse } from "next/server";
-import { resolveComplaint } from "@/lib/mock-data/complaints.store";
+import { NextRequest } from "next/server";
+import { proxyBackend } from "@/lib/api/backend";
+import { BACKEND } from "@/lib/api/endpoints";
 
 export async function POST(
-  _request: Request,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const complaint = resolveComplaint(id);
-
-  if (!complaint) {
-    return NextResponse.json({ message: "Complaint not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(complaint);
+  return proxyBackend(BACKEND.complaints.resolve(id), { method: "POST" });
 }

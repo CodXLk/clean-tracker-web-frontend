@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Users2, Calendar, Star, Building2, type LucideIcon } from "lucide-react";
+import { Users2, Calendar, Star, Building2, FileText, type LucideIcon } from "lucide-react";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { ActiveTaskCard } from "@/components/admin/ActiveTaskCard";
-import { WorkforceCalendar } from "@/components/admin/WorkforceCalendar";
+import { WorkforceCalendar, type AssignmentPrefill } from "@/components/admin/WorkforceCalendar";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
+import { DraftsModal } from "@/components/admin/DraftsModal";
 import { useWorkforceStats, useOccurrences } from "@/features/workforce/hooks/useAssignments";
+import { useDrafts } from "@/features/workforce/hooks/useDrafts";
 import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
+import type { AssignmentDraft } from "@/features/workforce/schemas/draft.schema";
 import { todayISODate } from "@/lib/utils/format";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -54,12 +57,15 @@ function cleanerNameOf(first?: string | null, last?: string | null): string {
 
 export default function WorkforcePage() {
   const [newAssignmentOpen, setNewAssignmentOpen] = useState(false);
-  const [defaultDate, setDefaultDate] = useState<Date | undefined>();
-  const [defaultTime, setDefaultTime] = useState<string>("");
+  const [prefill, setPrefill] = useState<AssignmentPrefill>({});
+  const [loadedDraft, setLoadedDraft] = useState<{ id: string; payload: unknown } | null>(null);
+  const [draftsOpen, setDraftsOpen] = useState(false);
 
   const today = todayISODate();
   const statsQuery = useWorkforceStats();
   const todaysQuery = useOccurrences({ from: today, to: today });
+  const draftsQuery = useDrafts();
+  const draftCount = draftsQuery.data?.length ?? 0;
 
   const stats: WorkforceStatData[] = useMemo(() => {
     const s = statsQuery.data;
@@ -119,16 +125,28 @@ export default function WorkforcePage() {
       : "Scheduled";
   }
 
-  function handleCalendarSlotClick(date: Date, time: string) {
-    setDefaultDate(date);
-    setDefaultTime(time);
+  function handlePrefill(next: AssignmentPrefill) {
+    setLoadedDraft(null);
+    setPrefill(next);
     setNewAssignmentOpen(true);
   }
 
   function handleNewAssignmentButton() {
-    setDefaultDate(new Date());
-    setDefaultTime("09:00");
+    setLoadedDraft(null);
+    setPrefill({ date: new Date(), time: "09:00" });
     setNewAssignmentOpen(true);
+  }
+
+  function handleLoadDraft(draft: AssignmentDraft) {
+    setPrefill({});
+    setLoadedDraft({ id: draft.id, payload: draft.payload });
+    setDraftsOpen(false);
+    setNewAssignmentOpen(true);
+  }
+
+  function handleAssignmentModalClose() {
+    setNewAssignmentOpen(false);
+    setLoadedDraft(null);
   }
 
   return (
@@ -137,16 +155,30 @@ export default function WorkforcePage() {
         {/* Page header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-on-surface">Workforce &amp; Management</h1>
-            <p className="mt-1 text-sm text-grey-500">Operational view</p>
+            <p className="text-sm text-grey-500">Operational view</p>
           </div>
-          <button
-            type="button"
-            onClick={handleNewAssignmentButton}
-            className="shrink-0 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          >
-            + New Assignment
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setDraftsOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <FileText size={16} aria-hidden="true" />
+              Drafts
+              {draftCount > 0 && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                  {draftCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleNewAssignmentButton}
+              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              + New Assignment
+            </button>
+          </div>
         </div>
 
         {/* Stats row */}
@@ -191,16 +223,23 @@ export default function WorkforcePage() {
         </div>
 
         {/* Calendar */}
-        <WorkforceCalendar onNewAssignment={handleCalendarSlotClick} />
+        <WorkforceCalendar onNewAssignment={handlePrefill} />
       </div>
 
       {/* New Assignment Modal */}
       <NewAssignmentModal
         open={newAssignmentOpen}
-        onClose={() => setNewAssignmentOpen(false)}
-        defaultDate={defaultDate}
-        defaultTime={defaultTime}
+        onClose={handleAssignmentModalClose}
+        defaultDate={prefill.date}
+        defaultTime={prefill.time}
+        defaultSiteId={prefill.siteId}
+        defaultFloorId={prefill.floorId}
+        defaultAreaId={prefill.areaId}
+        loadedDraft={loadedDraft}
       />
+
+      {/* Drafts Modal */}
+      <DraftsModal open={draftsOpen} onClose={() => setDraftsOpen(false)} onLoad={handleLoadDraft} />
     </div>
   );
 }

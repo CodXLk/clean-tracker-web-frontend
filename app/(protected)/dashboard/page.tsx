@@ -1,53 +1,104 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
 import { Bell, Calendar, Clock, ClipboardList, AlertTriangle } from "lucide-react";
 import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
-import { SlideButton } from "@/components/shared/SlideButton";
+import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
+import { useMySites } from "@/features/attendance/hooks/useAttendance";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useComplaints } from "@/features/complaints/hooks/useComplaints";
+import { formatTaskTime, toLocalDateString } from "@/features/tasks/lib/task-utils";
+import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
-interface KpiCardData {
-  label:  string;
-  value:  string | number;
-  color:  "orange" | "green" | "grey";
+function greetingFor(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
-
-const TASK_KPIS: KpiCardData[] = [
-  { label: "Pending",   value: 2, color: "orange" },
-  { label: "Completed", value: 1, color: "green"  },
-  { label: "Total",     value: 3, color: "grey"   },
-];
-
-interface ComplaintAlert {
-  id:       string;
-  title:    string;
-  location: string;
-}
-
-const COMPLAINT_ALERTS: ComplaintAlert[] = [
-  { id: "1", title: "Restroom cleaning issue", location: "Floor 2 - Restrooms"   },
-  { id: "2", title: "Trash not collected",      location: "Floor 3 - Office Area" },
-];
 
 interface UpcomingShift {
-  id:       string;
-  date:     string;
-  site:     string;
+  id: string;
+  date: string;
+  site: string;
   timeRange: string;
 }
 
-const UPCOMING_SHIFTS: UpcomingShift[] = [
-  { id: "1", date: "Tomorrow, Apr 10", site: "Site A",  timeRange: "08:00 – 16:00" },
-  { id: "2", date: "Thu, Apr 11",      site: "Site B",  timeRange: "09:00 – 17:00" },
-];
+// Group future task occurrences into one "shift" per site per day.
+function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
+  const byKey = new Map<string, { date: string; site: string; start?: string; end?: string }>();
+  for (const o of occurrences) {
+    const key = `${o.date}__${o.siteId}`;
+    const group = byKey.get(key) ?? { date: o.date, site: o.siteName };
+    if (o.startTime && (!group.start || o.startTime < group.start)) group.start = o.startTime;
+    if (o.endTime && (!group.end || o.endTime > group.end)) group.end = o.endTime;
+    byKey.set(key, group);
+  }
+
+  return Array.from(byKey.entries())
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .slice(0, 4)
+    .map(([key, g]) => {
+      const label = new Date(`${g.date}T00:00:00`).toLocaleDateString([], {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+      const start = formatTaskTime(g.start);
+      const end = formatTaskTime(g.end);
+      const timeRange = start && end ? `${start} – ${end}` : start ?? "All day";
+      return { id: key, date: label, site: g.site, timeRange };
+    });
+}
 
 export default function DashboardPage() {
-  const [checkedIn, setCheckedIn] = useState(false);
+  const { data: sites = [], isLoading } = useMySites();
+  const { data: me } = useMe();
 
-  function handleCheckIn() {
-    setCheckedIn(true);
-  }
+  const today = useMemo(() => toLocalDateString(new Date()), []);
+  const range = useMemo(() => {
+    const start = new Date();
+    start.setDate(start.getDate() + 1);
+    const end = new Date();
+    end.setDate(end.getDate() + 7);
+    return { from: toLocalDateString(start), to: toLocalDateString(end) };
+  }, []);
+
+  const { data: todayTasks = [] } = useMyTasks(today);
+  const { data: upcomingTasks = [] } = useMyTasks(range.from, range.to);
+  const { data: complaintsData } = useComplaints();
+
+  const activeSite = sites.find((s) => s.status === "CHECKED_IN");
+  const checkedIn = !!activeSite;
+  const checkInTime = activeSite?.checkInAt
+    ? new Date(activeSite.checkInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    : undefined;
+
+  const greeting = greetingFor(new Date().getHours());
+  const firstName = me?.firstName?.trim() || "there";
+
+  const taskKpis = useMemo(() => {
+    let pending = 0;
+    let completed = 0;
+    for (const o of todayTasks) {
+      if (o.status === "COMPLETED") completed += 1;
+      else pending += 1;
+    }
+    return { pending, completed, total: todayTasks.length };
+  }, [todayTasks]);
+
+  const openComplaints = useMemo(
+    () =>
+      (complaintsData?.complaints ?? []).filter(
+        (c) => c.status === "open" || c.status === "in_progress",
+      ),
+    [complaintsData],
+  );
+
+  const upcomingShifts = useMemo(() => buildUpcomingShifts(upcomingTasks), [upcomingTasks]);
 
   return (
     <div
@@ -64,11 +115,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
             <div>
-              <p className="text-xs text-white/70">Good morning</p>
-              <p className="text-lg font-bold text-white leading-tight">Hello, Peter 👋</p>
+              <p className="text-xs text-white/70">{greeting}</p>
+              <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>
               <CheckInBadge
                 checkedIn={checkedIn}
-                checkInTime={checkedIn ? "09:30" : undefined}
+                checkInTime={checkInTime ?? undefined}
                 className="mt-1"
               />
             </div>
@@ -108,17 +159,9 @@ export default function DashboardPage() {
                     Attendance
                   </h2>
                 </div>
-                <button className="text-sm text-primary hover:underline">
-                  Choose check-in method
-                </button>
               </div>
-              <SlideButton
-                label={checkedIn ? "Checked In" : "Slide to Check In"}
-                variant="teal"
-                onComplete={handleCheckIn}
-                completedLabel="Checked In"
-                disabled={checkedIn}
-              />
+
+              <CheckInPanel sites={sites} isLoading={isLoading} />
             </section>
 
             {/* Today's Tasks KPI */}
@@ -137,13 +180,13 @@ export default function DashboardPage() {
                   </h2>
                 </div>
                 <span className="rounded-full bg-[#ED5F25]/20 px-3 py-0.5 text-xs font-semibold text-[#ED5F25]">
-                  3 Tasks
+                  {taskKpis.total} {taskKpis.total === 1 ? "Task" : "Tasks"}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                {TASK_KPIS.map((kpi) => (
-                  <KpiCard key={kpi.label} {...kpi} />
-                ))}
+                <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
+                <KpiCard label="Completed" value={taskKpis.completed} color="green" />
+                <KpiCard label="Total" value={taskKpis.total} color="grey" />
               </div>
             </section>
           </div>
@@ -153,40 +196,68 @@ export default function DashboardPage() {
             {/* Complaints Alert */}
             <section
               aria-labelledby="complaints-heading"
-              className="rounded-3xl bg-gradient-to-br from-red-50 to-red-100 p-5 shadow-sm border border-red-200"
+              className={cn(
+                "rounded-3xl p-5 shadow-sm border",
+                openComplaints.length > 0
+                  ? "bg-gradient-to-br from-red-50 to-red-100 border-red-200"
+                  : "bg-white/60 border-white/20",
+              )}
             >
               <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger/10">
-                  <AlertTriangle size={18} className="text-danger" />
+                <div
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                    openComplaints.length > 0 ? "bg-danger/10" : "bg-success/10",
+                  )}
+                >
+                  <AlertTriangle
+                    size={18}
+                    className={openComplaints.length > 0 ? "text-danger" : "text-success"}
+                  />
                 </div>
                 <div>
                   <h2
                     id="complaints-heading"
-                    className="text-sm font-bold text-danger"
+                    className={cn(
+                      "text-sm font-bold",
+                      openComplaints.length > 0 ? "text-danger" : "text-on-surface",
+                    )}
                   >
                     Complaints Alert
                   </h2>
                   <p className="text-xs text-grey-700 leading-snug">
-                    You have 2 new complaints that require immediate attention
+                    {openComplaints.length > 0
+                      ? `You have ${openComplaints.length} open ${
+                          openComplaints.length === 1 ? "complaint" : "complaints"
+                        } that require attention`
+                      : "No open complaints right now"}
                   </p>
                 </div>
               </div>
 
-              <div className="mb-4 flex flex-col gap-2">
-                {COMPLAINT_ALERTS.map((c) => (
-                  <div
-                    key={c.id}
-                    className="rounded-xl border border-red-200 bg-white/60 px-3 py-2.5"
-                  >
-                    <p className="text-xs font-semibold text-on-surface">{c.title}</p>
-                    <p className="text-xs text-grey-500">{c.location}</p>
-                  </div>
-                ))}
-              </div>
+              {openComplaints.length > 0 && (
+                <div className="mb-4 flex flex-col gap-2">
+                  {openComplaints.slice(0, 3).map((c) => {
+                    const location = [c.floor, c.area].filter(Boolean).join(" · ");
+                    return (
+                      <div
+                        key={c.id}
+                        className="rounded-xl border border-red-200 bg-white/60 px-3 py-2.5"
+                      >
+                        <p className="text-xs font-semibold text-on-surface">{c.title}</p>
+                        {location && <p className="text-xs text-grey-500">{location}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-              <button className="w-full rounded-2xl bg-gradient-to-r from-danger to-red-600 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+              <Link
+                href="/dashboard/complaints"
+                className="block w-full rounded-2xl bg-gradient-to-r from-danger to-red-600 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
                 View All Complaints
-              </button>
+              </Link>
             </section>
 
             {/* Upcoming Shifts */}
@@ -204,18 +275,24 @@ export default function DashboardPage() {
                 </h2>
               </div>
               <div className="flex flex-col gap-2">
-                {UPCOMING_SHIFTS.map((shift) => (
-                  <div
-                    key={shift.id}
-                    className="flex items-center justify-between rounded-2xl bg-white/40 px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-xs font-semibold text-on-surface">{shift.date}</p>
-                      <p className="text-xs text-grey-500">{shift.site}</p>
+                {upcomingShifts.length === 0 ? (
+                  <p className="rounded-2xl bg-white/40 px-4 py-3 text-center text-xs text-grey-500">
+                    No upcoming shifts scheduled.
+                  </p>
+                ) : (
+                  upcomingShifts.map((shift) => (
+                    <div
+                      key={shift.id}
+                      className="flex items-center justify-between rounded-2xl bg-white/40 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-on-surface">{shift.date}</p>
+                        <p className="text-xs text-grey-500">{shift.site}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-primary">{shift.timeRange}</span>
                     </div>
-                    <span className="text-xs font-semibold text-primary">{shift.timeRange}</span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </section>
           </div>

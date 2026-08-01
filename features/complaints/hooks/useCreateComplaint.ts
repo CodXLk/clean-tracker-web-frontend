@@ -9,7 +9,8 @@ export function useCreateComplaint() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: CreateComplaintInput) => createComplaint(input),
+    mutationFn: ({ input, photos }: { input: CreateComplaintInput; photos?: File[] }) =>
+      createComplaint(input, photos ?? []),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: complaintKeys.list() });
     },

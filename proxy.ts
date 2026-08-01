@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "@/lib/constants";
+import { canAccessAdminPath, landingPath, roleFromToken } from "@/lib/auth/roles";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
@@ -18,8 +19,19 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthPage && token) {
-    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  if (token) {
+    const role = roleFromToken(token);
+
+    // Already-authenticated users hitting an auth page go to their role's home.
+    if (isAuthPage) {
+      return NextResponse.redirect(new URL(landingPath(role), request.url));
+    }
+
+    // Keep non-admin roles inside the cleaner app, except where a supervisor is
+    // explicitly allowed (e.g. the Cleaner Logs page).
+    if (pathname.startsWith("/admin") && !canAccessAdminPath(role, pathname)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
   return NextResponse.next();

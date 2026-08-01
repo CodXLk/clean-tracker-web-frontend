@@ -5,10 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoginSchema, type LoginInput } from "@/features/auth/schemas/auth.schema";
 import { useLogin, getAuthErrorMessage } from "@/features/auth/hooks/useAuth";
+import { isAdminRole, landingPath } from "@/lib/auth/roles";
 import { TextField } from "@/components/shared/TextField";
 import { PillButton } from "@/components/shared/PillButton";
-
-const ADMIN_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER"]);
 
 export function LoginForm() {
   const router = useRouter();
@@ -27,9 +26,11 @@ export function LoginForm() {
   function onSubmit(values: LoginInput) {
     login.mutate(values, {
       onSuccess: (data) => {
+        const role = data.user.role;
         const callback = searchParams.get("callbackUrl");
-        const destination = callback ?? (ADMIN_ROLES.has(data.user.role) ? "/admin/dashboard" : "/dashboard");
-        router.replace(destination);
+        // Honour the callback only when it's allowed for the user's role.
+        const callbackAllowed = callback && (isAdminRole(role) || !callback.startsWith("/admin"));
+        router.replace(callbackAllowed ? callback : landingPath(role));
       },
     });
   }

@@ -15,9 +15,11 @@ interface LocationPickerProps {
   value: string;
   /** Called with a fresh Google Maps link when the user picks a location. */
   onChange: (link: string) => void;
+  /** Called with the raw coordinates whenever a location is selected. */
+  onCoordsChange?: (coords: { lat: number; lng: number }) => void;
 }
 
-export function LocationPicker({ value, onChange }: LocationPickerProps) {
+export function LocationPicker({ value, onChange, onCoordsChange }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapObj = useRef<GoogleMap | null>(null);
@@ -53,13 +55,15 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       map.panTo(position);
       map.setZoom(15);
 
+      onCoordsChange?.({ lat, lng });
+
       if (emit) {
         const link = buildMapsLink(lat, lng);
         lastEmitted.current = link;
         onChange(link);
       }
     },
-    [onChange],
+    [onChange, onCoordsChange],
   );
 
   // Initialise the map once.

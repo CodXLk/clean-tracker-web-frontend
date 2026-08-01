@@ -1,101 +1,90 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { TaskSummaryCard } from "@/components/shared/TaskSummaryCard";
-import type { TaskSummaryStatus } from "@/components/shared/TaskSummaryCard";
-import { TaskDetailModal } from "@/components/modals/TaskDetailModal";
-import type { TaskDetailState } from "@/components/modals/TaskDetailModal";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SiteSelector } from "@/components/shared/SiteSelector";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
-import type { Priority } from "@/components/shared/PriorityBadge";
+import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useActiveSite } from "@/features/attendance/hooks/useActiveSite";
+import {
+  assignmentTypeLabel,
+  formatTaskTime,
+  toLocalDateString,
+  toSummaryStatus,
+} from "@/features/tasks/lib/task-utils";
+import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
-type Floor = "Floor 1" | "Floor 2" | "Floor 3" | "Floor 4";
-
-const FLOORS: Floor[] = ["Floor 1", "Floor 2", "Floor 3", "Floor 4"];
-
 interface AreaCount {
-  area:  string;
+  areaId: string;
+  area: string;
   count: number;
 }
 
-const AREAS_BY_FLOOR: Record<Floor, AreaCount[]> = {
-  "Floor 1": [
-    { area: "Lobby",       count: 3 },
-    { area: "Office Room", count: 4 },
-    { area: "Restroom",    count: 1 },
-  ],
-  "Floor 2": [
-    { area: "Lobby",       count: 2 },
-    { area: "Office Room", count: 3 },
-    { area: "Restroom",    count: 2 },
-  ],
-  "Floor 3": [
-    { area: "Conference Room", count: 2 },
-    { area: "Office Room",     count: 5 },
-    { area: "Restroom",        count: 1 },
-  ],
-  "Floor 4": [
-    { area: "Break Room",  count: 1 },
-    { area: "Office Room", count: 2 },
-    { area: "Restroom",    count: 2 },
-  ],
-};
-
-interface PeriodicalTask {
-  id:       string;
-  title:    string;
-  category: string;
-  priority: Priority;
-  status:   TaskSummaryStatus;
-  dueLabel: string;
-}
-
-const PERIODICAL_TASKS: PeriodicalTask[] = [
-  { id: "1", title: "Restrooms - All Floors",         category: "Periodical", priority: "high",   status: "pending",     dueLabel: "Due: 02:00 PM" },
-  { id: "2", title: "Lobby - Floor 2",                 category: "Periodical", priority: "medium", status: "in_progress", dueLabel: "Due: 03:30 PM" },
-  { id: "3", title: "Conference Room A - Floor 1",      category: "Periodical", priority: "low",    status: "scheduled",   dueLabel: "Due: 04:00 PM" },
-];
-
-interface KpiCardData {
-  label: string;
-  value: number;
-  color: "grey" | "orange" | "green" | "red";
-}
-
-const KPI_CARDS: KpiCardData[] = [
-  { label: "Total",      value: 11, color: "grey"   },
-  { label: "Pending",    value: 8,  color: "orange" },
-  { label: "Completed",  value: 3,  color: "green"  },
-  { label: "Complaints", value: 2,  color: "red"    },
-];
-
 export default function TasksPage() {
+  const today = useMemo(() => toLocalDateString(new Date()), []);
+  const { data: allOccurrences = [], isLoading } = useMyTasks(today);
+  const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useActiveSite(today);
+
+  // Only show tasks for the active (checked-in or selected) site.
+  const occurrences = useMemo(
+    () => (selectedSiteId ? allOccurrences.filter((o) => o.siteId === selectedSiteId) : allOccurrences),
+    [allOccurrences, selectedSiteId],
+  );
+
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [activeFloor, setActiveFloor]   = useState<Floor>("Floor 1");
+  const [activeFloor, setActiveFloor] = useState<string | null>(null);
 
-  const [selectedTask, setSelectedTask] = useState<PeriodicalTask | null>(null);
-  const [taskStates,   setTaskStates]   = useState<Record<string, TaskDetailState>>({});
+  // Distinct floors present in today's tasks (preserve first-seen order).
+  const floors = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const o of occurrences) {
+      if (o.floorId && o.floorName && !seen.has(o.floorId)) {
+        seen.set(o.floorId, o.floorName);
+      }
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name }));
+  }, [occurrences]);
 
-  function getModalState(task: PeriodicalTask): TaskDetailState {
-    const override = taskStates[task.id];
-    if (override) return override;
-    return task.status === "in_progress" ? "in_progress" : "start";
-  }
+  const selectedFloor = activeFloor ?? floors[0]?.name ?? null;
 
-  function handleStart(taskId: string) {
-    setTaskStates((prev) => ({ ...prev, [taskId]: "in_progress" }));
-    setSelectedTask(null);
-  }
+  const areas = useMemo<AreaCount[]>(() => {
+    if (!selectedFloor) return [];
+    const byArea = new Map<string, AreaCount>();
+    for (const o of occurrences) {
+      if (o.floorName !== selectedFloor || !o.areaId || !o.areaName) continue;
+      const existing = byArea.get(o.areaId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byArea.set(o.areaId, { areaId: o.areaId, area: o.areaName, count: 1 });
+      }
+    }
+    return Array.from(byArea.values());
+  }, [occurrences, selectedFloor]);
 
-  function handleComplete(taskId: string) {
-    setTaskStates((prev) => ({ ...prev, [taskId]: "completed" }));
-    setSelectedTask(null);
-  }
+  const periodicalTasks = useMemo(
+    () => occurrences.filter((o) => o.assignmentType === "PERIODICAL_TASK"),
+    [occurrences],
+  );
+
+  const kpis = useMemo(() => {
+    let pending = 0;
+    let inProgress = 0;
+    let completed = 0;
+    for (const o of occurrences) {
+      if (o.status === "COMPLETED") completed += 1;
+      else if (o.status === "IN_PROGRESS") inProgress += 1;
+      else pending += 1;
+    }
+    return { total: occurrences.length, pending, inProgress, completed };
+  }, [occurrences]);
 
   return (
     <div
@@ -105,82 +94,94 @@ export default function TasksPage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <PageHeader
-        title="Tasks"
-        showCalendar
-        onCalendarClick={() => setCalendarOpen(true)}
-      />
+      <PageHeader title="Tasks" showCalendar onCalendarClick={() => setCalendarOpen(true)} />
 
       <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl -mt-5">
+        {sites.length > 1 && (
+          <div className="pt-5">
+            <SiteSelector
+              sites={sites}
+              selectedSiteId={selectedSiteId}
+              onChange={setSelectedSiteId}
+              checkedInSiteId={checkedInSiteId}
+            />
+          </div>
+        )}
         {/* KPI row */}
         <div className="mb-6 grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
-          {KPI_CARDS.map((kpi) => (
-            <KpiCard key={kpi.label} {...kpi} />
-          ))}
+          <KpiCard label="Total" value={kpis.total} color="grey" />
+          <KpiCard label="Pending" value={kpis.pending} color="orange" />
+          <KpiCard label="In Progress" value={kpis.inProgress} color="blue" />
+          <KpiCard label="Completed" value={kpis.completed} color="green" />
         </div>
 
-        <div className="flex flex-col gap-8 lg:grid lg:grid-cols-2 lg:gap-8">
-          {/* Left column — Periodical Task list */}
-          <section aria-labelledby="periodical-heading" className="flex flex-col gap-3">
-            <h2 id="periodical-heading" className="text-base font-medium text-primary">
-              Periodical Task
-            </h2>
-            <div className="flex flex-col gap-3">
-              {PERIODICAL_TASKS.map((task) => (
-                <TaskSummaryCard
-                  key={task.id}
-                  title={task.title}
-                  category={task.category}
-                  priority={task.priority}
-                  status={taskStates[task.id] === "completed" ? "completed" : task.status}
-                  dueLabel={task.dueLabel}
-                  icon={getTaskCategoryIcon(task.category)}
-                  onClick={() => setSelectedTask(task)}
-                />
-              ))}
-            </div>
-          </section>
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <LoadingSpinner />
+          </div>
+        ) : occurrences.length === 0 ? (
+          <p className="py-16 text-center text-sm text-grey-500">
+            No tasks scheduled for you today.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-8 lg:grid lg:grid-cols-2 lg:gap-8">
+            {/* Left column — Periodical Task list */}
+            <section aria-labelledby="periodical-heading" className="flex flex-col gap-3">
+              <h2 id="periodical-heading" className="text-base font-medium text-primary">
+                Periodical Task
+              </h2>
+              {periodicalTasks.length === 0 ? (
+                <p className="rounded-2xl bg-white/60 p-4 text-sm text-grey-500">
+                  No periodical tasks today.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {periodicalTasks.map((task) => (
+                    <PeriodicalCard key={`${task.taskId}-${task.occurrenceDate}`} task={task} />
+                  ))}
+                </div>
+              )}
+            </section>
 
-          {/* Right column — Floor tabs + Area grid */}
-          <section aria-labelledby="floors-heading" className="flex flex-col gap-4">
-            <h2 id="floors-heading" className="sr-only">
-              Floors
-            </h2>
-            <div className="border-b border-grey-300 pb-3">
-              <FilterTabs options={FLOORS} value={activeFloor} onChange={setActiveFloor} />
-            </div>
+            {/* Right column — Floor tabs + Area grid */}
+            <section aria-labelledby="floors-heading" className="flex flex-col gap-4">
+              <h2 id="floors-heading" className="sr-only">
+                Floors
+              </h2>
+              {floors.length === 0 ? (
+                <p className="rounded-2xl bg-white/60 p-4 text-sm text-grey-500">
+                  No floor-based tasks today.
+                </p>
+              ) : (
+                <>
+                  <div className="border-b border-grey-300 pb-3">
+                    <FilterTabs
+                      options={floors.map((f) => f.name)}
+                      value={selectedFloor ?? floors[0].name}
+                      onChange={setActiveFloor}
+                    />
+                  </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              {AREAS_BY_FLOOR[activeFloor].map((item) => (
-                <Link
-                  key={item.area}
-                  href={`/dashboard/tasks/${encodeURIComponent(item.area)}`}
-                  className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <span className="text-2xl font-semibold text-on-surface">
-                    {String(item.count).padStart(2, "0")}
-                  </span>
-                  <span className="text-xs text-on-surface">{item.area}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {areas.map((item) => (
+                      <Link
+                        key={item.areaId}
+                        href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+                        className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <span className="text-2xl font-semibold text-on-surface">
+                          {String(item.count).padStart(2, "0")}
+                        </span>
+                        <span className="text-xs text-on-surface">{item.area}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+        )}
       </main>
-
-      {/* Periodical Task detail modal */}
-      {selectedTask && (
-        <TaskDetailModal
-          open={!!selectedTask}
-          onClose={() => setSelectedTask(null)}
-          description={selectedTask.title}
-          state={getModalState(selectedTask)}
-          onStart={() => handleStart(selectedTask.id)}
-          onComplete={() => handleComplete(selectedTask.id)}
-          onUploadPhoto={() => {}}
-          onAddNote={() => {}}
-        />
-      )}
 
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
 
@@ -189,18 +190,43 @@ export default function TasksPage() {
   );
 }
 
+function PeriodicalCard({ task }: { task: TaskOccurrence }) {
+  const due = formatTaskTime(task.startTime);
+  const card = (
+    <TaskSummaryCard
+      title={task.name}
+      category={assignmentTypeLabel(task.assignmentType)}
+      priority="medium"
+      status={toSummaryStatus(task.status)}
+      dueLabel={due ? `Due: ${due}` : task.siteName}
+      icon={getTaskCategoryIcon("periodical")}
+    />
+  );
+  if (task.areaId) {
+    return (
+      <Link
+        href={`/dashboard/tasks/${encodeURIComponent(task.areaName ?? "Area")}?areaId=${task.areaId}&date=${task.occurrenceDate}`}
+        className="block"
+      >
+        {card}
+      </Link>
+    );
+  }
+  return card;
+}
+
 interface KpiCardProps {
   label: string;
   value: number;
-  color: "orange" | "green" | "grey" | "red";
+  color: "orange" | "green" | "grey" | "blue";
 }
 
 function KpiCard({ label, value, color }: KpiCardProps) {
-  const colorMap = {
+  const colorMap: Record<KpiCardProps["color"], string> = {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
     green:  "text-success bg-success/10",
     grey:   "text-grey-700 bg-grey-100",
-    red:    "text-danger bg-danger/10",
+    blue:   "text-primary bg-primary/10",
   };
 
   return (

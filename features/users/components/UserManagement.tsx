@@ -39,8 +39,7 @@ export function UserManagement() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-on-surface">Users</h1>
-            <p className="mt-1 text-sm text-grey-500">Manage staff, client service managers and client contacts</p>
+            <p className="text-sm text-grey-500">Manage staff, client service managers and client contacts</p>
           </div>
           {allowedRoles.length > 0 && (
             <button

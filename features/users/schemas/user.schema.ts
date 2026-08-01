@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalAuMobileSchema } from "@/lib/validators/phone";
+import { optionalAuPhoneSchema } from "@/lib/validators/phone";
 
 // Roles mirror the Spring Boot `Role` enum.
 export const ROLES = [
@@ -55,7 +55,7 @@ export const CreateUserSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(50),
   lastName: z.string().max(50).optional().or(z.literal("")),
   email: z.string().email("A valid email is required"),
-  phoneNumber: optionalAuMobileSchema,
+  phoneNumber: optionalAuPhoneSchema,
   role: RoleSchema,
 });
 

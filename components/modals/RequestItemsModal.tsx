@@ -1,39 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { SlideButton } from "@/components/shared/SlideButton";
+import { PillButton } from "@/components/shared/PillButton";
+import { useMySites } from "@/features/attendance/hooks/useAttendance";
+import { useInventoryItems, useCreateRequest } from "@/features/inventory/hooks/useInventory";
+import { fmtQty } from "@/features/inventory/lib/inventory";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface RequestItemsModalProps {
   open:     boolean;
   onClose:  () => void;
 }
 
-interface InventoryItem {
-  id:    string;
-  name:  string;
-  stock: number;
-}
-
-const INVENTORY_ITEMS: InventoryItem[] = [
-  { id: "1", name: "Floor Cleaner",      stock: 10 },
-  { id: "2", name: "Disinfectant Spray", stock: 4  },
-  { id: "3", name: "Hand Sanitizer",     stock: 4  },
-  { id: "4", name: "Trash Bags",         stock: 20 },
-];
-
 export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
+  const sitesQuery = useMySites();
+  const itemsQuery = useInventoryItems(true);
+  const createMutation = useCreateRequest();
+
+  const [siteId,     setSiteId]     = useState("");
   const [search,     setSearch]     = useState("");
+  const [note,       setNote]       = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [error,      setError]      = useState<string | null>(null);
+
+  const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
+  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+
+  useEffect(() => {
+    if (open) {
+      setSearch("");
+      setNote("");
+      setQuantities({});
+      setError(null);
+      createMutation.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Default the site to the cleaner's only/first site.
+  useEffect(() => {
+    if (open && !siteId && sites.length > 0) {
+      setSiteId(sites[0].siteId);
+    }
+  }, [open, siteId, sites]);
 
   if (!open) return null;
 
-  const filtered = INVENTORY_ITEMS.filter((item) =>
+  const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const selectedItems = INVENTORY_ITEMS.filter((item) => (quantities[item.id] ?? 0) > 0);
+  const selectedItems = items.filter((item) => (quantities[item.id] ?? 0) > 0);
 
   function addItem(id: string) {
     setQuantities((prev) => ({ ...prev, [id]: 1 }));
@@ -56,9 +75,23 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
   }
 
   function handleSubmit() {
-    onClose();
-    setQuantities({});
-    setSearch("");
+    setError(null);
+    if (!siteId) {
+      setError("Select a site to request items for.");
+      return;
+    }
+    const lines = selectedItems.map((item) => ({
+      itemId: item.id,
+      requestedQuantity: quantities[item.id],
+    }));
+    if (lines.length === 0) {
+      setError("Add at least one item.");
+      return;
+    }
+    createMutation.mutate(
+      { siteId, note: note.trim() || undefined, lines },
+      { onSuccess: onClose },
+    );
   }
 
   return (
@@ -93,6 +126,27 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           </button>
         </div>
 
+        {/* Site selector (shown when the cleaner covers more than one site) */}
+        {sites.length > 1 && (
+          <div className="mb-4">
+            <label htmlFor="request-site" className="mb-1 block text-xs font-medium text-grey-700">
+              Site
+            </label>
+            <select
+              id="request-site"
+              value={siteId}
+              onChange={(e) => setSiteId(e.target.value)}
+              className="w-full rounded-xl border border-grey-300 bg-white px-3 py-2 text-sm text-on-surface outline-none focus:border-primary"
+            >
+              {sites.map((site) => (
+                <option key={site.siteId} value={site.siteId}>
+                  {site.siteName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Search */}
         <div className="mb-4 flex items-center gap-2 rounded-xl bg-grey-100 px-3 py-2">
           <Search size={16} className="shrink-0 text-grey-500" />
@@ -107,50 +161,56 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
 
         {/* Item list */}
         <div className="mb-5 flex flex-col gap-2">
-          {filtered.map((item) => {
-            const qty = quantities[item.id] ?? 0;
-            return (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-medium text-on-surface truncate">
-                    {item.name}
-                  </span>
-                  <span className="shrink-0 rounded-full bg-grey-100 px-2.5 py-0.5 text-xs text-grey-700">
-                    {item.stock} in stock
-                  </span>
-                </div>
-                {qty === 0 ? (
-                  <button
-                    onClick={() => addItem(item.id)}
-                    className="shrink-0 rounded-xl border border-primary px-3 py-1 text-sm text-primary transition-colors hover:bg-primary/10"
-                  >
-                    + Add
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => decrement(item.id)}
-                      aria-label={`Remove one ${item.name}`}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                    >
-                      <Minus size={12} strokeWidth={2.5} />
-                    </button>
-                    <span className="w-6 text-center text-sm font-semibold">{qty}</span>
-                    <button
-                      onClick={() => increment(item.id)}
-                      aria-label={`Add one ${item.name}`}
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                    >
-                      <Plus size={12} strokeWidth={2.5} />
-                    </button>
+          {itemsQuery.isLoading ? (
+            <p className="py-4 text-center text-sm text-grey-500">Loading items…</p>
+          ) : filtered.length === 0 ? (
+            <p className="py-4 text-center text-sm text-grey-500">No items found.</p>
+          ) : (
+            filtered.map((item) => {
+              const qty = quantities[item.id] ?? 0;
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-on-surface truncate">
+                      {item.name}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-grey-100 px-2.5 py-0.5 text-xs text-grey-700">
+                      {fmtQty(item.mainStockQuantity)} {item.unit}
+                    </span>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {qty === 0 ? (
+                    <button
+                      onClick={() => addItem(item.id)}
+                      className="shrink-0 rounded-xl border border-primary px-3 py-1 text-sm text-primary transition-colors hover:bg-primary/10"
+                    >
+                      + Add
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => decrement(item.id)}
+                        aria-label={`Remove one ${item.name}`}
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
+                      >
+                        <Minus size={12} strokeWidth={2.5} />
+                      </button>
+                      <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                      <button
+                        onClick={() => increment(item.id)}
+                        aria-label={`Add one ${item.name}`}
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
+                      >
+                        <Plus size={12} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Selected items */}
@@ -158,7 +218,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           <>
             <hr className="mb-4 border-grey-300" />
             <h3 className="mb-3 text-sm font-semibold text-grey-700">Selected Items</h3>
-            <div className="mb-5 flex flex-col gap-2">
+            <div className="mb-4 flex flex-col gap-2">
               {selectedItems.map((item) => {
                 const qty = quantities[item.id] ?? 0;
                 return (
@@ -191,13 +251,31 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           </>
         )}
 
-        {/* Submit */}
-        <SlideButton
-          label="Submit Request"
-          variant="teal"
-          onComplete={handleSubmit}
-          disabled={selectedItems.length === 0}
+        {/* Note */}
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Add a note (optional)"
+          rows={2}
+          maxLength={1000}
+          className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
         />
+
+        {(error || createMutation.isError) && (
+          <p role="alert" className="mb-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+            {error ?? getErrorMessage(createMutation.error)}
+          </p>
+        )}
+
+        {/* Submit */}
+        <PillButton
+          variant="teal"
+          className="w-full"
+          onClick={handleSubmit}
+          disabled={selectedItems.length === 0 || createMutation.isPending}
+        >
+          {createMutation.isPending ? "Submitting…" : "Submit Request"}
+        </PillButton>
 
         <p className="mt-3 text-center text-xs text-grey-500">
           Requests will be reviewed by your supervisor.

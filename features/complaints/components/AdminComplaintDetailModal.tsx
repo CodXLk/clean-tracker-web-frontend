@@ -126,20 +126,40 @@ export function AdminComplaintDetailModal({
             )}
           </div>
 
-          <div className="mt-5">
-            <p className="mb-3 text-xs font-medium text-grey-500">Activity Timeline</p>
-            <div className="flex flex-col gap-4">
-              {complaint.timeline.map((entry, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                  <div>
-                    <p className="text-sm text-on-surface">{entry.label}</p>
-                    <p className="text-xs text-grey-500">{entry.at}</p>
-                  </div>
-                </div>
-              ))}
+          {complaint.tasks.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-medium text-grey-500">Affected Tasks</p>
+              <ul className="flex flex-col gap-1.5">
+                {complaint.tasks.map((t) => (
+                  <li
+                    key={`${t.taskId}-${t.date}`}
+                    className="rounded-xl bg-grey-100 px-3 py-2 text-xs text-on-surface"
+                  >
+                    <span className="font-medium">{t.taskName}</span>
+                    {t.floor && <span className="text-grey-500"> · {t.floor}</span>}
+                    {t.area && <span className="text-grey-500"> · {t.area}</span>}
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
+          )}
+
+          {complaint.photos.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-medium text-grey-500">Photos</p>
+              <div className="grid grid-cols-4 gap-2">
+                {complaint.photos.map((p) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={p.id}
+                    src={`/api/complaints/photos/${p.id}`}
+                    alt="Complaint attachment"
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-6 pb-6 pt-4">

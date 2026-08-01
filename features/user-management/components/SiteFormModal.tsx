@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Nfc, Loader2 } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
@@ -17,6 +18,7 @@ import { SiteFormSchema, type Site, type SiteFormInput } from "@/features/user-m
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { useCreateSite, useUpdateSite } from "@/features/user-management/hooks/useSites";
+import { isNfcSupported, readNfcTag, NfcError } from "@/lib/nfc";
 
 interface SiteFormModalProps {
   open: boolean;
@@ -32,6 +34,10 @@ const EMPTY: SiteFormInput = {
   contactNumber: "",
   googleMapsLink: "",
   streetAddress: "",
+  latitude: null,
+  longitude: null,
+  geofenceRadiusMeters: null,
+  nfcTagId: "",
   startDate: "",
   endDate: "",
   workingDays: [],
@@ -47,6 +53,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
   // On create, chain straight into a dedicated Floors modal (whose own "manage areas"
   // action opens a further Areas modal) instead of showing floors inline in this modal.
   const [floorsModalSite, setFloorsModalSite] = useState<Site | null>(null);
+  const [nfcScanning, setNfcScanning] = useState(false);
+  const [nfcMessage, setNfcMessage] = useState<string | null>(null);
+  const nfcSupported = isNfcSupported();
 
   const {
     register,
@@ -89,6 +98,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             contactNumber: site.contactNumber ?? "",
             googleMapsLink: site.googleMapsLink ?? "",
             streetAddress: site.streetAddress ?? "",
+            latitude: site.latitude ?? null,
+            longitude: site.longitude ?? null,
+            geofenceRadiusMeters: site.geofenceRadiusMeters ?? null,
+            nfcTagId: site.nfcTagId ?? "",
             startDate: site.startDate ?? "",
             endDate: site.endDate ?? "",
             workingDays: site.workingDays ?? [],
@@ -98,6 +111,8 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     createMutation.reset();
     updateMutation.reset();
     setFloorsModalSite(null);
+    setNfcMessage(null);
+    setNfcScanning(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, site]);
 
@@ -119,6 +134,20 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     setValue("clientCompanyId", next, { shouldValidate: true });
     setValue("clientId", "", { shouldValidate: false });
     autoSelectGuard.current = null;
+  }
+
+  async function handleScanNfc() {
+    setNfcMessage(null);
+    setNfcScanning(true);
+    try {
+      const uid = await readNfcTag();
+      setValue("nfcTagId", uid, { shouldValidate: true });
+      setNfcMessage(`Tag captured: ${uid}`);
+    } catch (err) {
+      setNfcMessage(err instanceof NfcError ? err.message : "Failed to read the NFC tag.");
+    } finally {
+      setNfcScanning(false);
+    }
   }
 
   function onSubmit(values: SiteFormInput) {
@@ -221,10 +250,57 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           <LocationPicker
             value={mapsLink}
             onChange={(link) => setValue("googleMapsLink", link, { shouldValidate: true })}
+            onCoordsChange={({ lat, lng }) => {
+              setValue("latitude", lat, { shouldValidate: true });
+              setValue("longitude", lng, { shouldValidate: true });
+            }}
           />
         </div>
 
         <TextField label="Street address" error={errors.streetAddress?.message} {...register("streetAddress")} />
+
+        <div className="flex flex-col gap-3 rounded-xl border border-grey-200 bg-grey-50 p-3">
+          <div className="flex items-center gap-2">
+            <Nfc size={16} className="text-teal" aria-hidden="true" />
+            <span className="text-sm font-medium text-on-surface">NFC check-in tag</span>
+          </div>
+          <p className="text-xs text-grey-500">
+            Register the tag mounted at this site. Cleaners tap it to check in; if a device has no NFC,
+            check-in falls back to matching their location against the map point above.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <TextField
+                label="NFC tag id"
+                placeholder="Scan a tag or enter its id manually"
+                error={errors.nfcTagId?.message}
+                {...register("nfcTagId")}
+              />
+            </div>
+            {nfcSupported && (
+              <button
+                type="button"
+                onClick={handleScanNfc}
+                disabled={nfcScanning}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-teal px-4 text-sm font-semibold text-teal transition-colors hover:bg-teal/10 disabled:opacity-60"
+              >
+                {nfcScanning ? (
+                  <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <Nfc size={16} aria-hidden="true" />
+                )}
+                {nfcScanning ? "Scanning…" : "Scan tag"}
+              </button>
+            )}
+          </div>
+          {!nfcSupported && (
+            <p className="text-xs text-grey-500">
+              NFC scanning isn&apos;t available on this device — enter the tag id manually, or register it later from an
+              Android device.
+            </p>
+          )}
+          {nfcMessage && <p className="text-xs font-medium text-teal">{nfcMessage}</p>}
+        </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
