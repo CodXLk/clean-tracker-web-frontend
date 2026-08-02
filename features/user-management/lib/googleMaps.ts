@@ -1,9 +1,9 @@
 // Google Maps JS API loader + link helpers for the Site location picker.
-// The Maps API key is a browser key by design (it must ship to the client), so it
-// lives in NEXT_PUBLIC_ with the provisioned key as a fallback default.
-
-export const GOOGLE_MAPS_API_KEY =
-  process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "AIzaSyBmobQB7cfd7KvpQpPo8vyumWAIz9bBRFI";
+// The Maps API key is a browser key by design (it must ship to the client). Keep it in
+// NEXT_PUBLIC_GOOGLE_MAPS_API_KEY and secure it with HTTP-referrer + API restrictions in
+// Google Cloud Console. Never hardcode a fallback key: a rotated/invalid one silently
+// breaks the map everywhere the env var isn't set.
+export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 export const DEFAULT_MAP_CENTER: GoogleLatLngLiteral = { lat: -33.8688, lng: 151.2093 }; // Sydney
 
@@ -22,6 +22,11 @@ const CALLBACK_NAME = "__primewayGoogleMapsReady";
 export function loadGoogleMaps(): Promise<GoogleMapsNamespace> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Google Maps can only load in the browser"));
+  }
+  if (!GOOGLE_MAPS_API_KEY) {
+    return Promise.reject(
+      new Error("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — set it and restart/rebuild the app."),
+    );
   }
   if (window.google?.maps) {
     return Promise.resolve(window.google.maps);
