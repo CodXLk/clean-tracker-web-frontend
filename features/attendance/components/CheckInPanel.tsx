@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Nfc, Check, AlertTriangle, LocateFixed } from "lucide-react";
+import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
 import { useCheckIn, useCheckOut } from "@/features/attendance/hooks/useAttendance";
+import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CheckInPayload, CleanerSite } from "@/features/attendance/schemas/attendance.schema";
 
 function formatTime(iso?: string | null): string {
@@ -56,27 +59,80 @@ interface CheckInPanelProps {
 export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
+  const today = toLocalDateString(new Date());
+  const { data: todayTasks = [] } = useMyTasks(today);
 
   // Per-site error message and a remount key to reset the slider after a failure.
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
+  // Pending-task consent prompt shown before checking out with unfinished work.
+  const [pendingPrompt, setPendingPrompt] = useState<
+    { site: CleanerSite; tasks: TaskOccurrence[] } | null
+  >(null);
+  const [confirming, setConfirming] = useState(false);
 
   function bumpReset(siteId: string) {
     setResetKeys((prev) => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }));
   }
 
+  function pendingTasksFor(siteId: string): TaskOccurrence[] {
+    return todayTasks.filter(
+      (t) => t.siteId === siteId && t.status !== "COMPLETED" && t.status !== "CANCELLED",
+    );
+  }
+
+  // Redo/complaint tasks the cleaner must clear this shift at the given site.
+  function redoTasksFor(siteId: string): TaskOccurrence[] {
+    return pendingTasksFor(siteId).filter((t) => t.isRedo);
+  }
+
+  async function executeCheckout(site: CleanerSite, acknowledgeIncomplete: boolean) {
+    setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
+    const payload = await acquirePayload(site);
+    await checkOut.mutateAsync({ ...payload, acknowledgeIncomplete });
+  }
+
   async function run(site: CleanerSite, mode: "in" | "out") {
     setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
     try {
-      const payload = await acquirePayload(site);
-      if (mode === "in") await checkIn.mutateAsync(payload);
-      else await checkOut.mutateAsync(payload);
+      if (mode === "in") {
+        const payload = await acquirePayload(site);
+        await checkIn.mutateAsync(payload);
+        return;
+      }
+      // Check-out: block on any unfinished tasks and ask for consent first.
+      const pending = pendingTasksFor(site.siteId);
+      if (pending.length > 0) {
+        setPendingPrompt({ site, tasks: pending });
+        bumpReset(site.siteId);
+        return;
+      }
+      await executeCheckout(site, false);
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
         [site.siteId]: getMessage(err, mode === "in" ? "Check-in failed." : "Check-out failed."),
       }));
       bumpReset(site.siteId);
+    }
+  }
+
+  async function confirmPendingCheckout() {
+    if (!pendingPrompt) return;
+    const { site } = pendingPrompt;
+    setConfirming(true);
+    try {
+      await executeCheckout(site, true);
+      setPendingPrompt(null);
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [site.siteId]: getMessage(err, "Check-out failed."),
+      }));
+      setPendingPrompt(null);
+      bumpReset(site.siteId);
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -103,6 +159,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         const resetKey = resetKeys[site.siteId] ?? 0;
         const checkedIn = site.status === "CHECKED_IN";
         const checkedOut = site.status === "CHECKED_OUT";
+        const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
 
         return (
           <div key={site.siteId} className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
@@ -132,6 +189,28 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 )}
               </div>
             </div>
+
+            {redoTasks.length > 0 && (
+              <div className="rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-[#7C3AED]">
+                  <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
+                  {redoTasks.length} redo/complaint task{redoTasks.length > 1 ? "s" : ""} to
+                  complete this shift
+                </p>
+                <ul className="mt-1 list-disc pl-5 text-xs text-grey-700">
+                  {redoTasks.slice(0, 4).map((t) => (
+                    <li key={t.redoId ?? t.taskId}>
+                      {t.name}
+                      {t.areaName ? ` · ${t.areaName}` : ""}
+                    </li>
+                  ))}
+                  {redoTasks.length > 4 && <li>and {redoTasks.length - 4} more…</li>}
+                </ul>
+                <p className="mt-1 text-[11px] text-grey-500">
+                  You must finish these before you can check out.
+                </p>
+              </div>
+            )}
 
             {checkedOut ? (
               <div className="flex items-center justify-center gap-2 rounded-full bg-success/10 px-4 py-3 text-sm font-semibold text-success">
@@ -172,6 +251,81 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
           </div>
         );
       })}
+
+      {pendingPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pending-tasks-title"
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !confirming && setPendingPrompt(null)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 w-full max-w-md rounded-3xl bg-surface shadow-2xl">
+            <div className="flex items-start justify-between gap-3 px-5 pt-5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-error/10 text-error">
+                  <AlertTriangle size={18} aria-hidden="true" />
+                </span>
+                <h2 id="pending-tasks-title" className="text-base font-semibold text-on-surface">
+                  Incomplete tasks
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                disabled={confirming}
+                onClick={() => setPendingPrompt(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-grey-100 disabled:opacity-50"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="px-5 pt-3">
+              <p className="text-sm text-grey-700">
+                You still have {pendingPrompt.tasks.length} unfinished task
+                {pendingPrompt.tasks.length === 1 ? "" : "s"} at{" "}
+                <span className="font-medium text-on-surface">{pendingPrompt.site.siteName}</span>.
+                If you check out now, your supervisor will be notified.
+              </p>
+
+              <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-2xl bg-white/70 p-3">
+                {pendingPrompt.tasks.map((t) => (
+                  <li key={`${t.taskId}-${t.occurrenceDate}`} className="text-sm">
+                    <p className="font-medium text-on-surface">{t.name}</p>
+                    <p className="text-xs text-grey-500">
+                      {t.floorName} · {t.areaName}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex gap-3 px-5 pb-5 pt-4">
+              <button
+                type="button"
+                disabled={confirming}
+                onClick={() => setPendingPrompt(null)}
+                className="flex-1 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-50"
+              >
+                Keep working
+              </button>
+              <button
+                type="button"
+                disabled={confirming}
+                onClick={confirmPendingCheckout}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-error px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:opacity-60"
+              >
+                {confirming ? "Checking out…" : "Check out anyway"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

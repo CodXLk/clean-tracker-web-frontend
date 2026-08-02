@@ -1,37 +1,48 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil, X } from "lucide-react";
+import { useEffect } from "react";
+import { CheckCircle2, X } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
+import { TextField } from "@/components/shared/TextField";
+import {
+  ChangePasswordSchema,
+  type ChangePasswordInput,
+} from "@/features/auth/schemas/auth.schema";
+import { useChangePassword, getAuthErrorMessage } from "@/features/auth/hooks/useAuth";
 
 interface ResetPasswordModalProps {
   open:    boolean;
   onClose: () => void;
 }
 
-interface PasswordField {
-  id:          string;
-  label:       string;
-  placeholder: string;
-}
-
-const PASSWORD_FIELDS: PasswordField[] = [
-  { id: "current",  label: "Current password",  placeholder: "Enter current password"  },
-  { id: "new",      label: "New password",       placeholder: "Enter new password"       },
-  { id: "confirm",  label: "Confirm password",   placeholder: "Confirm new password"    },
-];
-
 export function ResetPasswordModal({ open, onClose }: ResetPasswordModalProps) {
-  const [values,  setValues]  = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState<string | null>(null);
+  const changePassword = useChangePassword();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<ChangePasswordInput>({
+    resolver: zodResolver(ChangePasswordSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+  });
+
+  // Reset form + mutation state whenever the modal is reopened.
+  useEffect(() => {
+    if (open) {
+      reset();
+      changePassword.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
-  function handleSave() {
-    onClose();
-    setValues({});
-    setEditing(null);
+  function onSubmit(values: ChangePasswordInput) {
+    changePassword.mutate(values);
   }
 
   return (
@@ -47,7 +58,7 @@ export function ResetPasswordModal({ open, onClose }: ResetPasswordModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Reset password"
+        aria-label="Change password"
         className={cn(
           "fixed z-50 bg-white p-6",
           "inset-x-0 bottom-0 rounded-t-3xl",
@@ -56,62 +67,65 @@ export function ResetPasswordModal({ open, onClose }: ResetPasswordModalProps) {
       >
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-on-surface">Reset password</h2>
+          <h2 className="text-xl font-bold text-on-surface">Change password</h2>
           <button
             onClick={onClose}
-            aria-label="Close reset password"
+            aria-label="Close change password"
             className="rounded-full p-0.5 text-danger transition-colors hover:bg-danger/10"
           >
             <X size={20} strokeWidth={2} />
           </button>
         </div>
 
-        {/* Password fields */}
-        <div className="mb-6 flex flex-col">
-          {PASSWORD_FIELDS.map((field, idx) => (
-            <div
-              key={field.id}
-              className={cn(
-                "flex items-center justify-between gap-2 py-3",
-                idx < PASSWORD_FIELDS.length - 1 && "border-b border-grey-300",
-              )}
-            >
-              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                <span className="text-xs text-grey-500">{field.label}</span>
-                {editing === field.id ? (
-                  <input
-                    type="password"
-                    value={values[field.id] ?? ""}
-                    onChange={(e) =>
-                      setValues((prev) => ({ ...prev, [field.id]: e.target.value }))
-                    }
-                    onBlur={() => setEditing(null)}
-                    autoFocus
-                    placeholder={field.placeholder}
-                    className="text-sm font-medium text-on-surface outline-none bg-transparent placeholder:text-grey-500"
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-on-surface">
-                    {values[field.id] ? "••••••••" : (
-                      <span className="text-grey-500">{field.placeholder}</span>
-                    )}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => setEditing(field.id)}
-                aria-label={`Edit ${field.label}`}
-                className="shrink-0 rounded-full p-1 text-grey-500 transition-colors hover:bg-grey-100 hover:text-primary"
-              >
-                <Pencil size={14} strokeWidth={2} />
-              </button>
-            </div>
-          ))}
-        </div>
+        {changePassword.isSuccess ? (
+          <div className="flex flex-col items-center gap-4 py-4 text-center">
+            <CheckCircle2 size={44} className="text-success" />
+            <p className="text-sm text-grey-600">Your password has been updated.</p>
+            <PillButton variant="teal" onClick={onClose}>
+              Done
+            </PillButton>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            <TextField
+              label="Current password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Enter current password"
+              required
+              error={errors.currentPassword?.message}
+              {...register("currentPassword")}
+            />
+            <TextField
+              label="New password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              required
+              error={errors.newPassword?.message}
+              {...register("newPassword")}
+            />
+            <TextField
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Re-enter new password"
+              required
+              error={errors.confirmPassword?.message}
+              {...register("confirmPassword")}
+            />
 
-        <PillButton variant="orange" onClick={handleSave}>
-          Save
-        </PillButton>
+            {changePassword.isError && (
+              <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+                {getAuthErrorMessage(changePassword.error)}
+              </p>
+            )}
+
+            <PillButton type="submit" variant="orange" disabled={changePassword.isPending}>
+              {changePassword.isPending ? "Saving…" : "Save"}
+            </PillButton>
+          </form>
+        )}
       </div>
     </>
   );

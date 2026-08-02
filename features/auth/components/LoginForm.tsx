@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoginSchema, type LoginInput } from "@/features/auth/schemas/auth.schema";
@@ -55,6 +56,15 @@ export function LoginForm() {
         error={errors.password?.message}
         {...register("password")}
       />
+
+      <div className="-mt-2 text-right">
+        <Link
+          href="/forgot-password"
+          className="text-sm font-medium text-primary transition-opacity hover:opacity-80"
+        >
+          Forgot password?
+        </Link>
+      </div>
 
       {login.isError && (
         <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

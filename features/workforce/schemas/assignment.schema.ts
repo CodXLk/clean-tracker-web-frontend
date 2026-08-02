@@ -79,6 +79,7 @@ export const TaskOccurrenceSchema = z.object({
   description: z.string().nullable().optional(),
   colorHex: z.string().nullable().optional(),
   cleaners: z.array(AssignmentCleanerSchema),
+  supervisors: z.array(AssignmentCleanerSchema).default([]),
   recurring: z.boolean(),
   overridden: z.boolean(),
 });
@@ -118,6 +119,7 @@ export const AssignmentSchema = z.object({
       orderIndex: z.number(),
       endDate: z.string().nullable().optional(),
       cleaners: z.array(AssignmentCleanerSchema),
+      supervisors: z.array(AssignmentCleanerSchema).default([]),
       items: z
         .array(
           z.object({
@@ -191,6 +193,8 @@ export const AssignmentFormSchema = z
     groups: z.array(LocationGroupFormSchema).min(1, "Add a floor and area"),
     /** Assignment-level cleaner selection (applies to all tasks unless assignPerTask). */
     cleanerIds: z.array(z.string().uuid()),
+    /** Assignment-level supervisor selection (applies to every task). */
+    supervisorIds: z.array(z.string().uuid()),
     assignPerTask: z.boolean(),
     // Recurrence — Periodical, or Other with custom recurrence enabled.
     recurrenceType: RecurrenceTypeSchema.optional(),
@@ -327,6 +331,7 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
         areaId: group.areaId,
         ...(task.description?.trim() ? { description: task.description.trim() } : {}),
         cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+        ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
         ...((task.items ?? []).length > 0
           ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
           : {}),

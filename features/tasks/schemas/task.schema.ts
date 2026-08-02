@@ -26,8 +26,8 @@ export const CleanerSummarySchema = z.object({
 
 // Mirrors backend TaskOccurrenceResponse — one computed occurrence of a task on a date.
 export const TaskOccurrenceSchema = z.object({
-  assignmentId: z.string().uuid(),
-  taskId: z.string().uuid(),
+  assignmentId: z.string().uuid().nullable().optional(),
+  taskId: z.string().uuid().nullable().optional(),
   occurrenceDate: z.string(),
   date: z.string(),
   name: z.string(),
@@ -37,7 +37,7 @@ export const TaskOccurrenceSchema = z.object({
   floorName: z.string().nullable().optional(),
   areaId: z.string().uuid().nullable().optional(),
   areaName: z.string().nullable().optional(),
-  assignmentType: AssignmentTypeSchema,
+  assignmentType: AssignmentTypeSchema.nullable().optional(),
   startTime: z.string().nullable().optional(),
   endTime: z.string().nullable().optional(),
   durationMinutes: z.number().nullable().optional(),
@@ -47,6 +47,9 @@ export const TaskOccurrenceSchema = z.object({
   cleaners: z.array(CleanerSummarySchema).default([]),
   recurring: z.boolean(),
   overridden: z.boolean(),
+  redoId: z.string().uuid().nullable().optional(),
+  isRedo: z.boolean().optional().default(false),
+  isComplaint: z.boolean().optional().default(false),
 });
 export const TaskOccurrenceListSchema = z.array(TaskOccurrenceSchema);
 export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;
@@ -81,6 +84,7 @@ export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;
 export interface OccurrenceRef {
   taskId: string;
   date: string;
+  redoId?: string;
 }
 
 export interface CompleteTasksInput {

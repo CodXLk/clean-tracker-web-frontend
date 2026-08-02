@@ -195,7 +195,7 @@ function PeriodicalCard({ task }: { task: TaskOccurrence }) {
   const card = (
     <TaskSummaryCard
       title={task.name}
-      category={assignmentTypeLabel(task.assignmentType)}
+      category={assignmentTypeLabel(task.assignmentType ?? "OTHER")}
       priority="medium"
       status={toSummaryStatus(task.status)}
       dueLabel={due ? `Due: ${due}` : task.siteName}

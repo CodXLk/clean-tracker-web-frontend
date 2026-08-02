@@ -9,9 +9,10 @@ import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
+import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useAuthStore } from "@/features/auth/store/auth.store";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
-import type { TaskStatus } from "@/features/tasks/schemas/task.schema";
+import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
 const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
@@ -34,6 +35,11 @@ interface PageParams {
   area: string;
 }
 
+/** Stable selection key: redos are keyed by their redoId, regular tasks by taskId. */
+function occKey(task: TaskOccurrence): string {
+  return task.redoId ?? (task.taskId as string);
+}
+
 interface AreaTaskPageProps {
   params: Promise<PageParams>;
 }
@@ -50,6 +56,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const completeTasks = useCompleteTasks();
   const reviewComplete = useReviewComplete();
   const createComplaint = useCreateComplaint();
+  const complaintWithRedo = useComplaintWithRedo();
 
   const role = useAuthStore((s) => s.user?.role);
   const isSupervisor = role === "SUPERVISOR";
@@ -73,7 +80,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     [occurrences, areaId, isSupervisor],
   );
 
-  const selectableIds = useMemo(() => tasks.map((t) => t.taskId), [tasks]);
+  const selectableIds = useMemo(() => tasks.map((t) => occKey(t)), [tasks]);
   const allSelected = selectedIds.size > 0 && selectedIds.size === selectableIds.length;
 
   // Object URLs for photo previews.
@@ -111,11 +118,15 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   }
 
   function handleComplete() {
-    const selected = tasks.filter((t) => selectedIds.has(t.taskId));
+    const selected = tasks.filter((t) => selectedIds.has(occKey(t)));
     if (selected.length === 0) return;
     completeTasks.mutate(
       {
-        occurrences: selected.map((t) => ({ taskId: t.taskId, date: t.occurrenceDate })),
+        occurrences: selected.map((t) => ({
+          taskId: t.taskId as string,
+          date: t.occurrenceDate,
+          redoId: t.redoId ?? undefined,
+        })),
         note: note.trim() || undefined,
         photos,
       },
@@ -124,21 +135,22 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   }
 
   function handleReviewComplete() {
-    const selected = tasks.filter((t) => selectedIds.has(t.taskId));
+    // Redo occurrences are completed by cleaners, not marked done during review.
+    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
     if (selected.length === 0) return;
     reviewComplete.mutate(
-      selected.map((t) => ({ taskId: t.taskId, date: t.occurrenceDate })),
+      selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
       { onSuccess: resetActionState },
     );
   }
 
   function handleComplaint() {
-    const selected = tasks.filter((t) => selectedIds.has(t.taskId));
+    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
     if (selected.length === 0) return;
     createComplaint.mutate(
       {
         input: {
-          occurrences: selected.map((t) => ({ taskId: t.taskId, date: t.occurrenceDate })),
+          occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
           description: note.trim() || undefined,
         },
         photos,
@@ -147,7 +159,23 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     );
   }
 
-  const supervisorPending = reviewComplete.isPending || createComplaint.isPending;
+  function handleComplaintWithRedo() {
+    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
+    if (selected.length === 0) return;
+    complaintWithRedo.mutate(
+      {
+        input: {
+          occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+          description: note.trim() || undefined,
+        },
+        photos,
+      },
+      { onSuccess: resetActionState },
+    );
+  }
+
+  const supervisorPending =
+    reviewComplete.isPending || createComplaint.isPending || complaintWithRedo.isPending;
   const hasSelection = selectedIds.size > 0;
 
   return (
@@ -194,16 +222,20 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
         ) : (
           <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-3">
             {tasks.map((task) => {
-              const selected = selectedIds.has(task.taskId);
+              const key = occKey(task);
+              const selected = selectedIds.has(key);
+              const isRedo = Boolean(task.isRedo);
               return (
                 <button
-                  key={`${task.taskId}-${task.occurrenceDate}`}
-                  onClick={() => toggleTaskSelected(task.taskId)}
+                  key={key}
+                  onClick={() => toggleTaskSelected(key)}
                   aria-pressed={selected}
                   className={cn(
                     "flex w-full items-start gap-3 rounded-2xl bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md",
                     selected && "ring-2 ring-primary",
+                    isRedo && "border-l-4",
                   )}
+                  style={isRedo ? { borderLeftColor: task.colorHex ?? "#7C3AED" } : undefined}
                 >
                   <span className="mt-0.5 shrink-0">
                     {selected ? (
@@ -215,11 +247,24 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
                   <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="text-sm font-semibold leading-snug text-[#1A1A1A]">
-                        {task.name}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold leading-snug text-[#1A1A1A]">
+                          {task.name}
+                        </span>
+                        {isRedo && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                            style={{ backgroundColor: task.colorHex ?? "#7C3AED" }}
+                          >
+                            {task.isComplaint ? "Complaint Redo" : "Redo"}
+                          </span>
+                        )}
+                      </div>
                       {task.floorName && (
                         <span className="text-xs text-grey-500">{task.floorName}</span>
+                      )}
+                      {isRedo && task.description && (
+                        <span className="text-xs text-grey-600">{task.description}</span>
                       )}
                       <span className="text-xs text-grey-500">{task.date}</span>
                     </div>
@@ -321,21 +366,32 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
             />
 
             {isSupervisor ? (
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <button
-                  onClick={handleComplaint}
+                  onClick={handleComplaintWithRedo}
                   disabled={supervisorPending}
-                  className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  className="w-full rounded-xl bg-[#7C3AED] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
-                  {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
+                  {complaintWithRedo.isPending
+                    ? "Scheduling…"
+                    : "Complaint + Redo (next shift)"}
                 </button>
-                <button
-                  onClick={handleReviewComplete}
-                  disabled={supervisorPending}
-                  className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {reviewComplete.isPending ? "Saving…" : "Mark as Completed"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleComplaint}
+                    disabled={supervisorPending}
+                    className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
+                  </button>
+                  <button
+                    onClick={handleReviewComplete}
+                    disabled={supervisorPending}
+                    className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {reviewComplete.isPending ? "Saving…" : "Mark as Completed"}
+                  </button>
+                </div>
               </div>
             ) : (
               <button

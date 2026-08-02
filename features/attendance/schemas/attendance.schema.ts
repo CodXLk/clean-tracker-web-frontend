@@ -57,4 +57,6 @@ export interface CheckInPayload {
   latitude?: number;
   longitude?: number;
   accuracyMeters?: number;
+  /** Cleaner consents to checking out with incomplete tasks. */
+  acknowledgeIncomplete?: boolean;
 }
