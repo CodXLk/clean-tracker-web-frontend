@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Nfc, Loader2 } from "lucide-react";
@@ -130,6 +130,21 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompanyId, clientsQuery.data, clientsQuery.isLoading]);
 
+  // Stable identities so LocationPicker's internal effect doesn't re-fire (and re-trigger
+  // setValue) on every parent render — see LocationPicker's "React to the link being
+  // edited/pasted" effect, which depends on these via its `applyLocation` callback.
+  const handleMapsLinkChange = useCallback(
+    (link: string) => setValue("googleMapsLink", link, { shouldValidate: true }),
+    [setValue],
+  );
+  const handleCoordsChange = useCallback(
+    ({ lat, lng }: { lat: number; lng: number }) => {
+      setValue("latitude", lat, { shouldValidate: true });
+      setValue("longitude", lng, { shouldValidate: true });
+    },
+    [setValue],
+  );
+
   function handleCompanyChange(next: string) {
     setValue("clientCompanyId", next, { shouldValidate: true });
     setValue("clientId", "", { shouldValidate: false });
@@ -249,11 +264,8 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
         <div className="rounded-xl border border-grey-200 bg-grey-50 p-3">
           <LocationPicker
             value={mapsLink}
-            onChange={(link) => setValue("googleMapsLink", link, { shouldValidate: true })}
-            onCoordsChange={({ lat, lng }) => {
-              setValue("latitude", lat, { shouldValidate: true });
-              setValue("longitude", lng, { shouldValidate: true });
-            }}
+            onChange={handleMapsLinkChange}
+            onCoordsChange={handleCoordsChange}
           />
         </div>
 
