@@ -80,3 +80,16 @@ export function useAttendanceLogs(filters: AttendanceLogFilters = {}) {
     queryFn: () => fetchLogs(filters),
   });
 }
+
+async function fetchMyAttendanceHistory(): Promise<AttendanceLog[]> {
+  const { data } = await clientApi.get(ENDPOINTS.attendance.me);
+  return AttendanceLogListSchema.parse(data);
+}
+
+/** The calling cleaner's own full attendance history (all sites, all dates). */
+export function useMyAttendanceHistory() {
+  return useQuery({
+    queryKey: attendanceKeys.me(),
+    queryFn: fetchMyAttendanceHistory,
+  });
+}

@@ -206,9 +206,15 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
-                <KpiCard label="Completed" value={taskKpis.completed} color="green" />
-                <KpiCard label="Total" value={taskKpis.total} color="grey" />
+                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
+                  <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
+                </Link>
+                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
+                  <KpiCard label="Completed" value={taskKpis.completed} color="green" />
+                </Link>
+                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
+                  <KpiCard label="Total" value={taskKpis.total} color="grey" />
+                </Link>
               </div>
             </section>
           </div>

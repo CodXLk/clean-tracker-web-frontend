@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useInventoryItems, useCreateRequest } from "@/features/inventory/hooks/useInventory";
-import { fmtQty } from "@/features/inventory/lib/inventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface RequestItemsModalProps {
@@ -110,8 +109,8 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
         aria-label="Request items"
         className={cn(
           "fixed z-50 bg-white p-6",
-          "inset-x-0 bottom-0 rounded-t-3xl max-h-[85vh] overflow-y-auto",
-          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
+          "inset-x-0 bottom-0 rounded-t-3xl min-h-[50vh] max-h-[85vh] overflow-y-auto",
+          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:min-h-0 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
         )}
       >
         {/* Header */}
@@ -177,9 +176,6 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
                     <span className="text-sm font-medium text-on-surface truncate">
                       {item.name}
                     </span>
-                    <span className="shrink-0 rounded-full bg-grey-100 px-2.5 py-0.5 text-xs text-grey-700">
-                      {fmtQty(item.mainStockQuantity)} {item.unit}
-                    </span>
                   </div>
                   {qty === 0 ? (
                     <button
@@ -197,7 +193,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
                       >
                         <Minus size={12} strokeWidth={2.5} />
                       </button>
-                      <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                      <span className="w-6 text-center text-sm font-semibold text-on-surface">{qty}</span>
                       <button
                         onClick={() => increment(item.id)}
                         aria-label={`Add one ${item.name}`}
@@ -235,7 +231,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
                       >
                         <Minus size={12} strokeWidth={2.5} />
                       </button>
-                      <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                      <span className="w-6 text-center text-sm font-semibold text-on-surface">{qty}</span>
                       <button
                         onClick={() => increment(item.id)}
                         aria-label={`Add one ${item.name}`}
