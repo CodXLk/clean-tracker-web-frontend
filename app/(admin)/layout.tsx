@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // shell but the middleware restricts them to their allow-listed pages (e.g. Cleaner Logs).
   const role = roleFromToken(token);
   if (!isAdminRole(role) && role !== "SUPERVISOR") {
-    redirect("/dashboard");
+    redirect("/dashboard?denied=admin");
   }
 
   return (

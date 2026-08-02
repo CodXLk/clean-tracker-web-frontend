@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Bell, CalendarDays, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 
 interface PageHeaderProps {
   title:          string;
@@ -22,6 +24,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const router = useRouter();
+  const { data: unreadCount = 0 } = useUnreadCount();
 
   function handleBack() {
     if (onBack) {
@@ -70,17 +73,19 @@ export function PageHeader({
             </button>
           )}
 
-          {/* Bell with red dot */}
-          <button
-            aria-label="Notifications"
+          {/* Bell */}
+          <Link
+            href="/dashboard/notifications"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
             className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80 active:opacity-60"
           >
             <Bell size={18} strokeWidth={2} />
-            <span
-              aria-hidden="true"
-              className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger"
-            />
-          </button>
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
     </header>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Calendar, Clock, ClipboardList, AlertTriangle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
 import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
@@ -56,6 +57,10 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
 }
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
+  const [adminDeniedDismissed, setAdminDeniedDismissed] = useState(false);
+  const showAdminDeniedBanner = searchParams.get("denied") === "admin" && !adminDeniedDismissed;
+
   const { data: sites = [], isLoading } = useMySites();
   const { data: me } = useMe();
 
@@ -145,6 +150,19 @@ export default function DashboardPage() {
 
       {/* Body */}
       <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl mt-5">
+        {showAdminDeniedBanner && (
+          <div className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-on-surface">
+            <p>Your account doesn&apos;t have access to the admin console, so you were brought here instead.</p>
+            <button
+              type="button"
+              onClick={() => setAdminDeniedDismissed(true)}
+              aria-label="Dismiss"
+              className="shrink-0 rounded-full p-1 text-on-surface/60 transition-opacity hover:opacity-80"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          </div>
+        )}
         <div className="lg:grid lg:grid-cols-2 lg:gap-6">
           {/* Left column */}
           <div className="flex flex-col gap-6">
