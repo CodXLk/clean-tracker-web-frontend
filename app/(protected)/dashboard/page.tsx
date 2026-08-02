@@ -10,6 +10,7 @@ import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
+import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 import { formatTaskTime, toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
@@ -70,6 +71,7 @@ export default function DashboardPage() {
   const { data: todayTasks = [] } = useMyTasks(today);
   const { data: upcomingTasks = [] } = useMyTasks(range.from, range.to);
   const { data: complaintsData } = useComplaints();
+  const { data: unreadCount = 0 } = useUnreadCount();
 
   const activeSite = sites.find((s) => s.status === "CHECKED_IN");
   const checkedIn = !!activeSite;
@@ -126,16 +128,18 @@ export default function DashboardPage() {
           </div>
 
           {/* Bell */}
-          <button
-            aria-label="Notifications"
+          <Link
+            href="/dashboard/notifications"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
             className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
           >
             <Bell size={20} strokeWidth={2} />
-            <span
-              aria-hidden="true"
-              className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-danger border-2 border-primary"
-            />
-          </button>
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
         </div>
       </header>
 

@@ -10,6 +10,9 @@ import {
   CheckCircle2,
   XCircle,
   Bell,
+  LogOut,
+  MessageSquareWarning,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -31,6 +34,10 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   REQUEST_REJECTED: XCircle,
   DELIVERY_DISPATCHED: Truck,
   DELIVERY_CONFIRMED: CheckCircle2,
+  CHECKOUT_WITH_PENDING_TASKS: LogOut,
+  COMPLAINT_RAISED: MessageSquareWarning,
+  TASK_REDO_ASSIGNED: RefreshCw,
+  OTHER: Bell,
 };
 
 const ICON_TONES: Record<NotificationType, string> = {
@@ -40,6 +47,10 @@ const ICON_TONES: Record<NotificationType, string> = {
   REQUEST_REJECTED: "bg-error/10 text-error",
   DELIVERY_DISPATCHED: "bg-primary/10 text-primary",
   DELIVERY_CONFIRMED: "bg-success/10 text-success",
+  CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
+  COMPLAINT_RAISED: "bg-error/10 text-error",
+  TASK_REDO_ASSIGNED: "bg-primary/10 text-primary",
+  OTHER: "bg-grey-100 text-grey-500",
 };
 
 function formatWhen(iso: string): string {
@@ -97,6 +108,16 @@ function NotificationRow({ n }: { n: Notification }) {
           {(n.type === "DELIVERY_DISPATCHED" || n.type === "DELIVERY_CONFIRMED") && (
             <Link href="/admin/inventory" className="text-xs font-medium text-primary hover:underline">
               View deliveries
+            </Link>
+          )}
+          {n.type === "COMPLAINT_RAISED" && (
+            <Link href="/admin/complaints" className="text-xs font-medium text-primary hover:underline">
+              View complaint
+            </Link>
+          )}
+          {(n.type === "CHECKOUT_WITH_PENDING_TASKS" || n.type === "TASK_REDO_ASSIGNED") && (
+            <Link href="/admin/cleaner-logs" className="text-xs font-medium text-primary hover:underline">
+              View cleaner logs
             </Link>
           )}
           {!n.read && (

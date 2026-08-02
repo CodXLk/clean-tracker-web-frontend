@@ -1,13 +1,25 @@
 import { z } from "zod";
 
-export const NotificationTypeSchema = z.enum([
-  "LOW_STOCK",
-  "REQUEST_SUBMITTED",
-  "REQUEST_APPROVED",
-  "REQUEST_REJECTED",
-  "DELIVERY_DISPATCHED",
-  "DELIVERY_CONFIRMED",
-]);
+// Mirrors the Spring Boot NotificationType enum (all roles). "OTHER" is a
+// frontend-only fallback so any future backend type degrades gracefully instead
+// of throwing during response validation and breaking the whole list.
+export const NotificationTypeSchema = z
+  .enum([
+    // Inventory
+    "LOW_STOCK",
+    "REQUEST_SUBMITTED",
+    "REQUEST_APPROVED",
+    "REQUEST_REJECTED",
+    "DELIVERY_DISPATCHED",
+    "DELIVERY_CONFIRMED",
+    // Attendance / tasks / complaints (cleaner + management facing)
+    "CHECKOUT_WITH_PENDING_TASKS",
+    "COMPLAINT_RAISED",
+    "TASK_REDO_ASSIGNED",
+    // Forward-compat fallback (never sent by the backend)
+    "OTHER",
+  ])
+  .catch("OTHER");
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 
 export const NotificationSchema = z.object({

@@ -10,6 +10,9 @@ import {
   Truck,
   CheckCircle2,
   XCircle,
+  LogOut,
+  MessageSquareWarning,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -28,6 +31,10 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   REQUEST_REJECTED: XCircle,
   DELIVERY_DISPATCHED: Truck,
   DELIVERY_CONFIRMED: CheckCircle2,
+  CHECKOUT_WITH_PENDING_TASKS: LogOut,
+  COMPLAINT_RAISED: MessageSquareWarning,
+  TASK_REDO_ASSIGNED: RefreshCw,
+  OTHER: Bell,
 };
 
 const ICON_TONES: Record<NotificationType, string> = {
@@ -37,7 +44,24 @@ const ICON_TONES: Record<NotificationType, string> = {
   REQUEST_REJECTED: "bg-error/10 text-error",
   DELIVERY_DISPATCHED: "bg-primary/10 text-primary",
   DELIVERY_CONFIRMED: "bg-success/10 text-success",
+  CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
+  COMPLAINT_RAISED: "bg-error/10 text-error",
+  TASK_REDO_ASSIGNED: "bg-primary/10 text-primary",
+  OTHER: "bg-grey-100 text-grey-500",
 };
+
+/** Deep-link target per notification type for the admin console. */
+function linkFor(type: NotificationType): string {
+  switch (type) {
+    case "COMPLAINT_RAISED":
+      return "/admin/complaints";
+    case "CHECKOUT_WITH_PENDING_TASKS":
+    case "TASK_REDO_ASSIGNED":
+      return "/admin/cleaner-logs";
+    default:
+      return "/admin/inventory";
+  }
+}
 
 function formatWhen(iso: string): string {
   const then = new Date(iso).getTime();
@@ -146,7 +170,7 @@ export function NotificationBell() {
                   return (
                     <li key={n.id}>
                       <Link
-                        href="/admin/inventory"
+                        href={linkFor(n.type)}
                         onClick={() => {
                           if (!n.read) markRead.mutate(n.id);
                           setOpen(false);
