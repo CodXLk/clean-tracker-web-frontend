@@ -17,7 +17,7 @@ import { WorkingDaysSelector } from "@/features/user-management/components/Worki
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
-import { useSiteCleaners } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteCleaners, useSiteSupervisors } from "@/features/user-management/hooks/useSiteAssignments";
 import { useCreateAssignment } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
@@ -102,6 +102,7 @@ function buildDefaults({
     startTime: defaultTime,
     groups: [emptyGroup(defaultFloorId, defaultAreaId)],
     cleanerIds: [],
+    supervisorIds: [],
     assignPerTask: false,
     recurrenceType: "DAILY",
     recurrenceCount: 1,
@@ -601,6 +602,7 @@ export function NewAssignmentModal({
   const startTime = watch("startTime");
   const groups = watch("groups");
   const selectedCleaners = watch("cleanerIds");
+  const selectedSupervisors = watch("supervisorIds");
   const assignPerTask = watch("assignPerTask");
   const recurrenceType = watch("recurrenceType");
   const monthlyMode = watch("monthlyMode");
@@ -615,6 +617,8 @@ export function NewAssignmentModal({
   const floorsQuery = useFloors(siteId || undefined);
   // Only cleaners assigned to the selected site can be picked.
   const cleanersQuery = useSiteCleaners(siteId || undefined);
+  // Only supervisors assigned to the selected site can be picked.
+  const supervisorsQuery = useSiteSupervisors(siteId || undefined);
 
   const selectedSite = useMemo(
     () => (sitesQuery.data ?? []).find((s) => s.id === siteId),
@@ -651,6 +655,20 @@ export function NewAssignmentModal({
   );
   const allFilteredSelected =
     filteredCleaners.length > 0 && filteredCleaners.every((c) => selectedCleaners?.includes(c.id));
+
+  const supervisors = supervisorsQuery.data ?? [];
+  // Default supervisor selection to the site's assigned supervisors once they load.
+  const didDefaultSupervisors = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!siteId || supervisorsQuery.isLoading) return;
+    // Only auto-select once per site, and only when nothing is chosen yet.
+    if (didDefaultSupervisors.current === siteId) return;
+    didDefaultSupervisors.current = siteId;
+    if ((getValues("supervisorIds") ?? []).length === 0) {
+      setValue("supervisorIds", supervisors.map((s) => s.id), { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteId, supervisorsQuery.isLoading, supervisorsQuery.data]);
 
   useEffect(() => {
     if (open) {
@@ -741,6 +759,15 @@ export function NewAssignmentModal({
     }
   }
 
+  function toggleSupervisor(id: string) {
+    const current = selectedSupervisors ?? [];
+    if (current.includes(id)) {
+      setValue("supervisorIds", current.filter((s) => s !== id), { shouldValidate: true });
+    } else {
+      setValue("supervisorIds", [...current, id], { shouldValidate: true });
+    }
+  }
+
   function toggleSelectAll() {
     const allIds = filteredCleaners.map((c) => c.id);
     const allSelected = allIds.every((id) => selectedCleaners?.includes(id));
@@ -811,6 +838,8 @@ export function NewAssignmentModal({
                         field.onChange(v);
                         // Floors/areas/cleaners are site-specific — reset to one blank group.
                         setValue("cleanerIds", []);
+                        setValue("supervisorIds", []);
+                        didDefaultSupervisors.current = undefined;
                         setValue("groups", [emptyGroup()], { shouldValidate: false });
                       }}
                       loading={sitesQuery.isLoading}
@@ -1281,6 +1310,73 @@ export function NewAssignmentModal({
                       <p className="mt-2 text-xs text-danger">{errors.cleanerIds.message}</p>
                     )}
                   </>
+                )}
+              </div>
+
+              {/* Supervisor assignment — reviewers of these tasks */}
+              <div className="mt-6">
+                <div className="mb-3 flex items-center gap-3">
+                  <span className="text-sm font-medium text-on-surface">Assign Supervisors</span>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    {!siteId
+                      ? "Select a site"
+                      : supervisorsQuery.isLoading
+                        ? "Loading…"
+                        : `${supervisors.length} available`}
+                  </span>
+                </div>
+                <p className="mb-3 text-xs text-grey-500">
+                  Selected supervisors will see these tasks to review. Site supervisors are selected
+                  by default.
+                </p>
+
+                {!siteId ? (
+                  <p className="text-xs text-grey-500">
+                    Select a site to see its assigned supervisors.
+                  </p>
+                ) : supervisorsQuery.isLoading ? (
+                  <p className="text-xs text-grey-500">Loading supervisors…</p>
+                ) : supervisors.length === 0 ? (
+                  <p className="text-xs text-grey-500">No supervisors are assigned to this site.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {supervisors.map((sup, i) => {
+                      const isSelected = selectedSupervisors?.includes(sup.id) ?? false;
+                      const gradient = CLEANER_GRADIENTS[i % CLEANER_GRADIENTS.length]!;
+                      return (
+                        <button
+                          key={sup.id}
+                          type="button"
+                          onClick={() => toggleSupervisor(sup.id)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                            isSelected
+                              ? "border-primary bg-primary/5 ring-2 ring-primary"
+                              : "border-white/30 bg-white/60 hover:border-grey-300",
+                          )}
+                        >
+                          <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white"
+                            style={{
+                              background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})`,
+                            }}
+                            aria-hidden="true"
+                          >
+                            {cleanerInitials(sup)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-on-surface">
+                              {cleanerName(sup)}
+                            </p>
+                            {sup.email && (
+                              <p className="truncate text-xs text-grey-500">{sup.email}</p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

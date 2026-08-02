@@ -43,3 +43,8 @@ export async function resolveComplaint(id: string): Promise<Complaint> {
   const { data } = await clientApi.post(ENDPOINTS.complaints.resolve(id));
   return ComplaintSchema.parse(data);
 }
+
+/** Schedule redo task(s) for a complaint into the site's next working shift. */
+export async function addComplaintRedo(id: string): Promise<void> {
+  await clientApi.post(ENDPOINTS.complaints.redo(id));
+}

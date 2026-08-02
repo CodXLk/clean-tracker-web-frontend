@@ -35,6 +35,15 @@ export const ComplaintSchema = z.object({
   assignedTo:   z.string().optional(),
   tasks:        z.array(ComplaintTaskSchema).default([]),
   photos:       z.array(ComplaintPhotoSchema).default([]),
+  cleaners:     z
+    .array(
+      z.object({
+        id:        z.string(),
+        firstName: z.string().nullish(),
+        lastName:  z.string().nullish(),
+      }),
+    )
+    .default([]),
 });
 
 export const ComplaintKpisSchema = z.object({

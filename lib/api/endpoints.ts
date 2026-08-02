@@ -1,10 +1,14 @@
 // Next.js Route Handler paths (called by client components via clientApi, baseURL "/api")
 export const ENDPOINTS = {
   auth: {
-    login:        "/auth/login",
-    logout:       "/auth/logout",
-    me:           "/auth/me",
-    accountSetup: "/auth/account-setup",
+    login:          "/auth/login",
+    logout:         "/auth/logout",
+    me:             "/auth/me",
+    accountSetup:   "/auth/account-setup",
+    forgotPassword: "/auth/forgot-password",
+    verifyOtp:      "/auth/verify-otp",
+    resetPassword:  "/auth/reset-password",
+    changePassword: "/auth/change-password",
   },
   users: {
     list:        "/users",
@@ -107,6 +111,7 @@ export const ENDPOINTS = {
     list:    "/complaints",
     create:  "/complaints",
     resolve: (id: string) => `/complaints/${id}/resolve`,
+    redo:    (id: string) => `/complaints/${id}/redo`,
     photo:   (id: string) => `/complaints/photos/${id}`,
   },
   contact: {
@@ -117,9 +122,12 @@ export const ENDPOINTS = {
 // Spring Boot backend paths (called server-side from Route Handlers)
 export const BACKEND = {
   auth: {
-    login:        "/api/v1/auth/login",
-    me:           "/api/v1/auth/me",
-    accountSetup: "/api/v1/auth/account-setup",
+    login:          "/api/v1/auth/login",
+    me:             "/api/v1/auth/me",
+    accountSetup:   "/api/v1/auth/account-setup",
+    forgotPassword: "/api/v1/auth/forgot-password",
+    verifyOtp:      "/api/v1/auth/verify-otp",
+    resetPassword:  "/api/v1/auth/reset-password",
     changePassword: "/api/v1/auth/change-password",
   },
   users: {
@@ -218,6 +226,7 @@ export const BACKEND = {
     list:    "/api/v1/complaints",
     create:  "/api/v1/complaints",
     resolve: (id: string) => `/api/v1/complaints/${id}/resolve`,
+    redo:    (id: string) => `/api/v1/complaints/${id}/redo`,
     photo:   (id: string) => `/api/v1/complaints/photos/${id}`,
   },
 } as const;
