@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SiteSelector } from "@/components/shared/SiteSelector";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
 import { useActiveSite } from "@/features/attendance/hooks/useActiveSite";
 import {
   assignmentTypeLabel,
@@ -40,7 +41,8 @@ export default function TasksPage() {
   );
 
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [activeFloor, setActiveFloor] = useState<string | null>(null);
+  const activeFloor = useTaskFiltersStore((s) => s.activeFloor);
+  const setActiveFloor = useTaskFiltersStore((s) => s.setActiveFloor);
 
   // Distinct floors present in today's tasks (preserve first-seen order).
   const floors = useMemo(() => {
@@ -53,7 +55,10 @@ export default function TasksPage() {
     return Array.from(seen, ([id, name]) => ({ id, name }));
   }, [occurrences]);
 
-  const selectedFloor = activeFloor ?? floors[0]?.name ?? null;
+  // Keep the persisted pick only while it's still one of the current floors (e.g. after
+  // switching sites, the previous floor may no longer apply) — otherwise fall back.
+  const selectedFloor =
+    activeFloor && floors.some((f) => f.name === activeFloor) ? activeFloor : floors[0]?.name ?? null;
 
   const areas = useMemo<AreaCount[]>(() => {
     if (!selectedFloor) return [];

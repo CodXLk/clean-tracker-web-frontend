@@ -95,19 +95,25 @@ export default function CleanerNotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-grey-50 pb-28">
-      <header className="bg-primary px-5 pb-5 pt-6">
+    <div
+      className="min-h-screen"
+      style={{
+        background:
+          "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
+      }}
+    >
+      <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 mb-5">
         <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
           <button
             type="button"
             aria-label="Back"
             onClick={() => router.back()}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80 active:opacity-60"
           >
             <ArrowLeft size={20} strokeWidth={2} />
           </button>
           <div className="flex-1">
-            <p className="text-lg font-bold leading-tight text-white">Notifications</p>
+            <h1 className="text-2xl font-semibold leading-tight text-white">Notifications</h1>
             <p className="text-xs text-white/70">{unread > 0 ? `${unread} unread` : "All caught up"}</p>
           </div>
           {unread > 0 && (
@@ -123,7 +129,7 @@ export default function CleanerNotificationsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-5 pt-5 lg:max-w-5xl">
+      <main className="mx-auto max-w-2xl px-5 pb-28 pt-5 lg:max-w-5xl -mt-5">
         {isLoading ? (
           <p className="py-16 text-center text-sm text-grey-500">Loading…</p>
         ) : isError ? (

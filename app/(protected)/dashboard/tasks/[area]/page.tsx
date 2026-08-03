@@ -268,12 +268,12 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
       <main
         className={cn(
-          "mx-auto max-w-2xl px-5 lg:max-w-5xl -mt-5",
+          "mx-auto max-w-2xl px-5 pt-5 lg:max-w-5xl -mt-5",
           hasSelection ? "pb-[22rem]" : "pb-28",
         )}
       >
         {selectableIds.length > 0 && (
-          <div className="flex items-center justify-end pt-5 pb-3">
+          <div className="flex items-center justify-end pb-3">
             <button
               onClick={toggleSelectAll}
               aria-pressed={allSelected}

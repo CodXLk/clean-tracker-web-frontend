@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
+import { useActiveSiteStore } from "@/features/attendance/store/activeSite.store";
 import type { CleanerSite } from "@/features/attendance/schemas/attendance.schema";
 
 export interface ActiveSiteContext {
@@ -16,7 +17,9 @@ export interface ActiveSiteContext {
 
 /**
  * Resolves which site the cleaner/supervisor is working at: defaults to the
- * checked-in site, but lets the user switch between their assigned sites.
+ * checked-in site, but lets the user switch between their assigned sites. The
+ * selection lives in a shared store (not component state) so it survives
+ * navigating into a sub-page (e.g. an area's task list) and back.
  */
 export function useActiveSite(date?: string): ActiveSiteContext {
   const { data: sites = [], isLoading } = useMySites(date);
@@ -26,24 +29,23 @@ export function useActiveSite(date?: string): ActiveSiteContext {
     [sites],
   );
 
-  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
-  const [touched, setTouched] = useState(false);
+  const selectedSiteId = useActiveSiteStore((s) => s.selectedSiteId);
+  const touched = useActiveSiteStore((s) => s.touched);
+  const setSelectedSiteId = useActiveSiteStore((s) => s.setSelectedSiteId);
+  const setDefaultSiteId = useActiveSiteStore((s) => s.setDefaultSiteId);
 
   // Until the user manually picks a site, track the checked-in site (or the first one).
   useEffect(() => {
     if (touched) return;
     const fallback = checkedInSiteId ?? sites[0]?.siteId ?? null;
-    setSelectedSiteId(fallback);
-  }, [checkedInSiteId, sites, touched]);
+    setDefaultSiteId(fallback);
+  }, [checkedInSiteId, sites, touched, setDefaultSiteId]);
 
   return {
     sites,
     isLoading,
     checkedInSiteId,
     selectedSiteId,
-    setSelectedSiteId: (siteId) => {
-      setTouched(true);
-      setSelectedSiteId(siteId);
-    },
+    setSelectedSiteId,
   };
 }
