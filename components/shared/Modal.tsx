@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 
 interface ModalProps {
   open: boolean;
@@ -9,10 +11,37 @@ interface ModalProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  /** Panel max-width utility class — defaults to the standard form-modal width. */
+  maxWidthClassName?: string;
 }
 
-export function Modal({ open, onClose, title, description, children }: ModalProps) {
+function subscribeNoop() {
+  return () => {};
+}
+
+/** True only once mounted on the client — false during SSR/first hydration. */
+function useMounted(): boolean {
+  return useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+}
+
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  maxWidthClassName = "max-w-lg",
+}: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Portal to <body> so this never lands inside a caller's <form> (or any other
+  // ancestor that cares about DOM nesting) — e.g. opened from a "+" button inside
+  // another form's fields, which would otherwise produce an invalid nested <form>.
+  const mounted = useMounted();
 
   useEffect(() => {
     if (!open) return;
@@ -23,9 +52,9 @@ export function Modal({ open, onClose, title, description, children }: ModalProp
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onMouseDown={(e) => {
@@ -37,7 +66,7 @@ export function Modal({ open, onClose, title, description, children }: ModalProp
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        className={cn("max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-xl", maxWidthClassName)}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -55,6 +84,7 @@ export function Modal({ open, onClose, title, description, children }: ModalProp
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
