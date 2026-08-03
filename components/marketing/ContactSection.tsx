@@ -73,11 +73,11 @@ export function ContactSection() {
             </div>
             <div className="flex items-center gap-3">
               <Phone size={20} className="shrink-0 text-primary" aria-hidden="true" />
-              <span>+61 3 0000 0000</span>
+              <span>1800 890 991</span>
             </div>
             <div className="flex items-center gap-3">
               <Mail size={20} className="shrink-0 text-primary" aria-hidden="true" />
-              <span>hello@primewayproperty.com.au</span>
+              <span>info@primewayservices.com.au</span>
             </div>
           </div>
         </div>
