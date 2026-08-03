@@ -120,7 +120,7 @@ export function IndustriesWeServe() {
           </h2>
           <p data-paragraph className="text-base leading-relaxed text-white sm:text-lg">
             Established in 2021, our company has rapidly grown to offer a wide range of cleaning
-            services across various industry sectors in Victoria, Australia. Our industries
+            services across various industry sectors in Australia. Our industries
             expertise include{" "}
             <span className="text-[#ED5F25]">
               commercial, education, health services, pharmaceutical, logistics, hospitality,

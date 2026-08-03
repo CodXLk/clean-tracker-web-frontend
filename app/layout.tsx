@@ -20,9 +20,9 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Primeway Property Services | Commercial Cleaning in Victoria, Australia",
+  title: "Primeway Property Services | Commercial Cleaning in, Australia",
   description:
-    "Primeway Property Services is a commercial cleaning company based in Victoria, Australia, offering regular, periodical, deep, and specialist cleaning across a wide range of industries.",
+    "Primeway Property Services is a commercial cleaning company based in, Australia, offering regular, periodical, deep, and specialist cleaning across a wide range of industries.",
 };
 
 export default function RootLayout({
