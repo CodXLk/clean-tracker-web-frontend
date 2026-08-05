@@ -9,6 +9,7 @@ import { PillButton } from "@/components/shared/PillButton";
 import { SearchableSelect } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useCreateItem, useUpdateItem } from "@/features/inventory/hooks/useInventory";
+import { useSuppliers } from "@/features/inventory/hooks/useSuppliers";
 import {
   ItemFormSchema,
   CATEGORY_LABELS,
@@ -26,17 +27,35 @@ interface ItemFormModalProps {
 
 const EMPTY: ItemFormInput = {
   name: "",
+  itemCode: "",
   category: "CONSUMABLE",
   unit: "pcs",
   unitPrice: 0,
+  costPrice: undefined,
+  sellingPrice: undefined,
+  supplierId: "",
   openingStock: undefined,
 };
+
+function buildPayload(values: ItemFormInput) {
+  return {
+    name: values.name,
+    itemCode: values.itemCode?.trim() || undefined,
+    category: values.category,
+    unit: values.unit,
+    unitPrice: values.unitPrice,
+    costPrice: values.costPrice,
+    sellingPrice: values.sellingPrice,
+    supplierId: values.supplierId || undefined,
+  };
+}
 
 export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
   const isEdit = !!item;
   const createMutation = useCreateItem();
   const updateMutation = useUpdateItem();
   const active = isEdit ? updateMutation : createMutation;
+  const { data: suppliers, isLoading: suppliersLoading } = useSuppliers(true);
 
   const {
     register,
@@ -50,7 +69,16 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
     if (!open) return;
     reset(
       item
-        ? { name: item.name, category: item.category, unit: item.unit, unitPrice: item.unitPrice }
+        ? {
+            name: item.name,
+            itemCode: item.itemCode ?? "",
+            category: item.category,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            costPrice: item.costPrice ?? undefined,
+            sellingPrice: item.sellingPrice ?? undefined,
+            supplierId: item.supplierId ?? "",
+          }
         : EMPTY,
     );
     createMutation.reset();
@@ -59,20 +87,21 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
   }, [open, item]);
 
   function onSubmit(values: ItemFormInput) {
+    const payload = buildPayload(values);
     if (isEdit && item) {
-      updateMutation.mutate(
-        { id: item.id, input: { name: values.name, category: values.category, unit: values.unit, unitPrice: values.unitPrice } },
-        { onSuccess: onClose },
-      );
+      updateMutation.mutate({ id: item.id, input: payload }, { onSuccess: onClose });
     } else {
-      createMutation.mutate(values, { onSuccess: onClose });
+      createMutation.mutate({ ...payload, openingStock: values.openingStock } as ItemFormInput, { onSuccess: onClose });
     }
   }
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? "Edit item" : "Add item"}>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-        <TextField label="Item name" required error={errors.name?.message} {...register("name")} />
+        <div className="grid grid-cols-2 gap-4">
+          <TextField label="Item name" required error={errors.name?.message} {...register("name")} />
+          <TextField label="Item code" placeholder="Optional" error={errors.itemCode?.message} {...register("itemCode")} />
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <Controller
@@ -150,6 +179,57 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
             />
           )}
         </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Controller
+            control={control}
+            name="costPrice"
+            render={({ field }) => (
+              <TextField
+                label="Cost price"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Optional"
+                error={errors.costPrice?.message}
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))}
+              />
+            )}
+          />
+          <Controller
+            control={control}
+            name="sellingPrice"
+            render={({ field }) => (
+              <TextField
+                label="Selling price"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Optional"
+                error={errors.sellingPrice?.message}
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))}
+              />
+            )}
+          />
+        </div>
+
+        <Controller
+          control={control}
+          name="supplierId"
+          render={({ field }) => (
+            <SearchableSelect
+              label="Supplier"
+              options={(suppliers ?? []).map((s) => ({ value: s.id, label: s.name }))}
+              value={field.value || null}
+              onChange={(v) => field.onChange(v ?? "")}
+              loading={suppliersLoading}
+              placeholder="Optional"
+              error={errors.supplierId?.message}
+            />
+          )}
+        />
 
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

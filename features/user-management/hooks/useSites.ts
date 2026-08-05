@@ -16,6 +16,8 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
     clientCompanyId: input.clientCompanyId,
     clientId: input.clientId,
     name: input.name.trim(),
+    siteType: input.siteType ?? "GENERAL",
+    numberOfCleaners: input.numberOfCleaners ?? 1,
   };
   if (input.contactPersonName) payload.contactPersonName = input.contactPersonName.trim();
   if (input.contactNumber) payload.contactNumber = input.contactNumber.trim();
@@ -28,6 +30,11 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   if (input.startDate) payload.startDate = input.startDate;
   if (input.endDate) payload.endDate = input.endDate;
   payload.workingDays = input.workingDays ?? [];
+  if (input.generalTaskStartTime) payload.generalTaskStartTime = input.generalTaskStartTime;
+  if (input.generalTaskEndTime) payload.generalTaskEndTime = input.generalTaskEndTime;
+  payload.cleaningTemplates = (input.cleaningTemplates ?? [])
+    .filter((t) => t.templateId)
+    .map((t) => ({ templateId: t.templateId, profileIndexes: t.profileIndexes ?? [] }));
   return payload;
 }
 

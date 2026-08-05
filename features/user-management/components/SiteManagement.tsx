@@ -10,15 +10,13 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
 import { AssignPeopleModal, type AssignOption } from "./AssignPeopleModal";
+import { CleanerProfilesModal } from "./CleanerProfilesModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import {
   useSiteSupervisors,
   useAssignSupervisors,
-  useSiteCleaners,
-  useAssignCleaners,
 } from "@/features/user-management/hooks/useSiteAssignments";
 import { useUsers } from "@/features/users/hooks/useUsers";
-import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 function personName(first?: string | null, last?: string | null): string {
@@ -30,7 +28,6 @@ export function SiteManagement() {
   const deleteMutation = useDeleteSite();
 
   const usersQuery = useUsers();
-  const cleanersQuery = useCleaners();
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -41,8 +38,6 @@ export function SiteManagement() {
 
   const siteSupervisors = useSiteSupervisors(supervisorsSite?.id);
   const assignSupervisors = useAssignSupervisors();
-  const siteCleaners = useSiteCleaners(cleanersSite?.id);
-  const assignCleaners = useAssignCleaners();
 
   const supervisorOptions: AssignOption[] = useMemo(
     () =>
@@ -50,16 +45,6 @@ export function SiteManagement() {
         .filter((u) => u.role === "SUPERVISOR")
         .map((u) => ({ id: u.id, label: personName(u.firstName, u.lastName), sublabel: u.email })),
     [usersQuery.data],
-  );
-
-  const cleanerOptions: AssignOption[] = useMemo(
-    () =>
-      (cleanersQuery.data ?? []).map((c) => ({
-        id: c.id,
-        label: personName(c.firstName, c.lastName),
-        sublabel: c.email ?? undefined,
-      })),
-    [cleanersQuery.data],
   );
 
   const rows = useMemo(() => {
@@ -198,14 +183,6 @@ export function SiteManagement() {
     );
   }
 
-  function handleSaveCleaners(cleanerIds: string[]) {
-    if (!cleanersSite) return;
-    assignCleaners.mutate(
-      { siteId: cleanersSite.id, cleanerIds },
-      { onSuccess: () => setCleanersSite(null) },
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -263,21 +240,10 @@ export function SiteManagement() {
         onSave={handleSaveSupervisors}
       />
 
-      <AssignPeopleModal
+      <CleanerProfilesModal
         open={!!cleanersSite}
-        onClose={() => {
-          setCleanersSite(null);
-          assignCleaners.reset();
-        }}
-        title="Assign Cleaners"
-        description={cleanersSite ? `Cleaners for “${cleanersSite.name}”` : undefined}
-        options={cleanerOptions}
-        initialSelectedIds={(siteCleaners.data ?? []).map((c) => c.id)}
-        isLoading={siteCleaners.isLoading || cleanersQuery.isLoading}
-        isSaving={assignCleaners.isPending}
-        error={assignCleaners.isError ? getErrorMessage(assignCleaners.error) : undefined}
-        emptyMessage="No cleaners exist yet. Invite cleaners from User Management first."
-        onSave={handleSaveCleaners}
+        onClose={() => setCleanersSite(null)}
+        site={cleanersSite}
       />
     </div>
   );

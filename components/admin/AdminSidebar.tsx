@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Package,
   Footprints,
+  CalendarCheck,
   X,
   LogOut,
   type LucideIcon,
@@ -45,6 +46,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
   { label: "Inventory",   href: "/admin/inventory",  icon: Package },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
+  { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   {
     label: "Client Management",
     icon: ContactRound,
@@ -164,7 +166,10 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   // Management, Cleaner Logs) in the admin console, alongside the cleaner app.
   const role = me.data?.role;
   const SUPERVISOR_ITEMS = new Set(["/admin/workforce", "/admin/cleaner-logs"]);
-  const navItems =
+  // Client Site Management (cleaning schedule) is limited to top-level admins for now.
+  const ADMIN_ONLY_ITEMS = new Set(["/admin/client-site-management"]);
+  const canSeeAdminOnly = role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
+  const roleFiltered =
     role === "SUPERVISOR"
       ? NAV_ITEMS.filter(
           (item) =>
@@ -174,6 +179,9 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
       : role === "CLIENT"
         ? NAV_ITEMS.filter((item) => item.label !== "Inspections")
         : NAV_ITEMS;
+  const navItems = roleFiltered.filter(
+    (item) => !(item.href && ADMIN_ONLY_ITEMS.has(item.href)) || canSeeAdminOnly,
+  );
 
   function isItemActive(item: NavItemConfig): boolean {
     if (!item.href) return false;

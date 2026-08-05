@@ -16,8 +16,10 @@ import { useAreas, useCreateArea, useUpdateArea, useDeleteArea } from "@/feature
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
 import { NameFormModal } from "@/components/admin/NameFormModal";
+import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
+import { WORK_TYPE_LABELS, type WorkType } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
@@ -39,6 +41,15 @@ export interface CalendarEvent {
   date: string;
   color: string;
   textColor: string;
+  /** Grouping metadata — used to collapse an assignment's tasks into one block. */
+  assignmentId: string;
+  assignmentType: string;
+  siteName: string;
+  templateName: string | null;
+  /** True when this block represents multiple tasks of one assignment (read-only). */
+  grouped?: boolean;
+  /** Underlying per-task events when grouped (length > 1). */
+  members?: CalendarEvent[];
 }
 
 /** Prefill for the New Assignment modal, opened from a calendar slot or a scope cell. */
@@ -231,7 +242,51 @@ function mapOccurrenceToEvent(occurrence: TaskOccurrence): CalendarEvent {
     date: occurrence.date,
     color,
     textColor,
+    assignmentId: occurrence.assignmentId,
+    assignmentType: occurrence.assignmentType,
+    siteName: occurrence.siteName,
+    templateName: occurrence.templateName ?? null,
   };
+}
+
+/**
+ * Collapse a day's per-task events into one block per assignment. The block is
+ * labelled by the assignment's saved template name, else its task-type. Blocks
+ * with a single task stay fully editable; multi-task blocks are read-only.
+ */
+function groupDayEvents(dayEvents: CalendarEvent[]): CalendarEvent[] {
+  const byAssignment = new Map<string, CalendarEvent[]>();
+  for (const ev of dayEvents) {
+    const list = byAssignment.get(ev.assignmentId);
+    if (list) list.push(ev);
+    else byAssignment.set(ev.assignmentId, [ev]);
+  }
+  const groups: CalendarEvent[] = [];
+  for (const [assignmentId, members] of byAssignment) {
+    members.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const first = members[0];
+    const label = first.templateName?.trim() || WORK_TYPE_LABELS[first.assignmentType as WorkType] || first.title;
+    if (members.length === 1) {
+      // Relabel by type/template for display, but keep the real task for editing.
+      groups.push({ ...first, title: label, members: [first] });
+      continue;
+    }
+    const endTime = members.reduce(
+      (max, m) => (timeToMinutes(m.endTime) > timeToMinutes(max) ? m.endTime : max),
+      members[0].endTime,
+    );
+    groups.push({
+      ...first,
+      id: `grp_${assignmentId}_${first.date}`,
+      title: label,
+      subtitle: [first.siteName, `${members.length} tasks`].filter(Boolean).join(" · "),
+      startTime: members[0].startTime,
+      endTime,
+      grouped: true,
+      members,
+    });
+  }
+  return groups;
 }
 
 // ── Occurrence scope dialog (This / This and following / All) ─────────────────
@@ -723,7 +778,7 @@ function WeekView({
   }, []);
 
   function getEventsForDay(date: string): CalendarEvent[] {
-    return events.filter((e) => e.date === date);
+    return groupDayEvents(events.filter((e) => e.date === date));
   }
 
   function isWorkingDate(date: string): boolean {
@@ -872,8 +927,8 @@ function WeekView({
                     return (
                       <div
                         key={ev.id}
-                        draggable
-                        onDragStart={(e) => onDragStart(e, ev)}
+                        draggable={!ev.grouped}
+                        onDragStart={ev.grouped ? undefined : (e) => onDragStart(e, ev)}
                         className={cn(
                           "group absolute rounded-lg p-2 cursor-pointer transition-opacity select-none",
                           cols > 1 && "ring-1 ring-white/70 p-1.5",
@@ -889,7 +944,7 @@ function WeekView({
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onEventClick(ev);
+                          onEventClick(ev.members?.[0] ?? ev);
                         }}
                         title={`${ev.title} — ${formatTimeDisplay(ev.startTime)} to ${formatTimeDisplay(ev.endTime)}`}
                       >
@@ -905,29 +960,33 @@ function WeekView({
                             {formatTimeDisplay(ev.startTime)} – {formatTimeDisplay(ev.endTime)}
                           </p>
                         )}
-                        {/* Quick delete button */}
-                        <button
-                          type="button"
-                          aria-label={`Delete ${ev.title}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteEvent(ev.id);
-                          }}
-                          className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-black/25 text-white group-hover:flex focus-visible:flex focus-visible:outline-none"
-                        >
-                          <X size={10} aria-hidden="true" />
-                        </button>
-                        {/* Resize handle */}
-                        <div
-                          className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            onResizeStart(e, ev);
-                          }}
-                          aria-hidden="true"
-                        >
-                          <div className="mx-auto mt-0.5 h-1 w-8 rounded-full bg-white/40" />
-                        </div>
+                        {/* Quick delete button — single-task blocks only */}
+                        {!ev.grouped && (
+                          <button
+                            type="button"
+                            aria-label={`Delete ${ev.title}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteEvent(ev.id);
+                            }}
+                            className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-black/25 text-white group-hover:flex focus-visible:flex focus-visible:outline-none"
+                          >
+                            <X size={10} aria-hidden="true" />
+                          </button>
+                        )}
+                        {/* Resize handle — single-task blocks only */}
+                        {!ev.grouped && (
+                          <div
+                            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 transition-opacity"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              onResizeStart(e, ev);
+                            }}
+                            aria-hidden="true"
+                          >
+                            <div className="mx-auto mt-0.5 h-1 w-8 rounded-full bg-white/40" />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -968,7 +1027,7 @@ function MonthView({ year, month, events, today, workingDays, onDayClick, onEven
   const weeks = getMonthWeeks(year, month);
 
   function getEventsForDay(date: string): CalendarEvent[] {
-    return events.filter((e) => e.date === date);
+    return groupDayEvents(events.filter((e) => e.date === date));
   }
 
   function isWorkingDate(date: string): boolean {
@@ -1032,7 +1091,7 @@ function MonthView({ year, month, events, today, workingDays, onDayClick, onEven
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEventClick(ev);
+                        onEventClick(ev.members?.[0] ?? ev);
                       }}
                       className={cn(
                         "w-full truncate rounded px-1.5 py-0.5 text-left text-xs font-medium transition-opacity hover:opacity-80",
@@ -1595,19 +1654,12 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
         />
 
         {/* Site selector — exactly one site is always in view */}
-        <select
-          aria-label="Select site"
+        <SiteFilterSelect
+          sites={sitesQuery.data ?? []}
           value={siteFilter}
-          onChange={(e) => setSiteFilter(e.target.value)}
-          className="rounded-lg border border-grey-200 bg-surface px-2.5 py-1.5 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          {(sitesQuery.data ?? []).length === 0 && <option value="">No sites</option>}
-          {(sitesQuery.data ?? []).map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+          onChange={setSiteFilter}
+          loading={sitesQuery.isLoading}
+        />
 
         {/* Working-day legend (when a site with working days is selected) */}
         {workingDays && (

@@ -201,6 +201,19 @@ export function WeekScheduleGrid({
     [managed, occurrences],
   );
 
+  /** date → work-order occurrences on that date (for the summary band). */
+  const workOrdersByDate = useMemo(() => {
+    const map = new Map<string, TaskOccurrence[]>();
+    for (const occurrence of occurrences) {
+      if (occurrence.assignmentType !== "WORK_ORDER") continue;
+      const list = map.get(occurrence.date) ?? [];
+      list.push(occurrence);
+      map.set(occurrence.date, list);
+    }
+    return map;
+  }, [occurrences]);
+  const hasWorkOrders = workOrdersByDate.size > 0;
+
   const taskCount = occurrences.length;
   const multiSite = !managed && readOnlyGroups.length > 1;
 
@@ -256,6 +269,53 @@ export function WeekScheduleGrid({
               >
                 {dt.getDate()}
               </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  /** Work-order summary band — one coloured "Work Order" cell per date that has one. */
+  function WorkOrderRow() {
+    return (
+      <div
+        className="grid border-b border-grey-200 bg-[#F97316]/[0.06]"
+        style={{ gridTemplateColumns: gridTemplate }}
+      >
+        <div className="flex items-center px-4 py-2 text-xs font-bold uppercase tracking-wide text-[#C2410C]">
+          Work Orders
+        </div>
+        {weekDates.map((dateStr) => {
+          const wos = workOrdersByDate.get(dateStr) ?? [];
+          const first = wos[0];
+          const poIds = [...new Set(wos.map((w) => w.poId).filter(Boolean))];
+          const label = poIds.length ? `Work Order — PO ${poIds.join(", ")}` : "Work Order";
+          return (
+            <div
+              key={dateStr}
+              className={cn(
+                "flex items-center justify-center border-l border-grey-200 p-1",
+                dateStr === today && "bg-primary/[0.04]",
+              )}
+            >
+              {first && (
+                <button
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  onClick={() => onOccurrenceClick?.(first)}
+                  className="relative w-full truncate rounded-md px-1.5 py-1 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{ backgroundColor: TYPE_HEX.WORK_ORDER }}
+                >
+                  Work Order
+                  {wos.length > 1 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-on-surface text-[9px] font-semibold text-white">
+                      {wos.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           );
         })}
@@ -361,6 +421,7 @@ export function WeekScheduleGrid({
       <div className="overflow-x-auto">
         <div className="min-w-[860px]">
           <DayHeaderRow />
+          {hasWorkOrders && <WorkOrderRow />}
 
           {/* ── Managed mode ─────────────────────────────────────────────── */}
           {managed ? (

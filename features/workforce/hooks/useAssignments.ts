@@ -65,6 +65,20 @@ export function useWorkforceStats() {
   });
 }
 
+async function fetchTaskNames(): Promise<string[]> {
+  const { data } = await clientApi.get(ENDPOINTS.assignments.taskNames);
+  return Array.isArray(data) ? (data as string[]) : [];
+}
+
+/** Distinct previously-used task names, for the task-name autocomplete. */
+export function useTaskNameSuggestions() {
+  return useQuery({
+    queryKey: assignmentKeys.taskNames(),
+    queryFn: fetchTaskNames,
+    staleTime: 60_000,
+  });
+}
+
 function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
 }

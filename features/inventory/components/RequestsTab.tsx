@@ -58,9 +58,14 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
             <div key={req.id} className="rounded-2xl border border-grey-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-on-surface">{req.siteName}</span>
                     <StatusBadge status={req.status} />
+                    {req.requestType === "CLEANER" && (
+                      <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-[11px] font-medium text-secondary">
+                        To cleaner{req.targetCleanerName ? `: ${req.targetCleanerName}` : ""}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs text-grey-500">
                     By {req.requestedByName ?? "Unknown"} · {fmtDateTime(req.createdAt)}

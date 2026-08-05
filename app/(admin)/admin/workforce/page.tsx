@@ -7,6 +7,8 @@ import { ActiveTaskCard } from "@/components/admin/ActiveTaskCard";
 import { WorkforceCalendar, type AssignmentPrefill } from "@/components/admin/WorkforceCalendar";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { DraftsModal } from "@/components/admin/DraftsModal";
+import { FilterTabs } from "@/components/shared/FilterTabs";
+import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesTab";
 import { useWorkforceStats, useOccurrences } from "@/features/workforce/hooks/useAssignments";
 import { useDrafts } from "@/features/workforce/hooks/useDrafts";
 import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
@@ -53,9 +55,13 @@ function cleanerNameOf(first?: string | null, last?: string | null): string {
   return [first, last].filter(Boolean).join(" ").trim() || "Unassigned";
 }
 
+const TABS = ["Operations", "Task Templates"] as const;
+type Tab = (typeof TABS)[number];
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function WorkforcePage() {
+  const [tab, setTab] = useState<Tab>("Operations");
   const [newAssignmentOpen, setNewAssignmentOpen] = useState(false);
   const [prefill, setPrefill] = useState<AssignmentPrefill>({});
   const [loadedDraft, setLoadedDraft] = useState<{ id: string; payload: unknown } | null>(null);
@@ -155,32 +161,45 @@ export default function WorkforcePage() {
         {/* Page header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm text-grey-500">Operational view</p>
+            <p className="text-sm text-grey-500">
+              {tab === "Operations" ? "Operational view" : "Reusable task lists"}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setDraftsOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <FileText size={16} aria-hidden="true" />
-              Drafts
-              {draftCount > 0 && (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  {draftCount}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleNewAssignmentButton}
-              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            >
-              + New Assignment
-            </button>
-          </div>
+          {tab === "Operations" && (
+            <div className="flex shrink-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setDraftsOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <FileText size={16} aria-hidden="true" />
+                Drafts
+                {draftCount > 0 && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {draftCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleNewAssignmentButton}
+                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                + New Assignment
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* Tabs */}
+        <div className="mb-6">
+          <FilterTabs<Tab> options={[...TABS]} value={tab} onChange={setTab} />
+        </div>
+
+        {tab === "Task Templates" ? (
+          <TaskTemplatesTab />
+        ) : (
+          <>
         {/* Stats row */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
@@ -224,6 +243,8 @@ export default function WorkforcePage() {
 
         {/* Calendar */}
         <WorkforceCalendar onNewAssignment={handlePrefill} />
+          </>
+        )}
       </div>
 
       {/* New Assignment Modal */}
