@@ -1177,6 +1177,24 @@ Every time a new reusable component is built, add it to the table below so futur
 | `BottomNavBar` | `BottomNavBar.tsx` | none — reads active route from `usePathname` | Fixed bottom 5-tab navigation |
 | `NavItem` | `BottomNavBar.tsx` (exported) | `item`, `isActive` | Individual nav tab (reuse if building a custom nav) |
 
+#### `components/marketing/`
+
+Public landing page (`/`) only. These follow the Figma "Primeway" file rather than the in-app design system: Plus Jakarta Sans headings, Inter body copy, and the `text-hero` … `text-body-lg` fluid type scale in `globals.css`.
+
+| Component | File | Props | Use for |
+|---|---|---|---|
+| `SectionHeading` | `SectionHeading.tsx` | `lead`, `accent`, `as`, plus any `h2` props | The two-tone 55px section title ("Who **We Are?**") |
+| `QuoteButton` | `QuoteButton.tsx` | `href`, `onNavigate`, `children` | The teal pill "Get a Quote" CTA |
+| `ServiceCard` | `ServiceCard.tsx` | `image`, `label`, `service` | 249x395 photo card with a coloured caption band |
+| `IndustryCard` | `IndustryCard.tsx` | `icon`, `label`, `tone` | 130x130 diamond tile with a photo hover state |
+
+**Landing page conventions**
+
+- Every section carries `data-nav-theme="light" \| "dark"`; `Navbar` observes them to flip its link colour to suit whatever sits behind it.
+- Scene geometry is expressed as percentages of Figma's 1512x982 canvas. When a scene sits inside a padded container, rebase the percentage onto the *content box* rather than the canvas.
+- Scroll animation is GSAP + ScrollTrigger, gated on `useMediaQuery("(prefers-reduced-motion: reduce)")`. Markup must render the settled state, so animations are always `gsap.from(...)` — never `to`.
+- Animate transforms only. Where Figma expresses a move as a change of `left`/`top`/`width`, convert it to `scale` + `xPercent`/`yPercent` off the settled layout.
+
 ---
 
 ### Color Variant Reference

@@ -1,128 +1,165 @@
 "use client";
 
-import { useRef } from "react";
 import Image from "next/image";
+import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "@/lib/gsap";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { SectionHeading } from "./SectionHeading";
 import { IndustryCard } from "./IndustryCard";
 
+/**
+ * Tile centres as percentages of Figma's 1512x982 "Industries" canvas, taken
+ * from the settled frame. `side` drives which way the tile flies in from — the
+ * design parks the left cluster at x=-436 and the right cluster at x=1863
+ * before they converge.
+ *
+ * NOTE: Figma labels the fifth and tenth tiles "Education" and "Retirement &
+ * Agecare" respectively, but gives the fifth the same icon and label as the
+ * fourth — i.e. "Education" appears twice. That duplication is reproduced here
+ * because it is what the design specifies; the body copy lists "automotive" as
+ * the tenth industry, so this is most likely a slip worth confirming with the
+ * designer. Changing it is a one-line edit to this table.
+ */
 const INDUSTRIES = [
-  { icon: "/images/marketing/industries/icon-commercial.png",  label: "Commercial",           color: "teal"   },
-  { icon: "/images/marketing/industries/icon-health.png",      label: "Health Services",      color: "orange" },
-  { icon: "/images/marketing/industries/icon-pharma.png",      label: "Pharmaceutical",       color: "orange" },
-  { icon: "/images/marketing/industries/icon-education.png",   label: "Education",            color: "teal"   },
-  { icon: "/images/marketing/industries/icon-manufacturing.png", label: "Manufacturing",       color: "teal"   },
-  { icon: "/images/marketing/industries/icon-logistics.png",   label: "Logistics",            color: "orange" },
-  { icon: "/images/marketing/industries/icon-hospitality.png", label: "Hospitality",          color: "orange" },
-  { icon: "/images/marketing/industries/icon-retail.png",      label: "Retail",               color: "teal"   },
-  { icon: "/images/marketing/industries/icon-retirement.png",  label: "Retirement & Agecare",  color: "orange" },
+  { label: "Commercial",           icon: "commercial",    tone: "teal",   side: "left",  x: 10.51, y: 38.48 },
+  { label: "Health Services",      icon: "health",        tone: "orange", side: "left",  x: 21.95, y: 29.12 },
+  { label: "Pharmaceutical",       icon: "pharma",        tone: "orange", side: "left",  x: 21.95, y: 49.99 },
+  { label: "Education",            icon: "education",     tone: "teal",   side: "left",  x: 10.51, y: 60.38 },
+  { label: "Education",            icon: "education",     tone: "orange", side: "left",  x: 21.89, y: 70.87 },
+  { label: "Manufacturing",        icon: "manufacturing", tone: "teal",   side: "right", x: 89.48, y: 38.48 },
+  { label: "Logistics",            icon: "logistics",     tone: "orange", side: "right", x: 78.10, y: 29.12 },
+  { label: "Hospitality",          icon: "hospitality",   tone: "orange", side: "right", x: 78.10, y: 49.99 },
+  { label: "Retail",               icon: "retail",        tone: "teal",   side: "right", x: 89.48, y: 60.38 },
+  { label: "Retirement & Agecare", icon: "retirement",    tone: "orange", side: "right", x: 78.04, y: 70.87 },
 ] as const;
 
-const COLUMN_OFFSETS = ["mt-0", "mt-16", "mt-0"] as const;
+/** How far off-canvas each cluster starts, as a share of the scene width. */
+const ENTRY_SHIFT = { left: -33.27, right: 39.81 } as const;
 
-// In Figma, the left group of cards sits off-canvas to the left (negative x) and the right group
-// sits off-canvas to the right (beyond the frame width) before converging into the settled grid —
-// confirmed by comparing card x-positions across the "Industries loading" keyframes. Reproduce that
-// per-column direction instead of a generic center pop-in.
-const COLUMN_ENTRY: Record<number, { x: number; y: number }> = {
-  0: { x: -220, y: 0 },
-  1: { x: 0, y: -140 },
-  2: { x: 220, y: 0 },
-};
+/**
+ * The tower is laid out at the framing the tile scene gives it (3059x1708 at
+ * -773.5,-214 on the 1512x982 canvas). These are the same numbers for the
+ * earlier text scene (2425x1354 at -93,31) re-expressed as a transform off that
+ * layout, so the scroll-linked move stays on the compositor.
+ */
+const TOWER_TEXT_FRAMING = { scale: 0.7927, xPercent: 11.885, yPercent: 3.982 } as const;
+const TOWER_TILE_FRAMING = {
+  left: "-51.16%",
+  top: "-21.79%",
+  width: "202.31%",
+  height: "173.93%",
+} as const;
 
 export function IndustriesWeServe() {
   const sectionRef = useRef<HTMLElement>(null);
+  const towerRef   = useRef<HTMLDivElement>(null);
+  const diamondsRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   useGSAP(
     () => {
-      if (!sectionRef.current) return;
+      if (!sectionRef.current || reduceMotion) return;
 
-      gsap.fromTo(
-        sectionRef.current.querySelectorAll("[data-reveal]"),
-        { opacity: 0, y: 30 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.7,
-          ease: "power2.out",
-          stagger: 0.12,
+      gsap.from(sectionRef.current.querySelectorAll("[data-reveal]"), {
+        opacity: 0,
+        x: -64,
+        duration: 0.85,
+        ease: "power2.out",
+        stagger: 0.15,
+        scrollTrigger: { trigger: sectionRef.current, start: "top 65%", once: true },
+      });
+
+      // The tower travels between the two framings Figma gives it: right of the
+      // copy while the text reads, then recentred and larger behind the tiles.
+      // The element is laid out at the *second* framing and the first is
+      // expressed as a transform off it, so the scrub only ever touches
+      // compositor properties instead of re-laying-out a 200%-wide image.
+      if (towerRef.current) {
+        gsap.from(towerRef.current, {
+          scale: TOWER_TEXT_FRAMING.scale,
+          xPercent: TOWER_TEXT_FRAMING.xPercent,
+          yPercent: TOWER_TEXT_FRAMING.yPercent,
+          ease: "none",
           scrollTrigger: {
             trigger: sectionRef.current,
-            start: "top 70%",
-            toggleActions: "play none none reverse",
+            start: "top top",
+            end: "bottom bottom",
+            scrub: 1,
           },
-        },
-      );
+        });
+      }
 
-      // Paragraph slides in from the left, matching its Figma entrance (x: -920 -> 483)
-      gsap.fromTo(
-        sectionRef.current.querySelector("[data-paragraph]"),
-        { opacity: 0, x: -80 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 0.8,
+      const scene = diamondsRef.current;
+      const diamonds = scene?.querySelectorAll<HTMLElement>("[data-diamond]") ?? [];
+      diamonds.forEach((diamond, i) => {
+        // The shift is a share of the scene, not of the 130px tile, so it has to
+        // be resolved against the measured scene width rather than `xPercent`.
+        const shift = Number(diamond.dataset.shift);
+        gsap.from(diamond, {
+          x: () => ((scene?.clientWidth ?? 0) * shift) / 100,
+          opacity: 0,
+          scale: 0.55,
+          duration: 0.85,
           ease: "power2.out",
+          delay: (i % 5) * 0.08,
           scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 70%",
-            toggleActions: "play none none reverse",
+            trigger: scene,
+            start: "top 72%",
+            once: true,
+            invalidateOnRefresh: true,
           },
-        },
-      );
-
-      const columns = sectionRef.current.querySelectorAll<HTMLElement>("[data-industry-col]");
-      columns.forEach((col, colIndex) => {
-        const cards = col.querySelectorAll("[data-industry-card]");
-        const entry = COLUMN_ENTRY[colIndex] ?? { x: 0, y: 0 };
-        gsap.fromTo(
-          cards,
-          { opacity: 0, scale: 0.6, rotate: 0, x: entry.x, y: entry.y },
-          {
-            opacity: 1,
-            scale: 1,
-            rotate: 45,
-            x: 0,
-            y: 0,
-            duration: 0.8,
-            ease: "power2.out",
-            stagger: 0.1,
-            scrollTrigger: {
-              trigger: sectionRef.current,
-              start: "top 65%",
-              toggleActions: "play none none reverse",
-            },
-          },
-        );
+        });
       });
     },
-    { scope: sectionRef, dependencies: [] },
+    { scope: sectionRef, dependencies: [reduceMotion] },
   );
 
-  const columns = [INDUSTRIES.slice(0, 3), INDUSTRIES.slice(3, 6), INDUSTRIES.slice(6, 9)];
-
   return (
-    <section id="industries" ref={sectionRef} className="relative overflow-hidden bg-black py-24">
-      <Image
-        src="/images/marketing/industries/architectural-bg.jpg"
-        alt=""
-        fill
-        sizes="100vw"
-        className="object-cover opacity-40"
-        priority={false}
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/80" />
+    <section
+      id="industries"
+      ref={sectionRef}
+      data-nav-theme="light"
+      aria-labelledby="industries-heading"
+      className="relative"
+    >
+      {/* The Aspire Tower render is a single sticky backdrop that both beats of
+          the section scroll past, matching how Figma keeps one tower node
+          moving between frames rather than cutting between images. */}
+      {/* Capped to the 1512px design canvas so the tower keeps its scale
+          relationship with the tiles instead of outgrowing them on wide displays. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 mx-auto max-w-[1512px]">
+        <div className="sticky top-0 h-[100svh] overflow-hidden">
+          <div ref={towerRef} className="absolute will-change-transform" style={TOWER_TILE_FRAMING}>
+            <Image
+              src="/images/marketing/industries/tower.webp"
+              alt=""
+              fill
+              sizes="205vw"
+              className="object-contain object-top"
+            />
+          </div>
+        </div>
+      </div>
 
-      <div className="relative mx-auto flex max-w-[1300px] flex-col items-center gap-14 px-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex max-w-lg flex-col gap-5 text-center lg:text-left">
-          <h2 data-reveal className="font-heading text-4xl font-bold sm:text-5xl">
-            <span className="text-white">Industries</span> <span className="text-[#ED5F25]">We Serve</span>
-          </h2>
-          <p data-paragraph className="text-base leading-relaxed text-white sm:text-lg">
+      <div className="relative mx-auto w-full max-w-[1512px]">
+        {/* Beat one — heading and body copy, tower to the right. */}
+        <div className="flex min-h-[100svh] flex-col justify-center px-[max(1.25rem,2.183vw)] py-24 lg:py-0">
+          <SectionHeading
+            id="industries-heading"
+            lead="Industries"
+            accent="We Serve"
+            className="lg:w-[36.45%]"
+            data-reveal
+          />
+          <p
+            data-reveal
+            className="mt-6 max-w-[43.85rem] font-body text-quote font-medium leading-snug text-white lg:mt-[2.5vw] lg:w-[45.85%] lg:max-w-none"
+          >
             Established in 2021, our company has rapidly grown to offer a wide range of cleaning
-            services across various industry sectors in Australia. Our industries
+            services across various industry sectors in Victoria, Australia. Our industries
             expertise include{" "}
-            <span className="text-[#ED5F25]">
+            <span className="text-accent">
               commercial, education, health services, pharmaceutical, logistics, hospitality,
               manufacturing, automotive, retail, retirement &amp; age care.
             </span>{" "}
@@ -131,24 +168,31 @@ export function IndustriesWeServe() {
           </p>
         </div>
 
-        <div className="flex items-center gap-6 sm:gap-8">
-          {columns.map((col, colIndex) => (
-            <div
-              key={colIndex}
-              data-industry-col
-              className={`flex flex-col gap-8 sm:gap-10 ${COLUMN_OFFSETS[colIndex]}`}
-            >
-              {col.map((industry) => (
-                <IndustryCard
-                  key={industry.label}
-                  icon={industry.icon}
-                  label={industry.label}
-                  color={industry.color}
-                  className="size-[90px] sm:size-[110px]"
-                />
-              ))}
-            </div>
-          ))}
+        {/* Beat two — the tiles converge around the recentred tower. This scene
+            is deliberately full-bleed: its tile coordinates are percentages of
+            the whole 1512 canvas, not of a padded content box. */}
+        <div
+          ref={diamondsRef}
+          className="relative flex min-h-[100svh] items-center px-[max(1.25rem,2.183vw)] py-24 lg:aspect-[1512/982] lg:block lg:min-h-0 lg:px-0 lg:py-0"
+        >
+          <h3 className="sr-only">Industries Primeway serves</h3>
+          <ul className="grid w-full grid-cols-2 justify-items-center gap-x-6 gap-y-10 sm:grid-cols-3 lg:contents">
+            {INDUSTRIES.map((industry, i) => (
+              <li
+                key={`${industry.label}-${i}`}
+                className="lg:absolute lg:flex lg:size-0 lg:items-center lg:justify-center"
+                style={{ left: `${industry.x}%`, top: `${industry.y}%` }}
+              >
+                <div data-diamond data-shift={ENTRY_SHIFT[industry.side]}>
+                  <IndustryCard
+                    icon={`/images/marketing/industries/icon-${industry.icon}.png`}
+                    label={industry.label}
+                    tone={industry.tone}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

@@ -12,6 +12,19 @@
   --color-secondary:          #03DAC6;
   --color-secondary-variant:  #018786;
 
+  /* Marketing site (Primeway) — values taken from the Figma "Primeway" file.
+     `accent` is the Figma "Secondary (Accent)" style; `sky-*` are the sampled
+     endpoints of the atmospheric backdrop that runs behind every scene after
+     the hero; `ribbon-*` are the four service-card caption bands. */
+  --color-accent:             #ED5F25;
+  --color-accent-variant:     #C94A17;
+  --color-atmos-top:          #8EAAB1;
+  --color-atmos-bottom:       #9FAFB2;
+  --color-ribbon-regular:     #756E5B;
+  --color-ribbon-periodical:  #A4A5A0;
+  --color-ribbon-deep:        #1B5468;
+  --color-ribbon-specialist:  #908281;
+
   /* Surface / Background */
   --color-background: #F5F5F5;
   --color-surface:    #FFFFFF;
@@ -51,11 +64,25 @@
   --color-nav-bar-bg:        #1C1C2E;
   --color-nav-icon-inactive: #737373;
 
-  /* Typography — fallbacks used until Next.js injects --font-geist-* at runtime */
+  /* Typography — fallbacks used until Next.js injects --font-* at runtime */
   --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
   --font-mono: var(--font-geist-mono, ui-monospace, monospace);
-  /* Marketing site headings (Primeway) */
+  /* Marketing site (Primeway): Plus Jakarta Sans for headings and nav,
+     Inter for body copy — both as specified in Figma. */
   --font-heading: var(--font-plus-jakarta-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-body:    var(--font-inter, ui-sans-serif, system-ui, sans-serif);
+
+  /* Marketing type scale. The Figma frames are a fixed 1512px canvas, so each
+     step is the design's pixel size expressed as a vw of 1512 and clamped to a
+     legible minimum — the whole scene then scales with the viewport instead of
+     stepping between breakpoints. Comment shows the size at the 1512px mark. */
+  --text-hero:     clamp(2.5rem,     5.952vw, 5.625rem);  /* 90px */
+  --text-section:  clamp(1.75rem,    3.638vw, 3.4375rem); /* 55px */
+  --text-lead:     clamp(1.375rem,   2.778vw, 2.625rem);  /* 42px */
+  --text-subhead:  clamp(1.375rem,   2.646vw, 2.5rem);    /* 40px */
+  --text-quote:    clamp(1.0625rem,  1.984vw, 1.875rem);  /* 30px */
+  --text-nav:      clamp(1rem,       1.653vw, 1.5625rem); /* 25px */
+  --text-body-lg:  clamp(0.9375rem,  1.455vw, 1.375rem);  /* 22px */
 }
 
 /* ── CSS Variables (for direct CSS usage outside Tailwind) ─────────────────── */
@@ -74,6 +101,30 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
+}
+
+/* ── Marketing site (Primeway landing page) ────────────────────────────────
+   The landing page is a scroll-driven scene sequence. Anchor navigation has to
+   land below the fixed navbar, and every scroll-linked animation must collapse
+   to its finished state for visitors who ask for reduced motion. */
+html {
+  scroll-behavior: smooth;
+}
+
+/* The "Who We Are" card is a rounded rectangle with a notch cut out of its top
+   edge for the section title. The notch only exists at the desktop framing —
+   below that the card is a plain rounded rectangle with the title stacked above
+   it — so the clip is applied by media query rather than inline. */
+@media (min-width: 64rem) {
+  .who-we-are-card {
+    clip-path: url(#who-we-are-notch);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 /* ── Google Places Autocomplete ────────────────────────────────────────────
