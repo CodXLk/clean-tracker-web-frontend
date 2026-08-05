@@ -14,7 +14,14 @@ import { LocationPicker } from "./LocationPicker";
 import { FloorsSection } from "./FloorsSection";
 import { FloorsModal } from "./FloorsModal";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
-import { SiteFormSchema, type Site, type SiteFormInput } from "@/features/user-management/schemas/site.schema";
+import { CleaningTemplatesSection } from "./CleaningTemplatesSection";
+import {
+  SiteFormSchema,
+  SITE_TYPE_LABELS,
+  SITE_TYPE_VALUES,
+  type Site,
+  type SiteFormInput,
+} from "@/features/user-management/schemas/site.schema";
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { useCreateSite, useUpdateSite } from "@/features/user-management/hooks/useSites";
@@ -30,6 +37,8 @@ const EMPTY: SiteFormInput = {
   clientCompanyId: "",
   clientId: "",
   name: "",
+  siteType: "GENERAL",
+  numberOfCleaners: 1,
   contactPersonName: "",
   contactNumber: "",
   googleMapsLink: "",
@@ -41,6 +50,9 @@ const EMPTY: SiteFormInput = {
   startDate: "",
   endDate: "",
   workingDays: [],
+  generalTaskStartTime: "",
+  generalTaskEndTime: "",
+  cleaningTemplates: [],
 };
 
 export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
@@ -84,6 +96,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
     () => (clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.email ?? undefined })),
     [clientsQuery.data],
   );
+  const siteTypeOptions: SelectOption[] = useMemo(
+    () => SITE_TYPE_VALUES.map((v) => ({ value: v, label: SITE_TYPE_LABELS[v] })),
+    [],
+  );
 
   // Reset the form each time the modal opens (create vs edit).
   useEffect(() => {
@@ -94,6 +110,8 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             clientCompanyId: site.clientCompanyId,
             clientId: site.clientId,
             name: site.name,
+            siteType: site.siteType ?? "GENERAL",
+            numberOfCleaners: site.numberOfCleaners ?? 1,
             contactPersonName: site.contactPersonName ?? "",
             contactNumber: site.contactNumber ?? "",
             googleMapsLink: site.googleMapsLink ?? "",
@@ -105,6 +123,12 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             startDate: site.startDate ?? "",
             endDate: site.endDate ?? "",
             workingDays: site.workingDays ?? [],
+            generalTaskStartTime: (site.generalTaskStartTime ?? "").slice(0, 5),
+            generalTaskEndTime: (site.generalTaskEndTime ?? "").slice(0, 5),
+            cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
+              templateId: t.templateId,
+              profileIndexes: t.profileIndexes ?? [],
+            })),
           }
         : EMPTY,
     );
@@ -236,6 +260,33 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
 
         <TextField label="Site name" required error={errors.name?.message} {...register("name")} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Controller
+            control={control}
+            name="siteType"
+            render={({ field }) => (
+              <SearchableSelect
+                label="Site type"
+                required
+                options={siteTypeOptions}
+                value={field.value || "GENERAL"}
+                onChange={field.onChange}
+                placeholder="Select a site type"
+                searchPlaceholder="Search site types…"
+                emptyMessage="No site types"
+                error={errors.siteType?.message}
+              />
+            )}
+          />
+          <TextField
+            label="Number of cleaners"
+            type="number"
+            min={0}
+            hint="Creates this many cleaner slots (profiles). Assign cleaners to the slots below after saving."
+            error={errors.numberOfCleaners?.message}
+            {...register("numberOfCleaners", { valueAsNumber: true })}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Contact person name"
             error={errors.contactPersonName?.message}
@@ -349,6 +400,43 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             General assignments are scheduled only on these days, until the site end date.
           </p>
         </div>
+
+        <div className="flex flex-col gap-3">
+          <span className="text-sm font-medium text-on-surface">General task service time</span>
+          <p className="text-xs text-grey-500">
+            Optional default start &amp; end time for general tasks. Used to pre-fill the start time
+            when adding a general assignment for this site.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              label="General task start"
+              type="time"
+              error={errors.generalTaskStartTime?.message}
+              {...register("generalTaskStartTime")}
+            />
+            <TextField
+              label="General task end"
+              type="time"
+              error={errors.generalTaskEndTime?.message}
+              {...register("generalTaskEndTime")}
+            />
+          </div>
+        </div>
+
+        {watch("siteType") === "HOTEL" && (
+          <Controller
+            control={control}
+            name="cleaningTemplates"
+            render={({ field }) => (
+              <CleaningTemplatesSection
+                value={field.value ?? []}
+                onChange={field.onChange}
+                numberOfCleaners={watch("numberOfCleaners") ?? 0}
+                error={errors.cleaningTemplates?.message}
+              />
+            )}
+          />
+        )}
 
         {isEdit && site && (
           <div className="flex flex-col gap-3">

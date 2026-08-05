@@ -1,18 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CalendarClock } from "lucide-react";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { useMe } from "@/features/auth/hooks/useMe";
-import { useLowStock } from "@/features/inventory/hooks/useInventory";
+import { useLowStock, useInventoryStats } from "@/features/inventory/hooks/useInventory";
 import { isManagementUser, fmtQty } from "@/features/inventory/lib/inventory";
 import { WarehouseTab } from "@/features/inventory/components/WarehouseTab";
 import { RequestsTab } from "@/features/inventory/components/RequestsTab";
 import { DeliveriesTab } from "@/features/inventory/components/DeliveriesTab";
 import { SiteInventoryTab } from "@/features/inventory/components/SiteInventoryTab";
+import { CleanerInventoryTab } from "@/features/inventory/components/CleanerInventoryTab";
+import { SuppliersTab } from "@/features/inventory/components/SuppliersTab";
+import { PurchaseOrdersTab } from "@/features/inventory/components/PurchaseOrdersTab";
 import { LogsTab } from "@/features/inventory/components/LogsTab";
 
-const TABS = ["Warehouse", "Requests", "Deliveries", "Site Inventory", "Logs"] as const;
+const TABS = [
+  "Warehouse",
+  "Suppliers",
+  "Purchase Orders",
+  "Requests",
+  "Deliveries",
+  "Site Inventory",
+  "Cleaner Inventory",
+  "Logs",
+] as const;
 type Tab = (typeof TABS)[number];
 
 export default function InventoryPage() {
@@ -20,6 +32,8 @@ export default function InventoryPage() {
   const canManage = isManagementUser(me);
   const lowStockQuery = useLowStock();
   const lowStock = lowStockQuery.data ?? [];
+  const statsQuery = useInventoryStats();
+  const stats = statsQuery.data;
 
   const [tab, setTab] = useState<Tab>("Warehouse");
 
@@ -53,14 +67,44 @@ export default function InventoryPage() {
           </div>
         )}
 
+        {(stats && (stats.expiredBatchCount > 0 || stats.nearExpiryBatchCount > 0)) && (
+          <div className="mb-6 rounded-2xl border border-error/30 bg-error/[0.05] p-4">
+            <div className="flex items-center gap-2 text-error">
+              <CalendarClock size={18} aria-hidden="true" />
+              <span className="text-sm font-semibold">Expiry alerts</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {stats.expiredBatchCount > 0 && (
+                <span className="rounded-lg bg-white px-2.5 py-1 text-on-surface">
+                  Expired:{" "}
+                  <span className="font-medium text-error">
+                    {fmtQty(stats.expiredQuantity)} units · {stats.expiredBatchCount} batch{stats.expiredBatchCount === 1 ? "" : "es"}
+                  </span>
+                </span>
+              )}
+              {stats.nearExpiryBatchCount > 0 && (
+                <span className="rounded-lg bg-white px-2.5 py-1 text-on-surface">
+                  Expiring within {stats.nearExpiryDays} days:{" "}
+                  <span className="font-medium text-[#ED5F25]">
+                    {fmtQty(stats.nearExpiryQuantity)} units · {stats.nearExpiryBatchCount} batch{stats.nearExpiryBatchCount === 1 ? "" : "es"}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 overflow-x-auto">
           <FilterTabs<Tab> options={[...TABS]} value={tab} onChange={setTab} />
         </div>
 
         {tab === "Warehouse" && <WarehouseTab canManage={canManage} />}
+        {tab === "Suppliers" && <SuppliersTab canManage={canManage} />}
+        {tab === "Purchase Orders" && <PurchaseOrdersTab canManage={canManage} />}
         {tab === "Requests" && <RequestsTab canManage={canManage} />}
         {tab === "Deliveries" && <DeliveriesTab canManage={canManage} />}
         {tab === "Site Inventory" && <SiteInventoryTab canManage={canManage} />}
+        {tab === "Cleaner Inventory" && <CleanerInventoryTab canManage={canManage} />}
         {tab === "Logs" && <LogsTab />}
       </div>
     </div>

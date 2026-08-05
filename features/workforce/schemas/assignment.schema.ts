@@ -72,6 +72,8 @@ export const TaskOccurrenceSchema = z.object({
   areaId: z.string().uuid(),
   areaName: z.string(),
   assignmentType: WorkTypeSchema,
+  poId: z.string().nullable().optional(),
+  templateName: z.string().nullable().optional(),
   startTime: z.string(), // HH:mm[:ss]
   endTime: z.string(),
   durationMinutes: z.number(),
@@ -92,6 +94,7 @@ export const AssignmentSchema = z.object({
   siteId: z.string().uuid(),
   siteName: z.string(),
   assignmentType: WorkTypeSchema,
+  poId: z.string().nullable().optional(),
   startDate: z.string(),
   startTime: z.string(),
   expectedEndTime: z.string(),
@@ -104,6 +107,7 @@ export const AssignmentSchema = z.object({
   monthlyWeekday: DayOfWeekSchema.nullable().optional(),
   otherRepeatWorkingDays: z.boolean(),
   otherUseRecurrence: z.boolean(),
+  generalUseRecurrence: z.boolean().default(false),
   recurring: z.boolean(),
   tasks: z.array(
     z.object({
@@ -164,8 +168,10 @@ export const GroupTaskFormSchema = z.object({
     .max(24 * 60, "Maximum 24 hours")
     .optional(),
   description: z.string().max(2048, "Description is too long").optional().or(z.literal("")),
-  /** Per-task cleaners — only used when assignPerTask is on. */
+  /** Per-task cleaners — only used when assignPerTask is on and the site has no profiles. */
   cleanerIds: z.array(z.string().uuid()),
+  /** Per-task responsible cleaner profiles (slots) — only used when assignPerTask is on. */
+  profileIds: z.array(z.string().uuid()),
   /** Optional expected inventory items consumed when the task completes. */
   items: z.array(
     z.object({
@@ -190,9 +196,15 @@ export const AssignmentFormSchema = z
     siteId: z.string().uuid("Please select a site"),
     date: z.string().min(1, "Date is required"),
     startTime: z.string().min(1, "Expected start time is required"),
+    /** Purchase-order reference — required for Work Order assignments. */
+    poId: z.string().max(100, "PO ID is too long").optional().or(z.literal("")),
+    /** Name of the saved task-list template used to build this assignment, if any. */
+    templateName: z.string().max(150, "Template name is too long").optional().or(z.literal("")),
     groups: z.array(LocationGroupFormSchema).min(1, "Add a floor and area"),
     /** Assignment-level cleaner selection (applies to all tasks unless assignPerTask). */
     cleanerIds: z.array(z.string().uuid()),
+    /** Assignment-level responsible cleaner profiles (slots) — default all responsible. */
+    profileIds: z.array(z.string().uuid()),
     /** Assignment-level supervisor selection (applies to every task). */
     supervisorIds: z.array(z.string().uuid()),
     assignPerTask: z.boolean(),
@@ -208,10 +220,22 @@ export const AssignmentFormSchema = z
     // Other-type behaviour toggles.
     otherRepeatWorkingDays: z.boolean(),
     otherUseRecurrence: z.boolean(),
+    // General-task: use the recurrence rule instead of site working days.
+    generalUseRecurrence: z.boolean(),
   })
   .superRefine((val, ctx) => {
     const usesRecurrence =
-      val.workType === "PERIODICAL_TASK" || (val.workType === "OTHER" && val.otherUseRecurrence);
+      val.workType === "PERIODICAL_TASK" ||
+      (val.workType === "OTHER" && val.otherUseRecurrence) ||
+      (val.workType === "GENERAL_TASK" && val.generalUseRecurrence);
+
+    if (val.workType === "WORK_ORDER" && !val.poId?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PO ID is required for a work order",
+        path: ["poId"],
+      });
+    }
 
     if (usesRecurrence) {
       if (!val.recurrenceType) {
@@ -283,23 +307,24 @@ export const AssignmentFormSchema = z
       }
     });
 
-    // Cleaner requirements.
+    // Cleaner / profile requirements. A site with cleaner profiles drives
+    // assignment via responsible slots (profileIds); legacy sites use cleanerIds.
     if (val.assignPerTask) {
       val.groups.forEach((group, gi) => {
         group.tasks.forEach((task, ti) => {
-          if (task.cleanerIds.length === 0) {
+          if (task.cleanerIds.length === 0 && task.profileIds.length === 0) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              message: "Assign at least one cleaner to this task",
+              message: "Assign at least one cleaner or profile to this task",
               path: ["groups", gi, "tasks", ti, "cleanerIds"],
             });
           }
         });
       });
-    } else if (val.cleanerIds.length === 0) {
+    } else if (val.cleanerIds.length === 0 && val.profileIds.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Select at least one cleaner",
+        message: "Select at least one cleaner or profile",
         path: ["cleanerIds"],
       });
     }
@@ -316,11 +341,16 @@ export function allTasksOf(input: Pick<AssignmentFormInput, "groups">): GroupTas
 export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<string, unknown> {
   const usesRecurrence =
     input.workType === "PERIODICAL_TASK" ||
-    (input.workType === "OTHER" && input.otherUseRecurrence);
+    (input.workType === "OTHER" && input.otherUseRecurrence) ||
+    (input.workType === "GENERAL_TASK" && input.generalUseRecurrence);
 
   const payload: Record<string, unknown> = {
     siteId: input.siteId,
     assignmentType: input.workType,
+    ...(input.workType === "WORK_ORDER" && input.poId?.trim()
+      ? { poId: input.poId.trim() }
+      : {}),
+    ...(input.templateName?.trim() ? { templateName: input.templateName.trim() } : {}),
     startDate: input.date,
     startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
     tasks: input.groups.flatMap((group) =>
@@ -331,6 +361,9 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
         areaId: group.areaId,
         ...(task.description?.trim() ? { description: task.description.trim() } : {}),
         cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+        ...((input.assignPerTask ? task.profileIds : input.profileIds).length > 0
+          ? { profileIds: input.assignPerTask ? task.profileIds : input.profileIds }
+          : {}),
         ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
         ...((task.items ?? []).length > 0
           ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
@@ -355,6 +388,9 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
   if (input.workType === "OTHER") {
     payload.otherRepeatWorkingDays = input.otherRepeatWorkingDays;
     payload.otherUseRecurrence = input.otherUseRecurrence;
+  }
+  if (input.workType === "GENERAL_TASK") {
+    payload.generalUseRecurrence = input.generalUseRecurrence;
   }
   return payload;
 }

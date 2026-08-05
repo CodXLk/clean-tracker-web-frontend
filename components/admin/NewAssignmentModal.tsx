@@ -9,7 +9,7 @@ import {
   FormProvider,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Search, Check, Plus, Trash2, Clock, MapPin } from "lucide-react";
+import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList } from "lucide-react";
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
@@ -18,9 +18,10 @@ import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useFloors";
 import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
 import { NameFormModal } from "@/components/admin/NameFormModal";
-import { useSiteCleaners, useSiteSupervisors } from "@/features/user-management/hooks/useSiteAssignments";
-import { useCreateAssignment } from "@/features/workforce/hooks/useAssignments";
+import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
+import { useCreateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
+import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
@@ -101,8 +102,10 @@ function buildDefaults({
     siteId: defaultSiteId,
     date: defaultDate ? formatDateForInput(defaultDate) : "",
     startTime: defaultTime,
+    poId: "",
     groups: [emptyGroup(defaultFloorId, defaultAreaId)],
     cleanerIds: [],
+    profileIds: [],
     supervisorIds: [],
     assignPerTask: false,
     recurrenceType: "DAILY",
@@ -114,6 +117,8 @@ function buildDefaults({
     monthlyWeekday: undefined,
     otherRepeatWorkingDays: false,
     otherUseRecurrence: false,
+    generalUseRecurrence: false,
+    templateName: "",
   };
 }
 
@@ -273,6 +278,7 @@ interface LocationGroupCardProps {
   onRemove: () => void;
   assignPerTask: boolean;
   cleaners: Cleaner[];
+  usingProfiles: boolean;
 }
 
 function LocationGroupCard({
@@ -284,6 +290,7 @@ function LocationGroupCard({
   onRemove,
   assignPerTask,
   cleaners,
+  usingProfiles,
 }: LocationGroupCardProps) {
   const {
     control,
@@ -294,6 +301,8 @@ function LocationGroupCard({
 
   const floorId = watch(`groups.${groupIndex}.floorId`);
   const areasQuery = useAreas(floorId || undefined);
+  const taskNameSuggestions = useTaskNameSuggestions();
+  const taskNameListId = `task-names-${groupIndex}`;
   const { fields, append, remove } = useFieldArray({
     control,
     name: `groups.${groupIndex}.tasks`,
@@ -309,6 +318,13 @@ function LocationGroupCard({
   const [qDesc, setQDesc] = useState("");
   const [qError, setQError] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // Saved task-list templates (save the current group's tasks / load a set in).
+  const templatesQuery = useTaskTemplates();
+  const saveTemplateMutation = useSaveTaskTemplate();
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateError, setTemplateError] = useState<string | null>(null);
 
   const areaOptions: SelectOption[] = useMemo(
     () => (areasQuery.data ?? []).map((a) => ({ value: a.id, label: a.name })),
@@ -330,6 +346,7 @@ function LocationGroupCard({
       durationMinutes: duration && duration > 0 ? duration : undefined,
       description: qDesc.trim(),
       cleanerIds: [],
+      profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
       items: [],
     });
     setQName("");
@@ -346,12 +363,68 @@ function LocationGroupCard({
     }
   }
 
+  /** Append every task from a saved template into this floor/area group. */
+  function loadTemplate(templateId: string) {
+    const template = (templatesQuery.data ?? []).find((t) => t.id === templateId);
+    if (!template) return;
+    // Remember the template so the calendar can label this assignment by its name.
+    setValue("templateName", template.name, { shouldValidate: false });
+    for (const t of template.tasks) {
+      append({
+        name: t.name,
+        durationMinutes: t.durationMinutes && t.durationMinutes > 0 ? t.durationMinutes : undefined,
+        description: t.description ?? "",
+        cleanerIds: [],
+        profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
+        items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+      });
+    }
+  }
+
+  /** Save this group's current tasks (with their items) as a reusable named template. */
+  function saveAsTemplate() {
+    const name = templateName.trim();
+    if (name.length < 2) {
+      setTemplateError("Enter a name (at least 2 characters)");
+      return;
+    }
+    const groupTasks = watch(`groups.${groupIndex}.tasks`) ?? [];
+    if (groupTasks.length === 0) {
+      setTemplateError("Add at least one task before saving");
+      return;
+    }
+    saveTemplateMutation.mutate(
+      {
+        input: {
+          name,
+          tasks: groupTasks.map((t) => ({
+            name: t.name,
+            ...(t.durationMinutes != null ? { durationMinutes: t.durationMinutes } : {}),
+            ...(t.description?.trim() ? { description: t.description.trim() } : {}),
+            items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+          })),
+        },
+      },
+      {
+        onSuccess: () => {
+          setShowSaveTemplate(false);
+          setTemplateName("");
+          setTemplateError(null);
+        },
+        onError: (err) => setTemplateError(getErrorMessage(err)),
+      },
+    );
+  }
+
   function toggleTaskCleaner(taskIndex: number, cleanerId: string) {
-    const current = watch(`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds`) ?? [];
+    const field = usingProfiles
+      ? (`groups.${groupIndex}.tasks.${taskIndex}.profileIds` as const)
+      : (`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds` as const);
+    const current = watch(field) ?? [];
     const next = current.includes(cleanerId)
       ? current.filter((c) => c !== cleanerId)
       : [...current, cleanerId];
-    setValue(`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds`, next, { shouldValidate: true });
+    setValue(field, next, { shouldValidate: true });
   }
 
   return (
@@ -516,12 +589,19 @@ function LocationGroupCard({
               onKeyDown={onQuickKeyDown}
               placeholder="Task name — e.g. Vacuum & mop floor"
               aria-label="New task name"
+              list={taskNameListId}
+              autoComplete="off"
               className={cn(
                 "w-full bg-white",
                 inputClass,
                 qError ? "border-danger" : "border-grey-300",
               )}
             />
+            <datalist id={taskNameListId}>
+              {(taskNameSuggestions.data ?? []).map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
           </div>
           <input
             type="number"
@@ -558,14 +638,91 @@ function LocationGroupCard({
         </p>
       </div>
 
+      {/* Saved task lists — load a set in, or save the current one */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <LayoutList size={14} className="text-grey-500" aria-hidden="true" />
+          <select
+            aria-label="Load a saved task list"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) loadTemplate(e.target.value);
+              e.currentTarget.selectedIndex = 0;
+            }}
+            disabled={(templatesQuery.data ?? []).length === 0}
+            className={cn(inputClass, "border-grey-300 bg-white py-1.5 text-xs")}
+          >
+            <option value="">
+              {(templatesQuery.data ?? []).length === 0
+                ? "No saved task lists"
+                : "Load a saved task list…"}
+            </option>
+            {(templatesQuery.data ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.tasks.length} task{t.tasks.length === 1 ? "" : "s"})
+              </option>
+            ))}
+          </select>
+        </div>
+        {!showSaveTemplate ? (
+          <button
+            type="button"
+            onClick={() => {
+              setShowSaveTemplate(true);
+              setTemplateError(null);
+            }}
+            disabled={fields.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <BookmarkPlus size={14} aria-hidden="true" />
+            Save as list
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => {
+                setTemplateName(e.target.value);
+                if (templateError) setTemplateError(null);
+              }}
+              placeholder="List name"
+              aria-label="Task list name"
+              className={cn(inputClass, "bg-white py-1.5 text-xs", templateError ? "border-danger" : "border-grey-300")}
+            />
+            <button
+              type="button"
+              onClick={saveAsTemplate}
+              disabled={saveTemplateMutation.isPending}
+              className="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-variant disabled:opacity-60"
+            >
+              {saveTemplateMutation.isPending ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSaveTemplate(false);
+                setTemplateName("");
+                setTemplateError(null);
+              }}
+              className="rounded-lg px-2 py-1.5 text-xs font-medium text-grey-500 transition-colors hover:bg-grey-100"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+      {templateError && <p className="mt-1 text-[11px] text-danger">{templateError}</p>}
+
       {/* Added tasks */}
       {fields.length > 0 ? (
         <ul className="mt-3 flex flex-col gap-1.5">
           {fields.map((field, taskIndex) => {
             const task = watch(`groups.${groupIndex}.tasks.${taskIndex}`);
-            const selected = task?.cleanerIds ?? [];
+            const selected = (usingProfiles ? task?.profileIds : task?.cleanerIds) ?? [];
             const taskCleanerError =
-              groupErrors?.tasks?.[taskIndex]?.cleanerIds?.message;
+              groupErrors?.tasks?.[taskIndex]?.cleanerIds?.message ??
+              groupErrors?.tasks?.[taskIndex]?.profileIds?.message;
             return (
               <li
                 key={field.id}
@@ -691,22 +848,29 @@ export function NewAssignmentModal({
   const siteId = watch("siteId");
   const startTime = watch("startTime");
   const groups = watch("groups");
-  const selectedCleaners = watch("cleanerIds");
+  const selectedCleanerIds = watch("cleanerIds");
+  const selectedProfileIds = watch("profileIds");
   const selectedSupervisors = watch("supervisorIds");
   const assignPerTask = watch("assignPerTask");
   const recurrenceType = watch("recurrenceType");
   const monthlyMode = watch("monthlyMode");
   const otherRepeatWorkingDays = watch("otherRepeatWorkingDays");
   const otherUseRecurrence = watch("otherUseRecurrence");
+  const generalUseRecurrence = watch("generalUseRecurrence");
 
   const showWorkingDays =
-    workType === "GENERAL_TASK" || (workType === "OTHER" && otherRepeatWorkingDays);
+    (workType === "GENERAL_TASK" && !generalUseRecurrence) ||
+    (workType === "OTHER" && otherRepeatWorkingDays);
   const showRecurrence =
-    workType === "PERIODICAL_TASK" || (workType === "OTHER" && otherUseRecurrence);
+    workType === "PERIODICAL_TASK" ||
+    (workType === "OTHER" && otherUseRecurrence) ||
+    (workType === "GENERAL_TASK" && generalUseRecurrence);
 
   const floorsQuery = useFloors(siteId || undefined);
   // Only cleaners assigned to the selected site can be picked.
   const cleanersQuery = useSiteCleaners(siteId || undefined);
+  // Cleaner slots (profiles) for the selected site — the preferred way to assign.
+  const profilesQuery = useSiteCleanerProfiles(siteId || undefined);
   // Only supervisors assigned to the selected site can be picked.
   const supervisorsQuery = useSiteSupervisors(siteId || undefined);
 
@@ -739,13 +903,48 @@ export function NewAssignmentModal({
     [startTime, allTasks],
   );
 
-  const cleaners = cleanersQuery.data ?? [];
+  // Cleaner slots (profiles) are the preferred selection unit. Each slot is
+  // adapted into a Cleaner-shaped option so it reuses the existing selection UI.
+  const siteProfiles = useMemo(
+    () => [...(profilesQuery.data ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
+    [profilesQuery.data],
+  );
+  const usingProfiles = siteProfiles.length > 0;
+  const cleanerField = usingProfiles ? ("profileIds" as const) : ("cleanerIds" as const);
+  const selectedCleaners = usingProfiles ? selectedProfileIds : selectedCleanerIds;
+
+  const cleaners: Cleaner[] = useMemo(() => {
+    if (usingProfiles) {
+      return siteProfiles.map(
+        (p) =>
+          ({
+            id: p.id,
+            firstName: p.label || `Cleaner ${p.profileIndex}`,
+            lastName: p.cleanerName ? `· ${p.cleanerName}` : "· Unassigned",
+          }) as Cleaner,
+      );
+    }
+    return cleanersQuery.data ?? [];
+  }, [usingProfiles, siteProfiles, cleanersQuery.data]);
+
+  const cleanersLoading = usingProfiles ? profilesQuery.isLoading : cleanersQuery.isLoading;
   const filteredCleaners = cleaners.filter((c) =>
     cleanerName(c).toLowerCase().includes(cleanerSearch.toLowerCase()),
   );
   const allFilteredSelected =
     filteredCleaners.length > 0 && filteredCleaners.every((c) => selectedCleaners?.includes(c.id));
 
+  // Default: every slot is responsible for the assignment unless removed.
+  const didDefaultProfiles = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!siteId || profilesQuery.isLoading) return;
+    if (didDefaultProfiles.current === siteId) return;
+    didDefaultProfiles.current = siteId;
+    if (siteProfiles.length > 0 && (getValues("profileIds") ?? []).length === 0) {
+      setValue("profileIds", siteProfiles.map((p) => p.id), { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siteId, profilesQuery.isLoading, profilesQuery.data]);
   const supervisors = supervisorsQuery.data ?? [];
   // Default supervisor selection to the site's assigned supervisors once they load.
   const didDefaultSupervisors = useRef<string | undefined>(undefined);
@@ -759,6 +958,21 @@ export function NewAssignmentModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId, supervisorsQuery.isLoading, supervisorsQuery.data]);
+
+  // Pre-fill the start time from the site's configured general-task start time.
+  const lastAutoStartTime = useRef<string | null>(null);
+  useEffect(() => {
+    if (workType !== "GENERAL_TASK") return;
+    const configured = (selectedSite?.generalTaskStartTime ?? "").slice(0, 5);
+    if (!configured) return;
+    const current = getValues("startTime") ?? "";
+    // Only apply when the user hasn't set their own time (empty or a prior auto value).
+    if (current === "" || current === lastAutoStartTime.current) {
+      lastAutoStartTime.current = configured;
+      setValue("startTime", configured, { shouldValidate: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workType, selectedSite?.id, selectedSite?.generalTaskStartTime]);
 
   useEffect(() => {
     if (open) {
@@ -843,9 +1057,9 @@ export function NewAssignmentModal({
   function toggleCleaner(id: string) {
     const current = selectedCleaners ?? [];
     if (current.includes(id)) {
-      setValue("cleanerIds", current.filter((c) => c !== id), { shouldValidate: true });
+      setValue(cleanerField, current.filter((c) => c !== id), { shouldValidate: true });
     } else {
-      setValue("cleanerIds", [...current, id], { shouldValidate: true });
+      setValue(cleanerField, [...current, id], { shouldValidate: true });
     }
   }
 
@@ -862,12 +1076,12 @@ export function NewAssignmentModal({
     const allIds = filteredCleaners.map((c) => c.id);
     const allSelected = allIds.every((id) => selectedCleaners?.includes(id));
     if (allSelected) {
-      setValue("cleanerIds", (selectedCleaners ?? []).filter((id) => !allIds.includes(id)), {
+      setValue(cleanerField, (selectedCleaners ?? []).filter((id) => !allIds.includes(id)), {
         shouldValidate: true,
       });
     } else {
       const merged = Array.from(new Set([...(selectedCleaners ?? []), ...allIds]));
-      setValue("cleanerIds", merged, { shouldValidate: true });
+      setValue(cleanerField, merged, { shouldValidate: true });
     }
   }
 
@@ -928,8 +1142,10 @@ export function NewAssignmentModal({
                         field.onChange(v);
                         // Floors/areas/cleaners are site-specific — reset to one blank group.
                         setValue("cleanerIds", []);
+                        setValue("profileIds", []);
                         setValue("supervisorIds", []);
                         didDefaultSupervisors.current = undefined;
+                        didDefaultProfiles.current = undefined;
                         setValue("groups", [emptyGroup()], { shouldValidate: false });
                       }}
                       loading={sitesQuery.isLoading}
@@ -970,6 +1186,23 @@ export function NewAssignmentModal({
                 </div>
               </div>
 
+              {/* Work Order: PO reference */}
+              {workType === "WORK_ORDER" && (
+                <div className="mt-4 flex flex-col gap-1.5">
+                  <label htmlFor="assign-po" className="text-sm font-medium text-on-surface">
+                    PO ID
+                  </label>
+                  <input
+                    id="assign-po"
+                    type="text"
+                    placeholder="e.g. PO-2025-0142"
+                    {...register("poId")}
+                    className={cn(inputClass, errors.poId ? "border-danger" : "border-grey-300")}
+                  />
+                  {errors.poId && <p className="text-xs text-danger">{errors.poId.message}</p>}
+                </div>
+              )}
+
               {/* Other: behaviour toggles */}
               {workType === "OTHER" && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
@@ -996,6 +1229,24 @@ export function NewAssignmentModal({
                       Use a custom recurrence rule (like Periodical)
                     </label>
                   </div>
+                </div>
+              )}
+
+              {/* General: opt into a custom recurrence rule instead of working days */}
+              {workType === "GENERAL_TASK" && (
+                <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
+                  <label className="flex items-center gap-2 text-sm text-on-surface">
+                    <input
+                      type="checkbox"
+                      {...register("generalUseRecurrence")}
+                      className="h-4 w-4 rounded border-grey-300 accent-[#0B585A]"
+                    />
+                    Recurrence
+                  </label>
+                  <p className="mt-2 text-xs text-grey-500">
+                    When enabled, distribute this general task using a custom recurrence rule
+                    instead of the site&apos;s working days.
+                  </p>
                 </div>
               )}
 
@@ -1252,6 +1503,7 @@ export function NewAssignmentModal({
                       onRemove={() => removeGroup(index)}
                       assignPerTask={assignPerTask}
                       cleaners={cleaners}
+                      usingProfiles={usingProfiles}
                     />
                   ))}
                 </div>
@@ -1285,11 +1537,13 @@ export function NewAssignmentModal({
               {/* Cleaner assignment — after the task list */}
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-3">
-                  <span className="text-sm font-medium text-on-surface">Assign Cleaners</span>
+                  <span className="text-sm font-medium text-on-surface">
+                    {usingProfiles ? "Responsible cleaner slots" : "Assign Cleaners"}
+                  </span>
                   <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
                     {!siteId
                       ? "Select a site"
-                      : cleanersQuery.isLoading
+                      : cleanersLoading
                         ? "Loading…"
                         : `${cleaners.length} available`}
                   </span>
@@ -1297,7 +1551,7 @@ export function NewAssignmentModal({
                     <Search size={14} className="text-grey-500" aria-hidden="true" />
                     <input
                       type="text"
-                      placeholder="Search cleaners"
+                      placeholder={usingProfiles ? "Search slots" : "Search cleaners"}
                       value={cleanerSearch}
                       onChange={(e) => setCleanerSearch(e.target.value)}
                       className="w-32 text-xs text-on-surface outline-none placeholder:text-grey-500"
@@ -1320,7 +1574,7 @@ export function NewAssignmentModal({
 
                 {assignPerTask ? (
                   <p className="text-xs text-grey-500">
-                    Pick cleaners on each task in the location cards above.
+                    Pick {usingProfiles ? "slots" : "cleaners"} on each task in the location cards above.
                   </p>
                 ) : (
                   <>
@@ -1341,19 +1595,23 @@ export function NewAssignmentModal({
                           {allFilteredSelected && <Check size={10} aria-hidden="true" />}
                         </button>
                         <span className="text-xs text-grey-500 select-none">
-                          Select All (assign every cleaner)
+                          Select All ({usingProfiles ? "all slots responsible" : "assign every cleaner"})
                         </span>
                       </div>
                     )}
 
                     {!siteId ? (
                       <p className="text-xs text-grey-500">
-                        Select a site to see its assigned cleaners.
+                        Select a site to see its {usingProfiles ? "cleaner slots" : "assigned cleaners"}.
                       </p>
-                    ) : cleanersQuery.isLoading ? (
-                      <p className="text-xs text-grey-500">Loading cleaners…</p>
+                    ) : cleanersLoading ? (
+                      <p className="text-xs text-grey-500">Loading…</p>
                     ) : cleaners.length === 0 ? (
-                      <p className="text-xs text-grey-500">No cleaners are assigned to this site.</p>
+                      <p className="text-xs text-grey-500">
+                        {usingProfiles
+                          ? "This site has no cleaner slots yet."
+                          : "No cleaners are assigned to this site."}
+                      </p>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
                         {filteredCleaners.map((cleaner, i) => {
@@ -1396,8 +1654,10 @@ export function NewAssignmentModal({
                         })}
                       </div>
                     )}
-                    {errors.cleanerIds && (
-                      <p className="mt-2 text-xs text-danger">{errors.cleanerIds.message}</p>
+                    {(errors.cleanerIds || errors.profileIds) && (
+                      <p className="mt-2 text-xs text-danger">
+                        {errors.cleanerIds?.message ?? errors.profileIds?.message}
+                      </p>
                     )}
                   </>
                 )}

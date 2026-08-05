@@ -43,8 +43,11 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
       sortAccessor: (i) => i.name.toLowerCase(),
       cell: (i) => (
         <div>
-          <span className="font-medium text-on-surface">{i.name}</span>
-          {!i.active && <span className="ml-2 rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-500">Inactive</span>}
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-on-surface">{i.name}</span>
+            {!i.active && <span className="rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-500">Inactive</span>}
+          </div>
+          {i.itemCode && <span className="text-xs text-grey-500">Code: {i.itemCode}</span>}
         </div>
       ),
     },

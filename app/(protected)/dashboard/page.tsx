@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
@@ -57,6 +57,14 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
 }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const searchParams = useSearchParams();
   const [adminDeniedDismissed, setAdminDeniedDismissed] = useState(false);
   const showAdminDeniedBanner = searchParams.get("denied") === "admin" && !adminDeniedDismissed;

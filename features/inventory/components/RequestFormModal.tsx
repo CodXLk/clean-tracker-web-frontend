@@ -8,7 +8,9 @@ import { PillButton } from "@/components/shared/PillButton";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import { useInventoryItems, useCreateRequest } from "@/features/inventory/hooks/useInventory";
+import { REQUEST_TYPE_LABELS, type RequestType } from "@/features/inventory/schemas/inventory.schema";
 
 interface RequestFormModalProps {
   open: boolean;
@@ -25,9 +27,12 @@ interface Line {
 export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModalProps) {
   const sitesQuery = useSites();
   const itemsQuery = useInventoryItems(true);
+  const cleanersQuery = useCleaners();
   const createMutation = useCreateRequest();
 
   const [siteId, setSiteId] = useState(fixedSiteId ?? "");
+  const [requestType, setRequestType] = useState<RequestType>("SITE");
+  const [cleanerId, setCleanerId] = useState("");
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<Line[]>([{ itemId: "", quantity: "" }]);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +40,8 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
   useEffect(() => {
     if (open) {
       setSiteId(fixedSiteId ?? "");
+      setRequestType("SITE");
+      setCleanerId("");
       setNote("");
       setLines([{ itemId: "", quantity: "" }]);
       setError(null);
@@ -51,6 +58,14 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
     () => (itemsQuery.data ?? []).map((i) => ({ value: i.id, label: `${i.name} (${i.unit})` })),
     [itemsQuery.data],
   );
+  const cleanerOptions: SelectOption[] = useMemo(
+    () =>
+      (cleanersQuery.data ?? []).map((c) => ({
+        value: c.id,
+        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || c.id,
+      })),
+    [cleanersQuery.data],
+  );
 
   function updateLine(idx: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -60,12 +75,19 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
     e.preventDefault();
     setError(null);
     if (!siteId) return setError("Select a site.");
+    if (requestType === "CLEANER" && !cleanerId) return setError("Select a cleaner to issue items to.");
     const cleaned = lines
       .filter((l) => l.itemId && parseFloat(l.quantity) > 0)
       .map((l) => ({ itemId: l.itemId, requestedQuantity: parseFloat(l.quantity) }));
     if (cleaned.length === 0) return setError("Add at least one item with a quantity.");
     createMutation.mutate(
-      { siteId, note: note.trim() || undefined, lines: cleaned },
+      {
+        siteId,
+        requestType,
+        cleanerId: requestType === "CLEANER" ? cleanerId : undefined,
+        note: note.trim() || undefined,
+        lines: cleaned,
+      },
       { onSuccess: onClose },
     );
   }
@@ -75,9 +97,31 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
       open={open}
       onClose={onClose}
       title="Request items"
-      description="Ask management to deliver items to a site."
+      description="Ask management to deliver items to a site or issue them to a cleaner."
     >
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-on-surface">Request type</span>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(REQUEST_TYPE_LABELS) as RequestType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setRequestType(type)}
+                aria-pressed={requestType === type}
+                className={
+                  "h-11 rounded-xl border px-3 text-sm font-semibold transition-colors " +
+                  (requestType === type
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-grey-300 text-grey-500 hover:border-primary/50")
+                }
+              >
+                {REQUEST_TYPE_LABELS[type]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {!fixedSiteId && (
           <SearchableSelect
             label="Site"
@@ -87,6 +131,18 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
             onChange={setSiteId}
             loading={sitesQuery.isLoading}
             placeholder="Select a site"
+          />
+        )}
+
+        {requestType === "CLEANER" && (
+          <SearchableSelect
+            label="Cleaner"
+            required
+            options={cleanerOptions}
+            value={cleanerId || null}
+            onChange={setCleanerId}
+            loading={cleanersQuery.isLoading}
+            placeholder="Select a cleaner"
           />
         )}
 

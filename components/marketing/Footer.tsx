@@ -21,7 +21,7 @@ export function Footer() {
             className="h-12 w-auto brightness-0 invert"
           />
           <p className="max-w-sm text-sm text-white/70">
-            Commercial cleaning company based in Victoria, Australia, established in 2021.
+            Commercial cleaning company based in, Australia, established in 2021.
           </p>
         </div>
 

@@ -15,6 +15,49 @@ export const DAY_OF_WEEK_VALUES = [
 export const DayOfWeekSchema = z.enum(DAY_OF_WEEK_VALUES);
 export type DayOfWeek = z.infer<typeof DayOfWeekSchema>;
 
+// Mirrors backend SiteType enum.
+export const SITE_TYPE_VALUES = [
+  "GENERAL",
+  "HOTEL",
+  "HOSPITAL",
+  "OFFICE",
+  "RETAIL",
+  "SCHOOL",
+  "RESTAURANT",
+] as const;
+
+export const SiteTypeSchema = z.enum(SITE_TYPE_VALUES);
+export type SiteType = z.infer<typeof SiteTypeSchema>;
+
+export const SITE_TYPE_LABELS: Record<SiteType, string> = {
+  GENERAL: "General cleaning site",
+  HOTEL: "Hotel",
+  HOSPITAL: "Hospital",
+  OFFICE: "Office",
+  RETAIL: "Retail",
+  SCHOOL: "School",
+  RESTAURANT: "Restaurant",
+};
+
+// One cleaner slot (profile) on a site — mirrors backend SiteCleanerProfileResponse.
+export const SiteCleanerProfileSchema = z.object({
+  id: z.string().uuid(),
+  profileIndex: z.number(),
+  label: z.string(),
+  cleanerId: z.string().uuid().nullable().optional(),
+  cleanerName: z.string().nullable().optional(),
+});
+export type SiteCleanerProfile = z.infer<typeof SiteCleanerProfileSchema>;
+
+// One cleaning-schedule template mapped to a site — mirrors backend CleaningTemplateResponse.
+export const SiteCleaningTemplateSchema = z.object({
+  id: z.string().uuid(),
+  templateId: z.string().uuid(),
+  templateName: z.string().nullable().optional(),
+  profileIndexes: z.array(z.number()).default([]),
+});
+export type SiteCleaningTemplate = z.infer<typeof SiteCleaningTemplateSchema>;
+
 // Mirrors backend SiteResponse.
 export const SiteSchema = z.object({
   id: z.string().uuid(),
@@ -23,6 +66,8 @@ export const SiteSchema = z.object({
   clientId: z.string().uuid(),
   clientName: z.string(),
   name: z.string(),
+  siteType: SiteTypeSchema.default("GENERAL"),
+  numberOfCleaners: z.number().default(0),
   contactPersonName: z.string().nullable().optional(),
   contactNumber: z.string().nullable().optional(),
   googleMapsLink: z.string().nullable().optional(),
@@ -35,6 +80,10 @@ export const SiteSchema = z.object({
   startDate: z.string().nullable().optional(), // ISO date (yyyy-MM-dd)
   endDate: z.string().nullable().optional(),
   workingDays: z.array(DayOfWeekSchema).default([]),
+  generalTaskStartTime: z.string().nullable().optional(),
+  generalTaskEndTime: z.string().nullable().optional(),
+  cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
+  cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
@@ -47,6 +96,12 @@ export const SiteFormSchema = z
     clientCompanyId: z.string().uuid("Please select a client-company"),
     clientId: z.string().uuid("Please select a client"),
     name: z.string().min(2, "Name must be at least 2 characters").max(150, "Name is too long"),
+    siteType: SiteTypeSchema,
+    numberOfCleaners: z
+      .number()
+      .int()
+      .min(0, "Cannot be negative")
+      .max(100, "That is too many cleaners"),
     contactPersonName: z.string().max(120, "Name is too long").optional().or(z.literal("")),
     contactNumber: optionalAuPhoneSchema,
     googleMapsLink: z.string().max(2048, "Link is too long").optional().or(z.literal("")),
@@ -63,6 +118,14 @@ export const SiteFormSchema = z
     startDate: z.string().optional().or(z.literal("")),
     endDate: z.string().optional().or(z.literal("")),
     workingDays: z.array(DayOfWeekSchema),
+    generalTaskStartTime: z.string().optional().or(z.literal("")),
+    generalTaskEndTime: z.string().optional().or(z.literal("")),
+    cleaningTemplates: z.array(
+      z.object({
+        templateId: z.string().uuid("Please select a template"),
+        profileIndexes: z.array(z.number().int()),
+      }),
+    ),
   })
   .superRefine((val, ctx) => {
     if (val.startDate && val.endDate && val.endDate < val.startDate) {
@@ -71,6 +134,20 @@ export const SiteFormSchema = z
         message: "End date cannot be before the start date",
         path: ["endDate"],
       });
+    }
+    const timePairs: [keyof typeof val, keyof typeof val][] = [
+      ["generalTaskStartTime", "generalTaskEndTime"],
+    ];
+    for (const [startKey, endKey] of timePairs) {
+      const start = val[startKey] as string | undefined;
+      const end = val[endKey] as string | undefined;
+      if (start && end && end < start) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "End time cannot be before the start time",
+          path: [endKey as string],
+        });
+      }
     }
   });
 

@@ -12,8 +12,12 @@ import {
   InventoryRequestSchema,
   InventoryDeliveryListSchema,
   InventoryDeliverySchema,
+  CleanerInventorySchema,
+  InventoryStatsSchema,
+  InventoryBatchListSchema,
   type ItemFormInput,
   type RequestStatus,
+  type RequestType,
   type DeliveryStatus,
 } from "@/features/inventory/schemas/inventory.schema";
 
@@ -25,6 +29,9 @@ export const inventoryKeys = {
   transactions: (filters: string) => [...inventoryKeys.all, "transactions", filters] as const,
   requests: (filters: string) => [...inventoryKeys.all, "requests", filters] as const,
   deliveries: (filters: string) => [...inventoryKeys.all, "deliveries", filters] as const,
+  cleanerInventory: (cleanerId: string) => [...inventoryKeys.all, "cleaner", cleanerId] as const,
+  stats: () => [...inventoryKeys.all, "stats"] as const,
+  batches: (itemId: string) => [...inventoryKeys.all, "batches", itemId] as const,
 };
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
@@ -165,7 +172,13 @@ export function useRequests(filters: { status?: RequestStatus; siteId?: string }
 export function useCreateRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { siteId: string; note?: string; lines: RequestLineInput[] }) => {
+    mutationFn: async (input: {
+      siteId: string;
+      requestType?: RequestType;
+      cleanerId?: string;
+      note?: string;
+      lines: RequestLineInput[];
+    }) => {
       const { data } = await clientApi.post(ENDPOINTS.inventory.requests, input);
       return InventoryRequestSchema.parse(data);
     },
@@ -242,5 +255,51 @@ export function useCancelDelivery() {
       return InventoryDeliverySchema.parse(data);
     },
     onSuccess: () => invalidateAll(qc),
+  });
+}
+
+// ── Cleaner inventory ───────────────────────────────────────────────────────────
+
+export function useCleanerInventory(cleanerId: string | undefined) {
+  return useQuery({
+    queryKey: inventoryKeys.cleanerInventory(cleanerId ?? "none"),
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.cleanerInventory(cleanerId!));
+      return CleanerInventorySchema.parse(data);
+    },
+    enabled: !!cleanerId,
+  });
+}
+
+export function useMyCleanerInventory() {
+  return useQuery({
+    queryKey: inventoryKeys.cleanerInventory("me"),
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.cleanerInventoryMine);
+      return CleanerInventorySchema.parse(data);
+    },
+  });
+}
+
+// ── Expiry stats & batches ──────────────────────────────────────────────────────
+
+export function useInventoryStats() {
+  return useQuery({
+    queryKey: inventoryKeys.stats(),
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.stats);
+      return InventoryStatsSchema.parse(data);
+    },
+  });
+}
+
+export function useItemBatches(itemId: string | undefined) {
+  return useQuery({
+    queryKey: inventoryKeys.batches(itemId ?? "none"),
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.itemBatches(itemId!));
+      return InventoryBatchListSchema.parse(data);
+    },
+    enabled: !!itemId,
   });
 }

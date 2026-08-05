@@ -37,6 +37,9 @@ export const ENDPOINTS = {
     byId:   (id: string) => `/sites/${id}`,
     supervisors: (id: string) => `/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/sites/${id}/cleaners`,
+    cleanerProfiles: (id: string) => `/sites/${id}/cleaner-profiles`,
+    cleaningTemplates: (id: string) => `/sites/${id}/cleaning-templates`,
+    cleaningCheckIn: (id: string) => `/sites/${id}/cleaning-schedule/check-in`,
   },
   floors: {
     list:   "/floors",
@@ -69,6 +72,7 @@ export const ENDPOINTS = {
     create:      "/assignments",
     occurrences: "/assignments/occurrences",
     stats:       "/assignments/stats",
+    taskNames:   "/assignments/task-names",
     byId:        (id: string) => `/assignments/${id}`,
     occurrence:  (taskId: string, date: string) => `/assignments/tasks/${taskId}/occurrences/${date}`,
   },
@@ -76,6 +80,11 @@ export const ENDPOINTS = {
     list:   "/assignment-drafts",
     create: "/assignment-drafts",
     byId:   (id: string) => `/assignment-drafts/${id}`,
+  },
+  taskTemplates: {
+    list:   "/task-templates",
+    create: "/task-templates",
+    byId:   (id: string) => `/task-templates/${id}`,
   },
   inventory: {
     items:        "/inventory/items",
@@ -91,6 +100,26 @@ export const ENDPOINTS = {
     deliveries:   "/inventory/deliveries",
     deliveryById: (id: string) => `/inventory/deliveries/${id}`,
     deliveryAction: (id: string, action: string) => `/inventory/deliveries/${id}/${action}`,
+    cleanerInventoryMine: "/inventory/cleaners/me",
+    cleanerInventory: (cleanerId: string) => `/inventory/cleaners/${cleanerId}`,
+    stats:        "/inventory/stats",
+    itemBatches:  (id: string) => `/inventory/items/${id}/batches`,
+  },
+  suppliers: {
+    list:   "/suppliers",
+    create: "/suppliers",
+    byId:   (id: string) => `/suppliers/${id}`,
+  },
+  purchaseOrders: {
+    list:   "/purchase-orders",
+    create: "/purchase-orders",
+    byId:   (id: string) => `/purchase-orders/${id}`,
+    cancel: (id: string) => `/purchase-orders/${id}/cancel`,
+  },
+  goodsReceipts: {
+    list:   "/goods-receipts",
+    create: "/goods-receipts",
+    byId:   (id: string) => `/goods-receipts/${id}`,
   },
   notifications: {
     list:        "/notifications",
@@ -158,6 +187,9 @@ export const BACKEND = {
     byId:   (id: string) => `/api/v1/sites/${id}`,
     supervisors: (id: string) => `/api/v1/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/api/v1/sites/${id}/cleaners`,
+    cleanerProfiles: (id: string) => `/api/v1/sites/${id}/cleaner-profiles`,
+    cleaningTemplates: (id: string) => `/api/v1/sites/${id}/cleaning-templates`,
+    cleaningCheckIn: (id: string) => `/api/v1/sites/${id}/cleaning-schedule/check-in`,
   },
   floors: {
     list:   "/api/v1/floors",
@@ -190,6 +222,7 @@ export const BACKEND = {
     create:      "/api/v1/assignments",
     occurrences: "/api/v1/assignments/occurrences",
     stats:       "/api/v1/assignments/stats",
+    taskNames:   "/api/v1/assignments/task-names",
     byId:        (id: string) => `/api/v1/assignments/${id}`,
     occurrence:  (taskId: string, date: string) => `/api/v1/assignments/tasks/${taskId}/occurrences/${date}`,
   },
@@ -197,6 +230,11 @@ export const BACKEND = {
     list:   "/api/v1/assignment-drafts",
     create: "/api/v1/assignment-drafts",
     byId:   (id: string) => `/api/v1/assignment-drafts/${id}`,
+  },
+  taskTemplates: {
+    list:   "/api/v1/task-templates",
+    create: "/api/v1/task-templates",
+    byId:   (id: string) => `/api/v1/task-templates/${id}`,
   },
   inventory: {
     items:        "/api/v1/inventory/items",
@@ -212,6 +250,26 @@ export const BACKEND = {
     deliveries:   "/api/v1/inventory/deliveries",
     deliveryById: (id: string) => `/api/v1/inventory/deliveries/${id}`,
     deliveryAction: (id: string, action: string) => `/api/v1/inventory/deliveries/${id}/${action}`,
+    cleanerInventoryMine: "/api/v1/inventory/cleaners/me",
+    cleanerInventory: (cleanerId: string) => `/api/v1/inventory/cleaners/${cleanerId}`,
+    stats:        "/api/v1/inventory/stats",
+    itemBatches:  (id: string) => `/api/v1/inventory/items/${id}/batches`,
+  },
+  suppliers: {
+    list:   "/api/v1/suppliers",
+    create: "/api/v1/suppliers",
+    byId:   (id: string) => `/api/v1/suppliers/${id}`,
+  },
+  purchaseOrders: {
+    list:   "/api/v1/purchase-orders",
+    create: "/api/v1/purchase-orders",
+    byId:   (id: string) => `/api/v1/purchase-orders/${id}`,
+    cancel: (id: string) => `/api/v1/purchase-orders/${id}/cancel`,
+  },
+  goodsReceipts: {
+    list:   "/api/v1/goods-receipts",
+    create: "/api/v1/goods-receipts",
+    byId:   (id: string) => `/api/v1/goods-receipts/${id}`,
   },
   notifications: {
     list:        "/api/v1/notifications",

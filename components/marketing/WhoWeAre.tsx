@@ -45,7 +45,7 @@ export function WhoWeAre() {
         </span>
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-16">
           <p data-reveal className="text-2xl font-semibold leading-snug sm:text-[28px]">
-            We are a Commercial Cleaning Company based in Victoria, Australia.
+            We are a Commercial Cleaning Company based in Australia.
           </p>
           <p data-reveal className="text-lg font-semibold italic leading-relaxed text-white/90 sm:text-xl">
             &ldquo;Our company brings extensive experience in delivering commercial cleaning services
