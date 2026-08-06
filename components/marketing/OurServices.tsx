@@ -77,24 +77,49 @@ export function OurServices() {
       const cards = scene?.querySelectorAll<HTMLElement>("[data-service-card]") ?? [];
       if (!scene || cards.length === 0) return;
 
-      // Deltas are a share of the scene box, so they stay correct at any width;
-      // `invalidateOnRefresh` re-measures them when the viewport changes.
-      cards.forEach((card, i) => {
-        const spec = SERVICES[i]!;
-        gsap.from(card, {
-          x: () => (scene.clientWidth * (spec.start.x - spec.settled.x)) / 100,
-          y: () => (scene.clientHeight * (spec.start.y - spec.settled.y)) / 100,
-          scale: 0.78,
+      // The fan-out is choreography for the scattered `lg` canvas: in the
+      // stacked grid its deltas are shares of a scene box that no longer
+      // exists, and would throw each card in from well off-screen.
+      //
+      // `matchMedia` rather than a React media-query hook. The hook would make
+      // the breakpoint a dependency of the whole effect, so the first paint
+      // would build one set of tweens and the resolved query would immediately
+      // revert and rebuild them — taking the reveal above down with it.
+      const mm = gsap.matchMedia();
+
+      mm.add("(min-width: 64rem)", () => {
+        // Deltas are a share of the scene box, so they stay correct at any
+        // width; `invalidateOnRefresh` re-measures on viewport change.
+        cards.forEach((card, i) => {
+          const spec = SERVICES[i]!;
+          gsap.from(card, {
+            x: () => (scene.clientWidth * (spec.start.x - spec.settled.x)) / 100,
+            y: () => (scene.clientHeight * (spec.start.y - spec.settled.y)) / 100,
+            scale: 0.78,
+            opacity: 0,
+            duration: 1,
+            ease: "power3.out",
+            delay: i * 0.08,
+            scrollTrigger: {
+              trigger: scene,
+              start: "top 68%",
+              once: true,
+              invalidateOnRefresh: true,
+            },
+          });
+        });
+      });
+
+      mm.add("(max-width: 63.999rem)", () => {
+        // Stacked: the cards simply rise into place with the rest of the copy.
+        gsap.from(cards, {
           opacity: 0,
-          duration: 1,
-          ease: "power3.out",
-          delay: i * 0.08,
-          scrollTrigger: {
-            trigger: scene,
-            start: "top 68%",
-            once: true,
-            invalidateOnRefresh: true,
-          },
+          y: 48,
+          scale: 0.94,
+          duration: 0.7,
+          ease: "power2.out",
+          stagger: 0.1,
+          scrollTrigger: { trigger: scene, start: "top 85%", once: true },
         });
       });
     },
@@ -143,25 +168,37 @@ export function OurServices() {
             range of industries.
           </p>
 
-          <ul className="mt-4 grid grid-cols-1 justify-items-center gap-x-8 gap-y-12 sm:grid-cols-2 lg:contents">
+          {/* Two columns from the smallest screen up. One column left each card
+              at its floor width, marooned in the middle of a very tall list;
+              paired, they fill the row and the section reads at a third of the
+              length. */}
+          <ul className="mt-4 grid w-full max-w-[34rem] grid-cols-2 justify-items-center gap-x-4 gap-y-8 sm:gap-x-8 sm:gap-y-10 lg:contents">
             {SERVICES.map((service) => (
               <li
                 key={service.service}
                 // On `lg` each item collapses to a zero-size anchor at its Figma
                 // coordinate and centres the card on that point — the same trick
                 // the design uses, and it keeps `left`/`top` free of transforms.
-                className="lg:absolute lg:flex lg:size-0 lg:items-center lg:justify-center"
+                // `max-lg:` for the stacked widths rather than an `lg:` reset:
+                // `lg:w-auto` and `lg:size-0` carry the same specificity, so
+                // which one won came down to stylesheet order.
+                className="max-lg:w-full lg:absolute lg:flex lg:size-0 lg:items-center lg:justify-center"
                 style={{ left: `${service.settled.x}%`, top: `${service.settled.y}%` }}
               >
                 {/* Outer box is GSAP's (translate/scale/fade), inner box holds
-                    the static tilt so the fly-in path is never skewed by it. */}
-                <div data-service-card>
-                  <div style={{ transform: `rotate(${service.rotate}deg)` }}>
+                    the static tilt so the fly-in path is never skewed by it.
+                    The tilt is a canvas flourish — in the grid it would only
+                    knock the rows out of alignment, so it starts at `lg`. */}
+                <div data-service-card className="max-lg:w-full">
+                  <div
+                    className="rotate-0 lg:rotate-[var(--card-rotate)]"
+                    style={{ ["--card-rotate" as string]: `${service.rotate}deg` }}
+                  >
                     <ServiceCard
                       image={service.image}
                       label={service.label}
                       service={service.service}
-                      className="transition-transform duration-300 hover:scale-[1.04] motion-reduce:transition-none motion-reduce:hover:scale-100"
+                      className="max-lg:w-full max-lg:max-w-[13rem] transition-transform duration-300 hover:scale-[1.04] motion-reduce:transition-none motion-reduce:hover:scale-100"
                     />
                   </div>
                 </div>

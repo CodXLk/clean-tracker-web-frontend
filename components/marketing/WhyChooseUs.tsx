@@ -94,8 +94,20 @@ export function WhyChooseUs() {
         </div>
       </div>
 
+      {/* Same reasoning as Industries: on the `lg` canvas the copy occupies the
+          right half, clear of the tower. Stacked it runs straight over the
+          glass and the plaza, so the tower is banked down behind a scrim at
+          those sizes. Outside the parallaxed wrapper above, so it stays put
+          while the tower drifts. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-atmos-top/90 via-atmos-top/80 to-atmos-top/40 lg:hidden"
+      />
+
       <div className="relative mx-auto w-full max-w-[1512px] px-[max(1.25rem,2.712vw)]">
-        <div className="flex min-h-[100svh] flex-col justify-center py-24 lg:aspect-[1512/982] lg:block lg:min-h-0 lg:py-0">
+        {/* As in Industries: the full-viewport beat is `lg` pacing. Stacked, it
+            padded three short points out to a screenful. */}
+        <div className="flex min-h-0 flex-col justify-center py-20 sm:py-24 lg:aspect-[1512/982] lg:block lg:py-0">
           <SectionHeading
             id="why-choose-us-heading"
             lead="Why Choose"

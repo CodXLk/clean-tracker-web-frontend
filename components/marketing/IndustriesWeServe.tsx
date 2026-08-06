@@ -139,12 +139,21 @@ export function IndustriesWeServe() {
               className="object-contain object-top"
             />
           </div>
+          {/* On the `lg` canvas the copy sits in clear sky to the left of the
+              tower. Once the layout stacks there is no "beside" left and the
+              paragraph lands straight on the glass, where white text and orange
+              highlights both disappear. A scrim under the text — and only at
+              those sizes — restores the contrast without touching the scene. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-atmos-top via-atmos-top/90 to-atmos-top/45 lg:hidden" />
         </div>
       </div>
 
       <div className="relative mx-auto w-full max-w-[1512px]">
-        {/* Beat one — heading and body copy, tower to the right. */}
-        <div className="flex min-h-[100svh] flex-col justify-center px-[max(1.25rem,2.183vw)] py-24 lg:py-0">
+        {/* Beat one — heading and body copy, tower to the right. Full-viewport
+            beats are what give the `lg` scene its cinematic pacing; stacked,
+            the same rule padded a short paragraph out to a screenful and left
+            large empty bands between sections. */}
+        <div className="flex min-h-0 flex-col justify-center px-[max(1.25rem,2.183vw)] py-20 sm:py-24 lg:min-h-[100svh] lg:py-0">
           <SectionHeading
             id="industries-heading"
             lead="Industries"
@@ -173,7 +182,7 @@ export function IndustriesWeServe() {
             the whole 1512 canvas, not of a padded content box. */}
         <div
           ref={diamondsRef}
-          className="relative flex min-h-[100svh] items-center px-[max(1.25rem,2.183vw)] py-24 lg:aspect-[1512/982] lg:block lg:min-h-0 lg:px-0 lg:py-0"
+          className="relative flex min-h-0 items-center px-[max(1.25rem,2.183vw)] pb-20 sm:pb-24 lg:aspect-[1512/982] lg:block lg:px-0 lg:py-0"
         >
           <h3 className="sr-only">Industries Primeway serves</h3>
           <ul className="grid w-full grid-cols-2 justify-items-center gap-x-6 gap-y-10 sm:grid-cols-3 lg:contents">

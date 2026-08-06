@@ -64,8 +64,10 @@ export function WhoWeAre() {
       data-nav-theme="light"
       aria-labelledby="who-we-are-heading"
       // Figma seats the card 149px below the top of its 982px frame; the
-      // shallower foot is what carries into the white Services scene.
-      className="relative pt-[clamp(4rem,9.855vw,9.3125rem)] pb-[clamp(2.5rem,5vw,4.75rem)]"
+      // shallower foot is what carries into the white Services scene. The floor
+      // on that top padding is what keeps the title clear of the fixed navbar
+      // on small screens, where 9.855vw is only a few dozen pixels.
+      className="relative pt-[clamp(5.5rem,9.855vw,9.3125rem)] pb-[clamp(2.5rem,5vw,4.75rem)]"
     >
       <svg aria-hidden="true" className="absolute size-0" focusable="false">
         <clipPath id="who-we-are-notch" clipPathUnits="objectBoundingBox">
@@ -96,6 +98,15 @@ export function WhoWeAre() {
               fill
               sizes="(max-width: 1024px) 100vw, 95vw"
               className="object-cover object-bottom"
+            />
+
+            {/* From `lg` the copy sits in the empty sky at the top of the plate
+                and needs no help. Stacked below that it crosses the dome itself,
+                where white on pale glass is unreadable — so the photo is banked
+                down behind a scrim at those sizes only. */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/35 to-black/15 lg:hidden"
             />
 
             {/* Below `lg` the two paragraphs flow; from `lg` this box stretches

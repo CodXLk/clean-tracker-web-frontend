@@ -18,7 +18,11 @@ export function IndustryCard({ icon, label, tone, className }: IndustryCardProps
   return (
     <div
       className={cn(
-        "group relative aspect-square w-[clamp(4.5rem,8.598vw,8.125rem)] rotate-45 overflow-hidden",
+        // The floor matters more than the fluid step here: 8.598vw is only
+        // ~34px on a phone, so every small screen sits on the minimum. A tile
+        // has to be big enough to hold a two-word label legibly once it is
+        // turned 45 degrees and the text is inset from the corners.
+        "group relative aspect-square w-[clamp(5rem,8.598vw,8.125rem)] rotate-45 overflow-hidden",
         "rounded-[clamp(0.625rem,1.06vw,1rem)] transition-transform duration-300",
         "shadow-[0_4px_6px_-4px_rgba(0,0,0,0.25),0_10px_15px_-3px_rgba(0,0,0,0.1)]",
         "hover:scale-105 focus-within:scale-105 motion-reduce:transition-none motion-reduce:hover:scale-100",
@@ -30,7 +34,7 @@ export function IndustryCard({ icon, label, tone, className }: IndustryCardProps
         <span className="relative block w-[clamp(1.5rem,2.78vw,2.625rem)] shrink-0 aspect-square">
           <Image src={icon} alt="" fill sizes="42px" className="object-contain" />
         </span>
-        <span className="font-body text-[clamp(0.5rem,0.992vw,0.9375rem)] font-semibold leading-tight text-white">
+        <span className="font-body text-[clamp(0.6875rem,0.992vw,0.9375rem)] font-semibold leading-tight text-white">
           {label}
         </span>
       </div>

@@ -80,10 +80,15 @@ export function HeroScene() {
         scrollTrigger: {
           trigger: sceneRef.current,
           start: "top top",
-          end: "+=300%",
+          // Three viewports of scroll suits a wide screen, where the scene has
+          // room to read. On a phone the same distance is four screenfuls of
+          // sky before the page begins, so the beats are given proportionally
+          // less room. Resolved on refresh so rotating the device re-measures.
+          end: () => (window.innerWidth < 1024 ? "+=170%" : "+=300%"),
           scrub: 1,
           pin: true,
           anticipatePin: 1,
+          invalidateOnRefresh: true,
         },
       });
 
@@ -147,7 +152,9 @@ export function HeroScene() {
       ref={sceneRef}
       data-nav-theme="light"
       aria-label="Introduction"
-      className="relative h-screen min-h-[36rem] w-full overflow-hidden bg-atmos-top"
+      // `svh` rather than `vh`: on mobile the collapsing URL bar would otherwise
+      // change the scene height mid-scroll and drag every pinned offset with it.
+      className="relative h-[100svh] min-h-[30rem] w-full overflow-hidden bg-atmos-top"
     >
       {/* Sky plate — Figma places the skyline photo at 2767x1557, offset to
           (-805, -267) on the 1512x982 canvas. */}
@@ -226,49 +233,59 @@ export function HeroScene() {
         </div>
       </div>
 
-      {/* Hero building — 540x968 at (487, 263). */}
-      <div
-        ref={buildingRef}
-        className="absolute z-10 origin-center will-change-transform"
-        style={{
-          left:   pct(487, CANVAS_W),
-          top:    pct(263, CANVAS_H),
-          width:  pct(540, CANVAS_W),
-          height: pct(968, CANVAS_H),
-        }}
-      >
-        <Image
-          src="/images/marketing/hero/building.webp"
-          alt="A high-rise residential building serviced by Primeway, with one window open"
-          fill
-          priority
-          sizes="36vw"
-          className="object-contain object-top"
-        />
-      </div>
+      {/* Tower and headline.
+          On the Figma canvas (from `lg`) the two are placed independently, the
+          headline reading either side of the tower. Below that there is no
+          "either side" — and positioning them independently meant that for any
+          given viewport ratio they might or might not collide, which they did
+          at 320x568, 768x1024, 1023x800 and others.
+          So beneath `lg` they share a column: the tower takes whatever height is
+          left over (`flex-1`, letterboxed inside it by `object-contain`) and the
+          headline takes what it needs underneath. They cannot overlap at any
+          ratio because they are no longer independent. From `lg` the wrapper is
+          `display: contents` and both revert to their canvas coordinates. */}
+      <div className="absolute inset-0 flex flex-col items-center justify-end gap-[3%] px-5 pb-[7%] pt-[13%] lg:contents">
+        <div
+          ref={buildingRef}
+          className={
+            "relative z-10 min-h-0 w-[64%] flex-1 origin-center will-change-transform " +
+            "sm:w-[52%] " +
+            "lg:absolute lg:left-[32.209%] lg:top-[26.782%] lg:h-[98.574%] lg:w-[35.714%] lg:flex-none"
+          }
+        >
+          <Image
+            src="/images/marketing/hero/building.webp"
+            alt="A high-rise residential building serviced by Primeway, with one window open"
+            fill
+            priority
+            sizes="(max-width: 640px) 64vw, (max-width: 1024px) 52vw, 36vw"
+            className="object-contain object-bottom lg:object-top"
+          />
+        </div>
 
-      {/* Split headline — 90px ExtraBold either side of the building. `contents`
-          keeps it one accessible heading while each half is placed on canvas. */}
-      <h1 ref={headlineRef} className="contents">
-        <span
-          data-headline-part
-          className="pointer-events-none absolute z-20 font-heading text-hero font-extrabold leading-[1.08] tracking-tight text-accent will-change-transform"
-          style={{ left: pct(59, CANVAS_W), top: pct(461, CANVAS_H) }}
+        {/* Split headline — 90px ExtraBold either side of the building. Each
+            half sets on one line when stacked, wrapping to two only when the
+            screen is too narrow even for that. */}
+        <h1
+          ref={headlineRef}
+          className="pointer-events-none z-20 flex w-full flex-col items-center gap-[0.08em] text-center lg:contents"
         >
-          YOUR
-          <br />
-          SUCCESS
-        </span>
-        <span
-          data-headline-part
-          className="pointer-events-none absolute z-20 text-right font-heading text-hero font-extrabold leading-[1.08] tracking-tight text-accent will-change-transform"
-          style={{ right: pct(41, CANVAS_W), top: pct(461, CANVAS_H) }}
-        >
-          OUR
-          <br />
-          BUSINESS
-        </span>
-      </h1>
+          <span
+            data-headline-part
+            className="font-heading text-[clamp(2rem,8vw,3.5rem)] font-extrabold leading-[1.08] tracking-tight text-accent will-change-transform lg:pointer-events-none lg:absolute lg:z-20 lg:text-hero lg:left-[3.902%] lg:top-[46.945%] lg:text-left"
+          >
+            YOUR <br className="hidden lg:inline" />
+            SUCCESS
+          </span>
+          <span
+            data-headline-part
+            className="font-heading text-[clamp(2rem,8vw,3.5rem)] font-extrabold leading-[1.08] tracking-tight text-accent will-change-transform lg:pointer-events-none lg:absolute lg:z-20 lg:text-hero lg:right-[2.712%] lg:top-[46.945%] lg:text-right"
+          >
+            OUR <br className="hidden lg:inline" />
+            BUSINESS
+          </span>
+        </h1>
+      </div>
     </section>
   );
 }
