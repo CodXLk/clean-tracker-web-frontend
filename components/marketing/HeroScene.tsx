@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 const CANVAS_W = 1512;
@@ -47,6 +47,34 @@ export function HeroScene() {
         headlineRef.current?.querySelectorAll<HTMLElement>("[data-headline-part]") ?? [];
 
       gsap.set(markRef.current, { opacity: 1 });
+
+      // Pinning the hero adds a spacer three viewports tall, which the document
+      // does not have until this callback runs. A reload restores the previous
+      // scroll offset *before* that — against a document 3 viewports shorter —
+      // so the restored offset ends up pointing three viewports higher in the
+      // finished page, dropping the visitor into the wrong section with the
+      // timeline stuck mid-scrub. Only the top of the page means the same thing
+      // before and after the spacer exists, so that is where a reload starts.
+      //
+      // Next's router owns this property and resets it to "auto" shortly after
+      // mount, so setting it once here does not survive. It is only ever read
+      // as the page is being unloaded, which is where we assert it instead.
+      // The mode belongs to this history entry alone, so nothing leaks to the
+      // pages the visitor moves on to.
+      const keepPlaceOut = () => {
+        if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+      };
+      // `pagehide` rather than `beforeunload`: the latter would make the page
+      // ineligible for the back/forward cache, which is too high a price.
+      keepPlaceOut();
+      window.addEventListener("pagehide", keepPlaceOut);
+
+      // Late-arriving layout inputs — a web font swapping in, a hero image
+      // decoding — shift every trigger measured before them. Re-measure once
+      // they have settled rather than leaving the offsets stale.
+      const refresh = () => ScrollTrigger.refresh();
+      document.fonts?.ready.then(refresh).catch(() => {});
+      window.addEventListener("load", refresh, { once: true });
 
       const tl = gsap.timeline({
         scrollTrigger: {
@@ -104,6 +132,11 @@ export function HeroScene() {
       // plate crossfades to the flat atmosphere the next section sits on.
       tl.to(buildingRef.current, { scale: 5.2, opacity: 0, duration: 1.1, ease: "power1.in" }, 2.5);
       tl.to(skyRef.current, { opacity: 0, duration: 0.9, ease: "power1.in" }, 2.6);
+
+      return () => {
+        window.removeEventListener("load", refresh);
+        window.removeEventListener("pagehide", keepPlaceOut);
+      };
     },
     { scope: sceneRef, dependencies: [reduceMotion] },
   );
@@ -169,21 +202,28 @@ export function HeroScene() {
         ))}
       </div>
 
-      {/* Loading Scene mark — 460x450, centred. Hidden unless the timeline runs. */}
+      {/* Loading Scene mark — 460x450, centred. Hidden unless the timeline runs.
+          Centring sits on the outer box and the timeline drives the inner one.
+          Tailwind centres with the `translate` property, which GSAP has to fold
+          into its own matrix and then clear the moment it takes the element
+          over; if it reads that property before the stylesheet has applied
+          there is nothing to fold, and the centring is lost for good. Keeping
+          the two on separate elements means GSAP never has to consume it. */}
       <div
-        ref={markRef}
         aria-hidden="true"
-        className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 opacity-0 will-change-transform"
+        className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
         style={{ width: pct(460, CANVAS_W) }}
       >
-        <Image
-          src="/images/marketing/brand/logomark.png"
-          alt=""
-          width={920}
-          height={900}
-          priority
-          className="h-auto w-full"
-        />
+        <div ref={markRef} className="opacity-0 will-change-transform">
+          <Image
+            src="/images/marketing/brand/logomark.png"
+            alt=""
+            width={920}
+            height={900}
+            priority
+            className="h-auto w-full"
+          />
+        </div>
       </div>
 
       {/* Hero building — 540x968 at (487, 263). */}
