@@ -2,44 +2,61 @@ import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 
 interface IndustryCardProps {
-  icon:      string;
-  label:     string;
-  color:     "teal" | "orange";
+  icon: string;
+  label: string;
+  tone: "teal" | "orange";
   className?: string;
 }
 
-export function IndustryCard({ icon, label, color, className }: IndustryCardProps) {
+/**
+ * A 130x130 rounded square rotated 45° into a diamond, with its icon and label
+ * counter-rotated so they read level — the industry tile from Figma's
+ * "Industries" scenes. Hovering (or focusing) swaps in the photo-and-orange
+ * "on" variant from the same file.
+ */
+export function IndustryCard({ icon, label, tone, className }: IndustryCardProps) {
   return (
     <div
-      data-industry-card
       className={cn(
-        "group relative size-[130px] shrink-0 rotate-45 overflow-hidden rounded-2xl shadow-lg",
-        color === "teal" ? "bg-primary" : "bg-[#ED5F25]",
+        // The floor matters more than the fluid step here: 8.598vw is only
+        // ~34px on a phone, so every small screen sits on the minimum. A tile
+        // has to be big enough to hold a two-word label legibly once it is
+        // turned 45 degrees and the text is inset from the corners.
+        "group relative aspect-square w-[clamp(5rem,8.598vw,8.125rem)] rotate-45 overflow-hidden",
+        "rounded-[clamp(0.625rem,1.06vw,1rem)] transition-transform duration-300",
+        "shadow-[0_4px_6px_-4px_rgba(0,0,0,0.25),0_10px_15px_-3px_rgba(0,0,0,0.1)]",
+        "hover:scale-105 focus-within:scale-105 motion-reduce:transition-none motion-reduce:hover:scale-100",
+        tone === "teal" ? "bg-primary" : "bg-accent",
         className,
       )}
     >
-      {/* Resting state: icon + label */}
-      <div className="absolute inset-0 flex -rotate-45 flex-col items-center justify-center gap-2 px-4 text-center transition-opacity duration-300 group-hover:opacity-0">
-        <div className="relative size-8">
-          <Image src={icon} alt="" fill sizes="32px" className="object-contain" />
-        </div>
-        <p className="font-['Inter'] text-[13px] font-semibold leading-tight text-white">{label}</p>
+      <div className="absolute inset-0 flex -rotate-45 flex-col items-center justify-center gap-[6%] px-[8%] text-center transition-opacity duration-300 group-hover:opacity-0 group-focus-within:opacity-0">
+        <span className="relative block w-[clamp(1.5rem,2.78vw,2.625rem)] shrink-0 aspect-square">
+          <Image src={icon} alt="" fill sizes="42px" className="object-contain" />
+        </span>
+        <span className="font-body text-[clamp(0.6875rem,0.992vw,0.9375rem)] font-semibold leading-tight text-white">
+          {label}
+        </span>
       </div>
 
-      {/* Hover state: architectural photo + orange tint + caption */}
-      <div className="absolute inset-0 -rotate-45 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-        <div className="relative size-[184px] -translate-x-[27px] -translate-y-[27px]">
+      {/* Hover state: the tile's photo under a 60% accent wash. It has to be
+          over-sized and re-centred because the wrapper carries the 45° turn. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <div className="absolute left-1/2 top-1/2 aspect-square w-[142%] -translate-x-1/2 -translate-y-1/2 -rotate-45">
           <Image
-            src="/images/marketing/industries/architectural-bg.jpg"
+            src="/images/marketing/industries/card-hover.jpg"
             alt=""
             fill
-            sizes="184px"
+            sizes="190px"
             className="object-cover"
           />
-          <div className="absolute inset-0 bg-[#ED5F25]/60" />
-          <p className="absolute inset-0 flex items-center justify-center px-5 text-center font-['Inter'] text-[11px] font-semibold leading-tight text-white">
+          <span className="absolute inset-0 bg-accent/60" />
+          <span className="absolute inset-0 flex items-center justify-center px-[12%] text-center font-body text-[clamp(0.5rem,0.86vw,0.8125rem)] font-semibold leading-tight text-white">
             Customize best practices to various industries
-          </p>
+          </span>
         </div>
       </div>
     </div>
