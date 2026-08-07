@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
+import { SiteSelector } from "@/components/shared/SiteSelector";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
@@ -70,6 +71,31 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     { site: CleanerSite; tasks: TaskOccurrence[] } | null
   >(null);
   const [confirming, setConfirming] = useState(false);
+
+  const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
+
+  // Only offer sites with tasks scheduled today — plus whichever site the cleaner is
+  // already checked into, so they're never blocked from checking out just because
+  // today's tasks there are all done.
+  const sitesWithTasksToday = useMemo(
+    () => new Set(todayTasks.map((t) => t.siteId)),
+    [todayTasks],
+  );
+  const visibleSites = useMemo(
+    () => sites.filter((s) => sitesWithTasksToday.has(s.siteId) || s.siteId === checkedInSiteId),
+    [sites, sitesWithTasksToday, checkedInSiteId],
+  );
+
+  // Which of the cleaner's visible sites this single card/slider acts on. Defaults to
+  // the checked-in site, but the cleaner can switch via the selector when they have more
+  // than one.
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [siteTouched, setSiteTouched] = useState(false);
+
+  useEffect(() => {
+    if (siteTouched) return;
+    setSelectedSiteId(checkedInSiteId ?? visibleSites[0]?.siteId ?? null);
+  }, [checkedInSiteId, visibleSites, siteTouched]);
 
   function bumpReset(siteId: string) {
     setResetKeys((prev) => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }));
@@ -152,105 +178,125 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
+  if (visibleSites.length === 0) {
+    return (
+      <p className="rounded-2xl bg-white/50 px-4 py-6 text-center text-sm text-grey-500">
+        No tasks scheduled for you today — nothing to check in for.
+      </p>
+    );
+  }
+
+  const site = visibleSites.find((s) => s.siteId === selectedSiteId) ?? visibleSites[0];
+  const error = errors[site.siteId];
+  const resetKey = resetKeys[site.siteId] ?? 0;
+  const checkedIn = site.status === "CHECKED_IN";
+  const checkedOut = site.status === "CHECKED_OUT";
+  const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
+
   return (
     <div className="flex flex-col gap-3">
-      {sites.map((site) => {
-        const error = errors[site.siteId];
-        const resetKey = resetKeys[site.siteId] ?? 0;
-        const checkedIn = site.status === "CHECKED_IN";
-        const checkedOut = site.status === "CHECKED_OUT";
-        const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
-
-        return (
-          <div key={site.siteId} className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
+      <div key={site.siteId} className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {visibleSites.length > 1 ? (
+              <SiteSelector
+                sites={visibleSites}
+                selectedSiteId={selectedSiteId}
+                onChange={(siteId) => {
+                  setSiteTouched(true);
+                  setSelectedSiteId(siteId);
+                }}
+                checkedInSiteId={checkedInSiteId}
+                className="!bg-transparent !px-0 !py-0 !shadow-none"
+              />
+            ) : (
+              <>
                 <p className="truncate text-sm font-semibold text-on-surface">{site.siteName}</p>
                 {site.streetAddress && (
                   <p className="truncate text-xs text-grey-500">{site.streetAddress}</p>
                 )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                {site.nfcRegistered && (
-                  <span
-                    title="NFC check-in available"
-                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-                  >
-                    <Nfc size={12} /> NFC
-                  </span>
-                )}
-                {site.hasCoordinates && (
-                  <span
-                    title="Location check-in available"
-                    className="inline-flex items-center gap-1 rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-700"
-                  >
-                    <MapPin size={12} /> Location
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {redoTasks.length > 0 && (
-              <div className="rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-3 py-2.5">
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-[#7C3AED]">
-                  <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
-                  {redoTasks.length} redo/complaint task{redoTasks.length > 1 ? "s" : ""} to
-                  complete this shift
-                </p>
-                <ul className="mt-1 list-disc pl-5 text-xs text-grey-700">
-                  {redoTasks.slice(0, 4).map((t) => (
-                    <li key={t.redoId ?? t.taskId}>
-                      {t.name}
-                      {t.areaName ? ` · ${t.areaName}` : ""}
-                    </li>
-                  ))}
-                  {redoTasks.length > 4 && <li>and {redoTasks.length - 4} more…</li>}
-                </ul>
-                <p className="mt-1 text-[11px] text-grey-500">
-                  You must finish these before you can check out.
-                </p>
-              </div>
-            )}
-
-            {checkedOut ? (
-              <div className="flex items-center justify-center gap-2 rounded-full bg-success/10 px-4 py-3 text-sm font-semibold text-success">
-                <Check size={16} aria-hidden="true" /> Shift complete
-              </div>
-            ) : checkedIn ? (
-              <SlideButton
-                key={`out-${resetKey}`}
-                label="Slide to Check Out"
-                variant="checkout"
-                completedLabel="Checking out…"
-                onComplete={() => run(site, "out")}
-              />
-            ) : (
-              <SlideButton
-                key={`in-${resetKey}`}
-                label="Slide to Check In"
-                variant="teal"
-                completedLabel="Checking in…"
-                onComplete={() => run(site, "in")}
-              />
-            )}
-
-            {(checkedIn || checkedOut) && (
-              <p className="flex items-center justify-center gap-1 text-center text-xs text-grey-500">
-                <LocateFixed size={12} />
-                Checked in at {formatTime(site.checkInAt)}
-                {site.checkOutAt ? ` · Checked out at ${formatTime(site.checkOutAt)}` : ""}
-              </p>
-            )}
-
-            {error && (
-              <p className="flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                {error}
-              </p>
+              </>
             )}
           </div>
-        );
-      })}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {site.nfcRegistered && (
+              <span
+                title="NFC check-in available"
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+              >
+                <Nfc size={12} /> NFC
+              </span>
+            )}
+            {site.hasCoordinates && (
+              <span
+                title="Location check-in available"
+                className="inline-flex items-center gap-1 rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-700"
+              >
+                <MapPin size={12} /> Location
+              </span>
+            )}
+          </div>
+        </div>
+
+        {redoTasks.length > 0 && (
+          <div className="rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-[#7C3AED]">
+              <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
+              {redoTasks.length} redo/complaint task{redoTasks.length > 1 ? "s" : ""} to
+              complete this shift
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-xs text-grey-700">
+              {redoTasks.slice(0, 4).map((t) => (
+                <li key={t.redoId ?? t.taskId}>
+                  {t.name}
+                  {t.areaName ? ` · ${t.areaName}` : ""}
+                </li>
+              ))}
+              {redoTasks.length > 4 && <li>and {redoTasks.length - 4} more…</li>}
+            </ul>
+            <p className="mt-1 text-[11px] text-grey-500">
+              You must finish these before you can check out.
+            </p>
+          </div>
+        )}
+
+        {checkedOut ? (
+          <div className="flex items-center justify-center gap-2 rounded-full bg-success/10 px-4 py-3 text-sm font-semibold text-success">
+            <Check size={16} aria-hidden="true" /> Shift complete
+          </div>
+        ) : checkedIn ? (
+          <SlideButton
+            key={`out-${resetKey}`}
+            label="Slide to Check Out"
+            variant="checkout"
+            completedLabel="Checking out…"
+            onComplete={() => run(site, "out")}
+          />
+        ) : (
+          <SlideButton
+            key={`in-${resetKey}`}
+            label="Slide to Check In"
+            variant="teal"
+            completedLabel="Checking in…"
+            onComplete={() => run(site, "in")}
+          />
+        )}
+
+        {(checkedIn || checkedOut) && (
+          <p className="flex items-center justify-center gap-1 text-center text-xs text-grey-500">
+            <LocateFixed size={12} />
+            Checked in at {formatTime(site.checkInAt)}
+            {site.checkOutAt ? ` · Checked out at ${formatTime(site.checkOutAt)}` : ""}
+          </p>
+        )}
+
+        {error && (
+          <p className="flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            {error}
+          </p>
+        )}
+      </div>
 
       {pendingPrompt && (
         <div

@@ -31,6 +31,10 @@ export default function InventoryPage() {
 
   const { data: requests = [], isLoading } = useRequests({ status: TAB_TO_STATUS[activeFilter] });
 
+  // Hide the mobile bottom nav while a bottom-sheet modal is open so it can't render on
+  // top of it; the desktop sidebar is unaffected since it never overlaps these panels.
+  const modalOpen = requestModalOpen || !!selectedRequest;
+
   return (
     <div
       className="min-h-screen"
@@ -121,7 +125,7 @@ export default function InventoryPage() {
         />
       )}
 
-      <BottomNavBar />
+      <BottomNavBar hideMobileBar={modalOpen} />
     </div>
   );
 }

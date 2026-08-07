@@ -4,29 +4,61 @@ import { useState } from "react";
 import { Camera, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { useUpdateUser } from "@/features/users/hooks/useUserActions";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface EditProfileModalProps {
   open:    boolean;
   onClose: () => void;
 }
 
-interface ProfileField {
-  id:    string;
-  label: string;
-  value: string;
-  type?: string;
-}
-
 export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
-  const [firstName, setFirstName] = useState("Peter");
-  const [lastName,  setLastName]  = useState("James");
-  const [email,     setEmail]     = useState("peter.james@example.com");
-  const [phone,     setPhone]     = useState("+1 555 000 1234");
+  const me = useMe();
+  const updateUser = useUpdateUser();
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName,  setLastName]  = useState("");
+  const [phone,     setPhone]     = useState("");
+  const [error,     setError]     = useState<string | null>(null);
+
+  // Re-fill from the cleaner's real data each time the modal transitions to open —
+  // adjusting state during render (React's documented pattern for this) instead of an
+  // effect, since the modal stays mounted between opens/closes.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open && me.data) {
+      setFirstName(me.data.firstName);
+      setLastName(me.data.lastName ?? "");
+      setPhone(me.data.phoneNumber ?? "");
+      setError(null);
+    }
+  }
 
   if (!open) return null;
 
   function handleSave() {
-    onClose();
+    if (!me.data) return;
+    if (!firstName.trim()) {
+      setError("First name is required.");
+      return;
+    }
+    setError(null);
+    updateUser.mutate(
+      {
+        id: me.data.id,
+        input: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phoneNumber: phone.trim(),
+        },
+      },
+      {
+        onSuccess: onClose,
+        onError: (err) => setError(getErrorMessage(err)),
+      },
+    );
   }
 
   return (
@@ -45,8 +77,8 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
         aria-label="Edit profile"
         className={cn(
           "fixed z-50 bg-white",
-          "inset-x-0 bottom-0 rounded-t-3xl max-h-[90vh] overflow-y-auto",
-          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
+          "inset-x-0 bottom-0 rounded-t-3xl min-h-[50vh] max-h-[90vh] overflow-y-auto",
+          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:min-h-0 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
         )}
       >
         {/* Gradient top */}
@@ -94,11 +126,11 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
             />
           </div>
 
+          {/* Email isn't editable — the backend has no email-change endpoint. */}
           <EditFieldRow
             label="Email"
-            value={email}
-            onChange={setEmail}
-            type="email"
+            value={me.data?.email ?? "…"}
+            readOnly
           />
 
           <EditFieldRow
@@ -108,9 +140,19 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
             type="tel"
           />
 
+          {error && (
+            <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+              {error}
+            </p>
+          )}
+
           <div className="mt-2">
-            <PillButton variant="orange" onClick={handleSave}>
-              Save
+            <PillButton
+              variant="orange"
+              onClick={handleSave}
+              disabled={updateUser.isPending || !me.data}
+            >
+              {updateUser.isPending ? "Saving…" : "Save"}
             </PillButton>
           </div>
         </div>
@@ -120,14 +162,15 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
 }
 
 interface EditFieldRowProps {
-  label:     string;
-  value:     string;
-  onChange:  (v: string) => void;
-  type?:     string;
+  label:      string;
+  value:      string;
+  onChange?:  (v: string) => void;
+  type?:      string;
   className?: string;
+  readOnly?:  boolean;
 }
 
-function EditFieldRow({ label, value, onChange, type = "text", className }: EditFieldRowProps) {
+function EditFieldRow({ label, value, onChange, type = "text", className, readOnly = false }: EditFieldRowProps) {
   const [editing, setEditing] = useState(false);
 
   return (
@@ -139,7 +182,7 @@ function EditFieldRow({ label, value, onChange, type = "text", className }: Edit
     >
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
         <span className="text-xs text-grey-500">{label}</span>
-        {editing ? (
+        {editing && !readOnly && onChange ? (
           <input
             type={type}
             value={value}
@@ -152,13 +195,15 @@ function EditFieldRow({ label, value, onChange, type = "text", className }: Edit
           <span className="text-sm font-medium text-on-surface truncate">{value}</span>
         )}
       </div>
-      <button
-        onClick={() => setEditing(true)}
-        aria-label={`Edit ${label}`}
-        className="shrink-0 rounded-full p-1 text-grey-500 transition-colors hover:bg-grey-100 hover:text-primary"
-      >
-        <Pencil size={14} strokeWidth={2} />
-      </button>
+      {!readOnly && (
+        <button
+          onClick={() => setEditing(true)}
+          aria-label={`Edit ${label}`}
+          className="shrink-0 rounded-full p-1 text-grey-500 transition-colors hover:bg-grey-100 hover:text-primary"
+        >
+          <Pencil size={14} strokeWidth={2} />
+        </button>
+      )}
     </div>
   );
 }

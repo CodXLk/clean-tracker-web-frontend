@@ -86,16 +86,14 @@
 }
 
 /* ── CSS Variables (for direct CSS usage outside Tailwind) ─────────────────── */
+/* This app is light-themed only (no `dark:` variants are used anywhere) — these
+   stay fixed regardless of OS/browser color-scheme preference. A prior
+   prefers-color-scheme override here flipped text to near-white while cards
+   stayed white, making any text without an explicit Tailwind color invisible. */
 :root {
   --background: #F5F5F5;
   --foreground: #1C1B1F;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1C1C2E;
-    --foreground: #F5F5F5;
-  }
+  color-scheme: light;
 }
 
 body {

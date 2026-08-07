@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { WorkingDaysSelector } from "@/features/user-management/components/WorkingDaysSelector";
 import { useSites } from "@/features/user-management/hooks/useSites";
-import { useFloors } from "@/features/user-management/hooks/useFloors";
-import { useAreas } from "@/features/user-management/hooks/useAreas";
+import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useFloors";
+import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
+import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
 import { useCreateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
@@ -307,6 +308,11 @@ function LocationGroupCard({
     name: `groups.${groupIndex}.tasks`,
   });
 
+  const [floorPromptOpen, setFloorPromptOpen] = useState(false);
+  const [areaPromptOpen, setAreaPromptOpen] = useState(false);
+  const createFloor = useCreateFloor();
+  const createArea = useCreateArea();
+
   const [qName, setQName] = useState("");
   const [qDuration, setQDuration] = useState("");
   const [qDesc, setQDesc] = useState("");
@@ -445,44 +451,128 @@ function LocationGroupCard({
 
       {/* Floor + Area */}
       <div className="grid grid-cols-2 gap-4">
-        <Controller
-          name={`groups.${groupIndex}.floorId`}
-          control={control}
-          render={({ field }) => (
-            <SearchableSelect
-              label="Floor"
-              options={floorOptions}
-              value={field.value || null}
-              onChange={(v) => {
-                field.onChange(v);
-                setValue(`groups.${groupIndex}.areaId`, "");
-              }}
-              disabled={!siteId}
-              loading={floorsLoading && !!siteId}
-              error={groupErrors?.floorId?.message}
-              placeholder={siteId ? "Select floor" : "Select a site first"}
-              emptyMessage="No floors for this site"
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <Controller
+              name={`groups.${groupIndex}.floorId`}
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  label="Floor"
+                  options={floorOptions}
+                  value={field.value || null}
+                  onChange={(v) => {
+                    field.onChange(v);
+                    setValue(`groups.${groupIndex}.areaId`, "");
+                  }}
+                  disabled={!siteId}
+                  loading={floorsLoading && !!siteId}
+                  error={groupErrors?.floorId?.message}
+                  placeholder={siteId ? "Select floor" : "Select a site first"}
+                  emptyMessage="No floors for this site"
+                />
+              )}
             />
-          )}
-        />
-        <Controller
-          name={`groups.${groupIndex}.areaId`}
-          control={control}
-          render={({ field }) => (
-            <SearchableSelect
-              label="Area"
-              options={areaOptions}
-              value={field.value || null}
-              onChange={(v) => field.onChange(v)}
-              disabled={!floorId}
-              loading={areasQuery.isLoading && !!floorId}
-              error={groupErrors?.areaId?.message}
-              placeholder={floorId ? "Select area" : "Select a floor first"}
-              emptyMessage="No areas for this floor"
+          </div>
+          <button
+            type="button"
+            aria-label="Add a new floor"
+            title="Add a new floor"
+            disabled={!siteId}
+            onClick={() => setFloorPromptOpen(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <Controller
+              name={`groups.${groupIndex}.areaId`}
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  label="Area"
+                  options={areaOptions}
+                  value={field.value || null}
+                  onChange={(v) => field.onChange(v)}
+                  disabled={!floorId}
+                  loading={areasQuery.isLoading && !!floorId}
+                  error={groupErrors?.areaId?.message}
+                  placeholder={floorId ? "Select area" : "Select a floor first"}
+                  emptyMessage="No areas for this floor"
+                />
+              )}
             />
-          )}
-        />
+          </div>
+          <button
+            type="button"
+            aria-label="Add a new area"
+            title="Add a new area"
+            disabled={!floorId}
+            onClick={() => setAreaPromptOpen(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
+      {/* Add floor / area prompts */}
+      <NameFormModal
+        open={floorPromptOpen}
+        title="Add floor"
+        description="New floor for this site."
+        label="Floor name"
+        submitLabel="Add floor"
+        isPending={createFloor.isPending}
+        error={createFloor.isError ? getErrorMessage(createFloor.error) : undefined}
+        onSubmit={(name) => {
+          if (!siteId) return;
+          createFloor.mutate(
+            { siteId, input: { name } },
+            {
+              onSuccess: (floor) => {
+                setValue(`groups.${groupIndex}.floorId`, floor.id, { shouldValidate: true });
+                setValue(`groups.${groupIndex}.areaId`, "");
+                setFloorPromptOpen(false);
+                createFloor.reset();
+              },
+            },
+          );
+        }}
+        onClose={() => {
+          setFloorPromptOpen(false);
+          createFloor.reset();
+        }}
+      />
+      <NameFormModal
+        open={areaPromptOpen}
+        title="Add area"
+        description="New area for the selected floor."
+        label="Area name"
+        submitLabel="Add area"
+        isPending={createArea.isPending}
+        error={createArea.isError ? getErrorMessage(createArea.error) : undefined}
+        onSubmit={(name) => {
+          if (!floorId) return;
+          createArea.mutate(
+            { floorId, input: { name } },
+            {
+              onSuccess: (area) => {
+                setValue(`groups.${groupIndex}.areaId`, area.id, { shouldValidate: true });
+                setAreaPromptOpen(false);
+                createArea.reset();
+              },
+            },
+          );
+        }}
+        onClose={() => {
+          setAreaPromptOpen(false);
+          createArea.reset();
+        }}
+      />
 
       {/* Quick add — sits directly under floor/area so it never moves out of reach */}
       <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">

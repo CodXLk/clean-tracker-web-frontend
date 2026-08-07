@@ -209,51 +209,54 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
         onClose={onClose}
         title={isEdit ? "Edit site" : "Add a site"}
         description="Select a client-company and client, then enter the site details."
+        maxWidthClassName="max-w-2xl"
       >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-        <Controller
-          control={control}
-          name="clientCompanyId"
-          render={({ field }) => (
-            <SearchableSelect
-              label="Client-company"
-              required
-              options={companyOptions}
-              value={field.value || null}
-              onChange={handleCompanyChange}
-              loading={companiesQuery.isLoading}
-              placeholder="Select a client-company"
-              searchPlaceholder="Search client-companies…"
-              emptyMessage="No client-companies found. Create one first."
-              error={errors.clientCompanyId?.message}
-            />
-          )}
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Controller
+            control={control}
+            name="clientCompanyId"
+            render={({ field }) => (
+              <SearchableSelect
+                label="Client-company"
+                required
+                options={companyOptions}
+                value={field.value || null}
+                onChange={handleCompanyChange}
+                loading={companiesQuery.isLoading}
+                placeholder="Select a client-company"
+                searchPlaceholder="Search client-companies…"
+                emptyMessage="No client-companies found. Create one first."
+                error={errors.clientCompanyId?.message}
+              />
+            )}
+          />
 
-        <Controller
-          control={control}
-          name="clientId"
-          render={({ field }) => (
-            <SearchableSelect
-              label="Client"
-              required
-              options={clientOptions}
-              value={field.value || null}
-              onChange={field.onChange}
-              disabled={!selectedCompanyId}
-              loading={!!selectedCompanyId && clientsQuery.isLoading}
-              placeholder={selectedCompanyId ? "Select a client" : "Select a client-company first"}
-              searchPlaceholder="Search clients…"
-              emptyMessage="This client-company has no clients yet."
-              error={errors.clientId?.message}
-              hint={
-                selectedCompanyId && clientOptions.length === 1
-                  ? "Only one client — selected automatically."
-                  : undefined
-              }
-            />
-          )}
-        />
+          <Controller
+            control={control}
+            name="clientId"
+            render={({ field }) => (
+              <SearchableSelect
+                label="Client"
+                required
+                options={clientOptions}
+                value={field.value || null}
+                onChange={field.onChange}
+                disabled={!selectedCompanyId}
+                loading={!!selectedCompanyId && clientsQuery.isLoading}
+                placeholder={selectedCompanyId ? "Select a client" : "Select a client-company first"}
+                searchPlaceholder="Search clients…"
+                emptyMessage="This client-company has no clients yet."
+                error={errors.clientId?.message}
+                hint={
+                  selectedCompanyId && clientOptions.length === 1
+                    ? "Only one client — selected automatically."
+                    : undefined
+                }
+              />
+            )}
+          />
+        </div>
 
         <TextField label="Site name" required error={errors.name?.message} {...register("name")} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -435,6 +438,12 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           />
         )}
 
+        {isEdit && site && (
+          <div className="flex flex-col gap-3">
+            <FloorsSection siteId={site.id} />
+          </div>
+        )}
+
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
             {getErrorMessage(active.error)}
@@ -454,12 +463,6 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           </PillButton>
         </div>
       </form>
-
-      {isEdit && site && (
-        <div className="mt-5 flex flex-col gap-3">
-          <FloorsSection siteId={site.id} />
-        </div>
-      )}
       </Modal>
 
       <FloorsModal

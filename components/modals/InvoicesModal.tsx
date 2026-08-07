@@ -46,8 +46,8 @@ export function InvoicesModal({ open, onClose }: InvoicesModalProps) {
         aria-label="Invoices"
         className={cn(
           "fixed z-50 bg-white p-6",
-          "inset-x-0 bottom-0 rounded-t-3xl max-h-[85vh] overflow-y-auto",
-          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
+          "inset-x-0 bottom-0 rounded-t-3xl min-h-[50vh] max-h-[85vh] overflow-y-auto",
+          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:min-h-0 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl",
         )}
       >
         {/* Close */}

@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SiteSelector } from "@/components/shared/SiteSelector";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
 import { useActiveSite } from "@/features/attendance/hooks/useActiveSite";
 import {
   assignmentTypeLabel,
@@ -24,7 +25,8 @@ import { cn } from "@/lib/utils/cn";
 interface AreaCount {
   areaId: string;
   area: string;
-  count: number;
+  completed: number;
+  total: number;
 }
 
 export default function TasksPage() {
@@ -39,7 +41,8 @@ export default function TasksPage() {
   );
 
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [activeFloor, setActiveFloor] = useState<string | null>(null);
+  const activeFloor = useTaskFiltersStore((s) => s.activeFloor);
+  const setActiveFloor = useTaskFiltersStore((s) => s.setActiveFloor);
 
   // Distinct floors present in today's tasks (preserve first-seen order).
   const floors = useMemo(() => {
@@ -52,18 +55,28 @@ export default function TasksPage() {
     return Array.from(seen, ([id, name]) => ({ id, name }));
   }, [occurrences]);
 
-  const selectedFloor = activeFloor ?? floors[0]?.name ?? null;
+  // Keep the persisted pick only while it's still one of the current floors (e.g. after
+  // switching sites, the previous floor may no longer apply) — otherwise fall back.
+  const selectedFloor =
+    activeFloor && floors.some((f) => f.name === activeFloor) ? activeFloor : floors[0]?.name ?? null;
 
   const areas = useMemo<AreaCount[]>(() => {
     if (!selectedFloor) return [];
     const byArea = new Map<string, AreaCount>();
     for (const o of occurrences) {
       if (o.floorName !== selectedFloor || !o.areaId || !o.areaName) continue;
+      const isCompleted = o.status === "COMPLETED";
       const existing = byArea.get(o.areaId);
       if (existing) {
-        existing.count += 1;
+        existing.total += 1;
+        if (isCompleted) existing.completed += 1;
       } else {
-        byArea.set(o.areaId, { areaId: o.areaId, area: o.areaName, count: 1 });
+        byArea.set(o.areaId, {
+          areaId: o.areaId,
+          area: o.areaName,
+          total: 1,
+          completed: isCompleted ? 1 : 0,
+        });
       }
     }
     return Array.from(byArea.values());
@@ -108,10 +121,9 @@ export default function TasksPage() {
           </div>
         )}
         {/* KPI row */}
-        <div className="mb-6 grid grid-cols-2 gap-3 pt-5 sm:grid-cols-4">
+        <div className="mb-6 grid grid-cols-3 gap-3 pt-5 sm:grid-cols-4">
           <KpiCard label="Total" value={kpis.total} color="grey" />
           <KpiCard label="Pending" value={kpis.pending} color="orange" />
-          <KpiCard label="In Progress" value={kpis.inProgress} color="blue" />
           <KpiCard label="Completed" value={kpis.completed} color="green" />
         </div>
 
@@ -124,24 +136,25 @@ export default function TasksPage() {
             No tasks scheduled for you today.
           </p>
         ) : (
-          <div className="flex flex-col gap-8 lg:grid lg:grid-cols-2 lg:gap-8">
-            {/* Left column — Periodical Task list */}
-            <section aria-labelledby="periodical-heading" className="flex flex-col gap-3">
-              <h2 id="periodical-heading" className="text-base font-medium text-primary">
-                Periodical Task
-              </h2>
-              {periodicalTasks.length === 0 ? (
-                <p className="rounded-2xl bg-white/60 p-4 text-sm text-grey-500">
-                  No periodical tasks today.
-                </p>
-              ) : (
+          <div
+            className={cn(
+              "flex flex-col gap-8",
+              periodicalTasks.length > 0 && "lg:grid lg:grid-cols-2 lg:gap-8",
+            )}
+          >
+            {/* Left column — Periodical Task list (hidden entirely when the site has none) */}
+            {periodicalTasks.length > 0 && (
+              <section aria-labelledby="periodical-heading" className="flex flex-col gap-3">
+                <h2 id="periodical-heading" className="text-base font-medium text-primary">
+                  Periodical Task
+                </h2>
                 <div className="flex flex-col gap-3">
                   {periodicalTasks.map((task) => (
                     <PeriodicalCard key={`${task.taskId}-${task.occurrenceDate}`} task={task} />
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+            )}
 
             {/* Right column — Floor tabs + Area grid */}
             <section aria-labelledby="floors-heading" className="flex flex-col gap-4">
@@ -169,8 +182,8 @@ export default function TasksPage() {
                         href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
                         className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
                       >
-                        <span className="text-2xl font-semibold text-on-surface">
-                          {String(item.count).padStart(2, "0")}
+                        <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
+                          {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
                         </span>
                         <span className="text-xs text-on-surface">{item.area}</span>
                       </Link>
@@ -224,9 +237,9 @@ interface KpiCardProps {
 function KpiCard({ label, value, color }: KpiCardProps) {
   const colorMap: Record<KpiCardProps["color"], string> = {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
-    green:  "text-success bg-success/10",
-    grey:   "text-grey-700 bg-grey-100",
-    blue:   "text-primary bg-primary/10",
+    green: "text-success bg-success/10",
+    grey: "text-grey-700 bg-grey-100",
+    blue: "text-primary bg-primary/10",
   };
 
   return (
