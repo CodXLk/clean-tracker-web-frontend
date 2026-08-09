@@ -25,6 +25,26 @@ const CLOUDS = [
   { left: 1038, top: -76,  mirrored: true,  from: 2509 },
 ] as const;
 
+/**
+ * Timeline position at which beat one has fully resolved into the Hero Scene —
+ * the same position beat two is placed at below. Auto-advance travels exactly
+ * this far and no further, so the page settles on the hero rather than carrying
+ * on into the tower's growth.
+ */
+const HERO_SETTLED = 1.5;
+
+/** How long the Loading Scene holds before the page advances itself, seconds. */
+const AUTO_ADVANCE_HOLD = 1.6;
+/** How long that automatic travel takes, seconds. */
+const AUTO_ADVANCE_TRAVEL = 2.4;
+
+/**
+ * Input that means the visitor has taken the scroll into their own hands.
+ * Deliberately not `scroll`: auto-advance scrolls the window itself, so a
+ * scroll listener would cancel it on its own first frame.
+ */
+const TAKEOVER_EVENTS = ["wheel", "touchstart", "keydown", "mousedown"] as const;
+
 export function HeroScene() {
   const sceneRef    = useRef<HTMLElement>(null);
   const skyRef      = useRef<HTMLDivElement>(null);
@@ -37,10 +57,24 @@ export function HeroScene() {
 
   useGSAP(
     () => {
-      // Without the timeline every layer already renders in its settled Hero
-      // Scene position, so reduced motion simply skips the choreography — only
-      // the loading mark, which is markup-hidden by default, stays hidden.
-      if (!sceneRef.current || reduceMotion) return;
+      if (!sceneRef.current) return;
+
+      // Reduced motion gates the auto-advance at the end of this effect, not
+      // the scenes themselves. The choreography is scrubbed to the visitor's
+      // own scrolling, so it only ever moves because they moved it; the page
+      // scrolling itself is the part someone asking for stillness has not
+      // agreed to, and that is what gets withheld.
+      //
+      // Read live rather than taken from `reduceMotion`: `useMediaQuery`
+      // reports false on the first client render and only resolves in a
+      // passive effect, long after this layout effect has run, and `useGSAP`
+      // given a dependency array never reverts between dependency changes
+      // (only on unmount) — so an auto-advance armed on that first pass would
+      // outlive the correction and scroll the page anyway. `reduceMotion`
+      // stays in the expression to keep the dependency honest: a preference
+      // changed mid-session still re-runs this.
+      const stillness =
+        reduceMotion || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const clouds = cloudsRef.current?.querySelectorAll<HTMLElement>("[data-cloud]") ?? [];
       const headlineParts =
@@ -138,12 +172,81 @@ export function HeroScene() {
       tl.to(buildingRef.current, { scale: 5.2, opacity: 0, duration: 1.1, ease: "power1.in" }, 2.5);
       tl.to(skyRef.current, { opacity: 0, duration: 0.9, ease: "power1.in" }, 2.6);
 
+      // ── Auto-advance out of the Loading Scene ────────────────────────────
+      // The loading scene fills the screen and offers no visible sign that the
+      // page continues, so visitors settle on it and wait. After a short hold
+      // the page scrolls itself as far as the settled hero: the tower and
+      // headline assemble on their own, and the fold below is revealed.
+      //
+      // This drives the real scroll position rather than the timeline. The pin,
+      // the tower parallax in the sections below and the navbar's progress bar
+      // are all scrubbed off the same scroll; advancing the timeline alone
+      // would leave the page visually ahead of where the scrollbar says it is.
+      let cancelled = false;
+      let hold: gsap.core.Tween | null = null;
+      let travel: gsap.core.Tween | null = null;
+
+      const stopAutoAdvance = () => {
+        cancelled = true;
+        hold?.kill();
+        travel?.kill();
+        for (const type of TAKEOVER_EVENTS) window.removeEventListener(type, stopAutoAdvance);
+      };
+
+      const autoAdvance = () => {
+        const st = tl.scrollTrigger;
+        // Anyone who has already scrolled has answered the question this is
+        // here to answer.
+        if (cancelled || !st || st.end <= st.start || window.scrollY > 2) {
+          stopAutoAdvance();
+          return;
+        }
+
+        const scroller = { y: window.scrollY };
+        travel = gsap.to(scroller, {
+          y: st.start + (st.end - st.start) * (HERO_SETTLED / tl.duration()),
+          duration: AUTO_ADVANCE_TRAVEL,
+          ease: "power2.inOut",
+          // `behavior: "instant"` because `html` carries `scroll-behavior:
+          // smooth` for anchor links. Without the override each frame of this
+          // tween would kick off its own smooth scroll and fight the next one.
+          onUpdate: () => window.scrollTo({ top: scroller.y, behavior: "instant" }),
+          onComplete: stopAutoAdvance,
+        });
+      };
+
+      // Held until `load` so the hold is spent on a scene that has actually
+      // finished painting, rather than on half-decoded hero images.
+      const scheduleAutoAdvance = () => {
+        if (cancelled) return;
+        hold = gsap.delayedCall(AUTO_ADVANCE_HOLD, autoAdvance);
+      };
+
+      // Everything above runs for everyone; only the page moving on its own is
+      // withheld from a visitor who asked for stillness. They still get the
+      // whole hero — it just waits for them to scroll it.
+      if (!stillness) {
+        if (document.readyState === "complete") scheduleAutoAdvance();
+        else window.addEventListener("load", scheduleAutoAdvance, { once: true });
+
+        for (const type of TAKEOVER_EVENTS) {
+          window.addEventListener(type, stopAutoAdvance, { passive: true });
+        }
+      }
+
       return () => {
+        stopAutoAdvance();
+        window.removeEventListener("load", scheduleAutoAdvance);
         window.removeEventListener("load", refresh);
         window.removeEventListener("pagehide", keepPlaceOut);
       };
     },
-    { scope: sceneRef, dependencies: [reduceMotion] },
+    // `revertOnUpdate` because `useGSAP` given a dependency array otherwise
+    // reverts only on unmount: when `useMediaQuery` resolves and flips
+    // `reduceMotion`, the callback re-runs and would lay a second timeline and
+    // a second pin on top of the first — measurably, a document one whole pin
+    // distance too long. Reverting first means each pass replaces the last.
+    { scope: sceneRef, dependencies: [reduceMotion], revertOnUpdate: true },
   );
 
   return (
@@ -156,28 +259,17 @@ export function HeroScene() {
       // change the scene height mid-scroll and drag every pinned offset with it.
       className="relative h-[100svh] min-h-[30rem] w-full overflow-hidden bg-atmos-top"
     >
-      {/* Sky plate — Figma places the skyline photo at 2767x1557, offset to
-          (-805, -267) on the 1512x982 canvas. */}
+      {/* Sky plate — the source photo is already framed tight on the skyline,
+          so it fills the scene directly with no extra crop offset. */}
       <div ref={skyRef} className="absolute inset-0 will-change-transform">
-        <div
-          aria-hidden="true"
-          className="absolute"
-          style={{
-            left:   pct(-805, CANVAS_W),
-            top:    pct(-267, CANVAS_H),
-            width:  pct(2767.059, CANVAS_W),
-            height: pct(1557, CANVAS_H),
-          }}
-        >
-          <Image
-            src="/images/marketing/hero/sky.jpg"
-            alt=""
-            fill
-            priority
-            sizes="200vw"
-            className="object-cover"
-          />
-        </div>
+        <Image
+          src="/images/marketing/hero/sky.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
       </div>
 
       <div ref={cloudsRef} aria-hidden="true" className="absolute inset-0 overflow-hidden">

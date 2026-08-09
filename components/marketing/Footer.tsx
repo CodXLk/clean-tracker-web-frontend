@@ -27,12 +27,20 @@ export function Footer() {
 
       <div className="mx-auto grid w-full max-w-[1512px] gap-10 px-[max(1.25rem,2.712vw)] py-14 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1.2fr] lg:gap-12">
         <div className="flex flex-col gap-4">
+          {/* The logo plate is 492x220; declaring anything else hands next/image
+              the wrong aspect ratio and sizes the srcset off it — at 100x100 it
+              picked a 128px-wide render for a mark displayed far wider.
+              `self-start` because a direct child of a column flex container is
+              stretched to the full column by default, which `w-auto` does not
+              override: the two together painted the 2.24:1 mark into a 429x56
+              box. Sized to content, `h-14 w-auto` resolves the width from the
+              real ratio. */}
           <Image
             src="/images/marketing/brand/logo.png"
             alt="Primeway Property Services"
             width={492}
             height={220}
-            className="h-14 w-auto brightness-0 invert"
+            className="h-14 w-auto self-start brightness-0 invert"
           />
           <p className="max-w-sm font-body text-sm leading-relaxed text-white/70">
             A commercial cleaning company based in Victoria, Australia. Established 2021, serving a

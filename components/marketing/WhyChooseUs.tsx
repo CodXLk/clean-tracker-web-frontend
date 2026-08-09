@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { SectionHeading } from "./SectionHeading";
 
@@ -40,7 +40,11 @@ export function WhyChooseUs() {
         duration: 0.8,
         ease: "power2.out",
         stagger: 0.14,
-        scrollTrigger: { trigger: sectionRef.current, start: "top 68%", once: true },
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top 68%",
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
+        },
       });
 
       // Continues the drift the tower has through the Industries section, so the

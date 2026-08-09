@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { SectionHeading } from "./SectionHeading";
 import { IndustryCard } from "./IndustryCard";
@@ -67,7 +67,11 @@ export function IndustriesWeServe() {
         duration: 0.85,
         ease: "power2.out",
         stagger: 0.15,
-        scrollTrigger: { trigger: sectionRef.current, start: "top 65%", once: true },
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top 65%",
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
+        },
       });
 
       // The tower travels between the two framings Figma gives it: right of the
@@ -106,7 +110,7 @@ export function IndustriesWeServe() {
           scrollTrigger: {
             trigger: scene,
             start: "top 72%",
-            once: true,
+            toggleActions: REVEAL_TOGGLE_ACTIONS,
             invalidateOnRefresh: true,
           },
         });

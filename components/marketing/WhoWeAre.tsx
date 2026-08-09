@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 /**
@@ -50,7 +50,7 @@ export function WhoWeAre() {
         scrollTrigger: {
           trigger: sectionRef.current,
           start: "top 75%",
-          once: true,
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
         },
       });
     },
