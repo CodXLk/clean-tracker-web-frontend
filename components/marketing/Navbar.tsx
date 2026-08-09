@@ -68,24 +68,50 @@ export function Navbar() {
     return () => observer.disconnect();
   }, []);
 
-  // Which nav link to mark current — the section occupying the middle band.
+  // Which nav link to mark current — the last section to have crossed the
+  // middle of the viewport.
+  //
+  // Derived from position rather than from intersection callbacks. Only four of
+  // the page's six sections have a nav link, so through Industries and Why
+  // Choose Us nothing was intersecting the observed band and whichever section
+  // happened to fire last stayed lit: at one and the same scroll position the
+  // underline sat under "Services" on the way down and "Contact Us" on the way
+  // up. Reading positions makes the answer a pure function of where the page
+  // is, so the two directions cannot disagree.
   useEffect(() => {
-    const targets = NAV_LINKS.map((l) => document.querySelector(l.href)).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement,
-    );
+    type NavTarget = { href: (typeof NAV_LINKS)[number]["href"]; el: HTMLElement };
+    const targets = NAV_LINKS.map((link) => ({
+      href: link.href,
+      el: document.querySelector(link.href),
+    })).filter((t): t is NavTarget => t.el instanceof HTMLElement);
     if (targets.length === 0) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) setActiveHref(`#${entry.target.id}`);
-        }
-      },
-      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
-    );
+    let frame = 0;
+    const pick = () => {
+      frame = 0;
+      const midline = window.innerHeight / 2;
+      // NAV_LINKS is in document order, so the last match wins.
+      let current = targets[0]!.href;
+      for (const { href, el } of targets) {
+        if (el.getBoundingClientRect().top <= midline) current = href;
+      }
+      setActiveHref(current);
+    };
 
-    targets.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    // Coalesced onto a frame: scroll fires far more often than this needs to
+    // run, and each pass measures every target.
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(pick);
+    };
+
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
   }, []);
 
   // The glass surface only appears once the page has actually moved, so the

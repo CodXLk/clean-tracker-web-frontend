@@ -167,10 +167,37 @@ export function HeroScene() {
       tl.to(clouds, { yPercent: -18, opacity: 0, duration: 1, stagger: 0.04 }, 1.5);
       tl.to(headlineParts, { opacity: 0, yPercent: -18, duration: 0.7, stagger: 0.06 }, 1.6);
 
-      // Beat 3 — the tower grows past the frame and dissolves while the sky
-      // plate crossfades to the flat atmosphere the next section sits on.
+      // Beat 3 — the tower grows past the frame and dissolves.
       tl.to(buildingRef.current, { scale: 5.2, opacity: 0, duration: 1.1, ease: "power1.in" }, 2.5);
-      tl.to(skyRef.current, { opacity: 0, duration: 0.9, ease: "power1.in" }, 2.6);
+
+      // The sky's crossfade to the flat atmosphere deliberately sits *outside*
+      // the timeline. Inside it, the plate finished dissolving while the scene
+      // was still pinned — and the section then had a whole viewport of scroll
+      // left before Who We Are arrived, all of it empty. That was the blank
+      // panel between the two scenes. Tying the fade to the scroll-out instead
+      // keeps the skyline on screen right up to the handover, and rewinds just
+      // as cleanly on the way back up.
+      const pin = tl.scrollTrigger;
+      if (pin) {
+        gsap.to(skyRef.current, {
+          opacity: 0,
+          ease: "none",
+          scrollTrigger: {
+            // Absolute scroll positions rather than an element: the fade owns
+            // exactly the stretch between the pin releasing and the section
+            // clearing the viewport. Resolved on refresh, so a resized or
+            // rotated viewport re-measures with everything else.
+            start: () => pin.end,
+            end: () => pin.end + window.innerHeight,
+            scrub: true,
+            invalidateOnRefresh: true,
+            // Refreshed after the pin (priority 0), so `pin.end` is read as the
+            // final measured value rather than one taken before the spacer that
+            // pinning adds to the document existed.
+            refreshPriority: -2,
+          },
+        });
+      }
 
       // ── Auto-advance out of the Loading Scene ────────────────────────────
       // The loading scene fills the screen and offers no visible sign that the
@@ -194,17 +221,16 @@ export function HeroScene() {
       };
 
       const autoAdvance = () => {
-        const st = tl.scrollTrigger;
         // Anyone who has already scrolled has answered the question this is
         // here to answer.
-        if (cancelled || !st || st.end <= st.start || window.scrollY > 2) {
+        if (cancelled || !pin || pin.end <= pin.start || window.scrollY > 2) {
           stopAutoAdvance();
           return;
         }
 
         const scroller = { y: window.scrollY };
         travel = gsap.to(scroller, {
-          y: st.start + (st.end - st.start) * (HERO_SETTLED / tl.duration()),
+          y: pin.start + (pin.end - pin.start) * (HERO_SETTLED / tl.duration()),
           duration: AUTO_ADVANCE_TRAVEL,
           ease: "power2.inOut",
           // `behavior: "instant"` because `html` carries `scroll-behavior:
@@ -257,7 +283,11 @@ export function HeroScene() {
       aria-label="Introduction"
       // `svh` rather than `vh`: on mobile the collapsing URL bar would otherwise
       // change the scene height mid-scroll and drag every pinned offset with it.
-      className="relative h-[100svh] min-h-[30rem] w-full overflow-hidden bg-atmos-top"
+      // No background of its own: once the sky plate has faded the section is
+      // transparent, so the page's fixed atmosphere gradient carries straight
+      // through it. A solid `bg-atmos-top` here used to meet that gradient at a
+      // different tone and drew a visible seam across the handover.
+      className="relative h-[100svh] min-h-[30rem] w-full overflow-hidden"
     >
       {/* Sky plate — the source photo is already framed tight on the skyline,
           so it fills the scene directly with no extra crop offset. */}
