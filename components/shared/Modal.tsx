@@ -56,7 +56,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 lg:items-center lg:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -66,7 +66,12 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={cn("max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-xl", maxWidthClassName)}
+        className={cn(
+          "w-full overflow-y-auto bg-white p-6",
+          "max-h-[85vh] rounded-t-3xl",
+          "lg:max-h-[90vh] lg:rounded-2xl lg:shadow-xl",
+          maxWidthClassName,
+        )}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -77,7 +82,7 @@ export function Modal({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-danger hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <X size={18} aria-hidden="true" />
           </button>

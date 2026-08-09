@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
@@ -14,7 +14,7 @@ import {
   Star,
   CalendarCheck,
 } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
+import { useUIStore } from "@/store/ui.store";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
@@ -71,6 +71,12 @@ export default function ProfilePage() {
   // fix applied to the inventory popups — the desktop sidebar is unaffected.
   const modalOpen =
     invoicesOpen || editProfileOpen || resetPasswordOpen || notificationsOpen || signOutOpen;
+
+  const setMobileBarHidden = useUIStore((s) => s.setMobileBarHidden);
+  useEffect(() => {
+    setMobileBarHidden(modalOpen);
+    return () => setMobileBarHidden(false);
+  }, [modalOpen, setMobileBarHidden]);
 
   const router = useRouter();
   const logout = useLogout();
@@ -250,8 +256,6 @@ export default function ProfilePage() {
         onCancel={() => setSignOutOpen(false)}
         isPending={logout.isPending}
       />
-
-      <BottomNavBar hideMobileBar={modalOpen} />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Camera, ImagePlus, Square, SquareCheck, X } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
+import { useUIStore } from "@/store/ui.store";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -255,6 +255,12 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const supervisorPending =
     reviewComplete.isPending || createComplaint.isPending || complaintWithRedo.isPending;
   const hasSelection = selectedIds.size > 0;
+
+  const setMobileBarHidden = useUIStore((s) => s.setMobileBarHidden);
+  useEffect(() => {
+    setMobileBarHidden(hasSelection);
+    return () => setMobileBarHidden(false);
+  }, [hasSelection, setMobileBarHidden]);
 
   return (
     <div
@@ -558,8 +564,6 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
       {/* Calendar Modal */}
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
-
-      <BottomNavBar hideMobileBar={hasSelection} />
     </div>
   );
 }

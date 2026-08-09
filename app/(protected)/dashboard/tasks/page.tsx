@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
@@ -197,8 +196,6 @@ export default function TasksPage() {
       </main>
 
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
-
-      <BottomNavBar />
     </div>
   );
 }

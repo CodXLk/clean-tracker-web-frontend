@@ -1,0 +1,148 @@
+"use client";
+
+import { User } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import { Modal } from "@/components/shared/Modal";
+import { PriorityBadge } from "@/components/shared/PriorityBadge";
+import type { Complaint } from "@/features/complaints/types";
+
+interface ComplaintDetailModalProps {
+  open: boolean;
+  onClose: () => void;
+  complaint: Complaint | null;
+  onResolve: (id: string) => void;
+}
+
+const STATUS_LABEL: Record<Complaint["status"], string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+const STATUS_CLASSES: Record<Complaint["status"], string> = {
+  open: "bg-[#ED5F25]/10 text-[#ED5F25]",
+  in_progress: "bg-primary/10 text-primary",
+  resolved: "bg-success/10 text-success",
+  closed: "bg-grey-100 text-grey-700",
+};
+
+export function ComplaintDetailModal({ open, onClose, complaint, onResolve }: ComplaintDetailModalProps) {
+  if (!complaint) return null;
+
+  const canResolve = complaint.status === "open" || complaint.status === "in_progress";
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Complaint Details"
+      description={`ID: ${complaint.code}`}
+      maxWidthClassName="max-w-xl"
+    >
+      <div className="mb-4 flex items-center gap-2">
+        <span className={cn("rounded-xl px-2.5 py-1 text-xs", STATUS_CLASSES[complaint.status])}>
+          {STATUS_LABEL[complaint.status]}
+        </span>
+        <PriorityBadge priority={complaint.priority} />
+      </div>
+
+      <h3 className="text-base font-semibold text-on-surface">{complaint.title}</h3>
+      <p className="mt-1 text-sm text-grey-500">{complaint.description}</p>
+
+      <div className="mt-5 grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs font-medium text-grey-500">Location</p>
+          <p className="mt-1 text-sm text-on-surface">{complaint.floor}</p>
+          <p className="text-sm text-grey-500">{complaint.site}</p>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-grey-500">Date &amp; Time</p>
+          <p className="mt-1 text-sm text-on-surface">{complaint.reportedAt}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs font-medium text-grey-500">Submitted By</p>
+          <div className="mt-1 flex items-center gap-2">
+            <User size={16} className="text-grey-500" aria-hidden="true" />
+            <span className="text-sm text-on-surface">{complaint.reporterRole}</span>
+          </div>
+        </div>
+        {complaint.assignedTo && (
+          <div>
+            <p className="text-xs font-medium text-grey-500">Assigned To</p>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary">
+                {complaint.assignedTo
+                  .split(" ")
+                  .map((p) => p[0])
+                  .join("")}
+              </div>
+              <span className="text-sm text-on-surface">{complaint.assignedTo}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {complaint.tasks.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-grey-500">Affected Tasks</p>
+          <ul className="flex flex-col gap-1.5">
+            {complaint.tasks.map((t) => (
+              <li
+                key={`${t.taskId}-${t.date}`}
+                className="rounded-xl bg-grey-100 px-3 py-2 text-xs text-on-surface"
+              >
+                <span className="font-medium">{t.taskName}</span>
+                {t.floor && <span className="text-grey-500"> · {t.floor}</span>}
+                {t.area && <span className="text-grey-500"> · {t.area}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {complaint.photos.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-grey-500">Photos</p>
+          <div className="grid grid-cols-4 gap-2">
+            {complaint.photos.map((p) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={p.id}
+                src={`/api/complaints/photos/${p.id}`}
+                alt="Complaint attachment"
+                className="aspect-square w-full rounded-lg object-cover"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6">
+        {canResolve ? (
+          <button
+            type="button"
+            onClick={() => {
+              onResolve(complaint.id);
+              onClose();
+            }}
+            className="h-11 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Mark as Resolved
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-11 w-full rounded-xl border border-grey-300 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Close
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}

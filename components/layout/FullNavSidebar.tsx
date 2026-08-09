@@ -2,61 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  Users,
-  UsersRound,
-  ContactRound,
-  ChevronDown,
-  ClipboardCheck,
-  MessageSquare,
-  Package,
-  Footprints,
-  CalendarCheck,
-  X,
-  LogOut,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, X, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useUIStore } from "@/store/ui.store";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
-
-interface NavChild {
-  label: string;
-  href: string;
-}
-
-interface NavItemConfig {
-  label: string;
-  icon: LucideIcon;
-  /** Leaf items link directly. */
-  href?: string;
-  /** Parent items expand/collapse a submenu instead of linking. */
-  children?: NavChild[];
-}
-
-const NAV_ITEMS: NavItemConfig[] = [
-  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
-  { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
-  { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
-  { label: "Inventory",   href: "/admin/inventory",  icon: Package },
-  { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
-  { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
-  {
-    label: "Client Management",
-    icon: ContactRound,
-    children: [
-      { label: "Client-Company", href: "/admin/user-management/client-companies" },
-      { label: "Client-Contact", href: "/admin/user-management/clients" },
-      { label: "Site Management", href: "/admin/user-management/sites" },
-    ],
-  },
-];
+import { NAV_ITEMS, isNavItemActive, type NavItemConfig } from "@/lib/navigation/nav-items";
 
 interface SidebarNavItemProps {
   item: NavItemConfig;
@@ -161,31 +114,9 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const me = useMe();
   const logout = useLogout();
 
-  // Clients don't get an Inspections view — supervisor/admin-only surface.
-  // Supervisors get the Workforce & Management surfaces (Workforce, Client
-  // Management, Cleaner Logs) in the admin console, alongside the cleaner app.
-  const role = me.data?.role;
-  const SUPERVISOR_ITEMS = new Set(["/admin/workforce", "/admin/cleaner-logs"]);
-  // Client Site Management (cleaning schedule) is limited to top-level admins for now.
-  const ADMIN_ONLY_ITEMS = new Set(["/admin/client-site-management"]);
-  const canSeeAdminOnly = role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
-  const roleFiltered =
-    role === "SUPERVISOR"
-      ? NAV_ITEMS.filter(
-          (item) =>
-            (item.href && SUPERVISOR_ITEMS.has(item.href)) ||
-            item.label === "Client Management",
-        )
-      : role === "CLIENT"
-        ? NAV_ITEMS.filter((item) => item.label !== "Inspections")
-        : NAV_ITEMS;
-  const navItems = roleFiltered.filter(
-    (item) => !(item.href && ADMIN_ONLY_ITEMS.has(item.href)) || canSeeAdminOnly,
-  );
-
   function isItemActive(item: NavItemConfig): boolean {
     if (!item.href) return false;
-    return pathname === item.href || pathname.startsWith(item.href + "/");
+    return isNavItemActive(item.href, pathname);
   }
 
   const fullName = me.data
@@ -206,8 +137,8 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <nav aria-label="Admin navigation" className="mt-2 flex flex-col gap-1 px-3">
-        {navItems.map((item) =>
+      <nav aria-label="Main navigation" className="mt-2 flex flex-col gap-1 overflow-y-auto px-3">
+        {NAV_ITEMS.map((item) =>
           item.children ? (
             <SidebarNavGroup
               key={item.label}
@@ -255,7 +186,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   );
 }
 
-export function AdminSidebar() {
+export function FullNavSidebar() {
   const mobileOpen = useUIStore((s) => s.mobileNavOpen);
   const setMobileNav = useUIStore((s) => s.setMobileNav);
 
@@ -308,7 +239,7 @@ export function AdminSidebar() {
           "fixed bottom-0 left-0 top-0 z-50 w-64 max-w-[80vw] transform transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
-        aria-label="Mobile admin navigation"
+        aria-label="Mobile navigation"
         aria-hidden={!mobileOpen}
       >
         <div className="relative h-full">

@@ -4,7 +4,6 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -289,7 +288,7 @@ function DashboardContent() {
               )}
 
               <Link
-                href="/dashboard/complaints"
+                href="/admin/complaints"
                 className="block w-full rounded-2xl bg-gradient-to-r from-danger to-red-600 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
               >
                 View All Complaints
@@ -334,8 +333,6 @@ function DashboardContent() {
           </div>
         </div>
       </main>
-
-      <BottomNavBar />
     </div>
   );
 }

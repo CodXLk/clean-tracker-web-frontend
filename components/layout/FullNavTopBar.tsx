@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { useUIStore } from "@/store/ui.store";
-import { NotificationBell } from "./NotificationBell";
+import { NotificationBell } from "@/components/admin/NotificationBell";
 
 /** Ordered most-specific first so longest-prefix wins. */
 const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
@@ -19,6 +19,10 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/inventory", "Inventory"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],
+  ["/dashboard/tasks", "Tasks"],
+  ["/dashboard/profile", "Profile"],
+  ["/dashboard/notifications", "Notifications"],
+  ["/dashboard", "Home"],
 ];
 
 function sectionTitle(pathname: string): string {
@@ -28,7 +32,7 @@ function sectionTitle(pathname: string): string {
   return match?.[1] ?? "";
 }
 
-export function AdminTopBar() {
+export function FullNavTopBar() {
   const setMobileNav = useUIStore((s) => s.setMobileNav);
   const pathname = usePathname();
   const title = sectionTitle(pathname);

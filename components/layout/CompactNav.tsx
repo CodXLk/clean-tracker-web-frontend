@@ -3,51 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Home,
-  ClipboardList,
-  LogOut,
-  MessageSquare,
-  Package,
-  User,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { useAuthStore } from "@/features/auth/store/auth.store";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 import { SignOutConfirmModal } from "@/components/modals/SignOutConfirmModal";
-
-interface NavItemConfig {
-  label: string;
-  href:  string;
-  icon:  LucideIcon;
-}
-
-const NAV_ITEMS: NavItemConfig[] = [
-  { label: "Home",       href: "/dashboard",            icon: Home },
-  { label: "Tasks",      href: "/dashboard/tasks",       icon: ClipboardList },
-  { label: "Complaints", href: "/dashboard/complaints",  icon: MessageSquare },
-  { label: "Inventory",  href: "/dashboard/inventory",   icon: Package },
-  { label: "Profile",    href: "/dashboard/profile",     icon: User },
-];
-
-/** Supervisors get an extra entry point into the Workforce & Management console. */
-const SUPERVISOR_ITEM: NavItemConfig = {
-  label: "Workforce",
-  href:  "/admin/workforce",
-  icon:  UsersRound,
-};
+import { useUIStore } from "@/store/ui.store";
+import { NAV_ITEMS, isNavItemActive, type NavItemConfig } from "@/lib/navigation/nav-items";
 
 interface NavItemProps {
-  item:     NavItemConfig;
+  item: NavItemConfig;
   isActive: boolean;
 }
 
 export function NavItem({ item, isActive }: NavItemProps) {
   const Icon = item.icon;
+  if (!item.href) return null;
 
   return (
     <Link
@@ -87,6 +59,7 @@ export function NavItem({ item, isActive }: NavItemProps) {
 
 function SidebarItem({ item, isActive }: NavItemProps) {
   const Icon = item.icon;
+  if (!item.href) return null;
 
   return (
     <Link
@@ -110,30 +83,14 @@ function SidebarItem({ item, isActive }: NavItemProps) {
   );
 }
 
-interface BottomNavBarProps {
-  /** Hide only the mobile bottom bar (e.g. while a bottom-sheet panel is open) — the
-   *  desktop sidebar stays visible since it never overlaps those panels. */
-  hideMobileBar?: boolean;
-}
-
-export function BottomNavBar({ hideMobileBar = false }: BottomNavBarProps) {
+export function CompactNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const role = useAuthStore((s) => s.user?.role);
   const me = useMe();
   const logout = useLogout();
+  const mobileBarHidden = useUIStore((s) => s.mobileBarHidden);
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const items =
-    role === "SUPERVISOR"
-      ? [...NAV_ITEMS.slice(0, 4), SUPERVISOR_ITEM, NAV_ITEMS[4]]
-      : NAV_ITEMS;
-
-  function isItemActive(item: NavItemConfig): boolean {
-    if (item.href === "/dashboard") {
-      return pathname === "/dashboard";
-    }
-    return pathname.startsWith(item.href);
-  }
+  const items = NAV_ITEMS.filter((item) => !!item.href);
 
   const fullName = me.data
     ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ")
@@ -160,7 +117,7 @@ export function BottomNavBar({ hideMobileBar = false }: BottomNavBarProps) {
           <SidebarItem
             key={item.href}
             item={item}
-            isActive={isItemActive(item)}
+            isActive={isNavItemActive(item.href!, pathname)}
           />
         ))}
 
@@ -199,7 +156,7 @@ export function BottomNavBar({ hideMobileBar = false }: BottomNavBarProps) {
       />
 
       {/* Mobile / tablet bottom bar — hidden on lg+ screens */}
-      {!hideMobileBar && (
+      {!mobileBarHidden && (
         <nav
           aria-label="Main navigation"
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-grey-300 bg-surface"
@@ -208,7 +165,7 @@ export function BottomNavBar({ hideMobileBar = false }: BottomNavBarProps) {
             <NavItem
               key={item.href}
               item={item}
-              isActive={isItemActive(item)}
+              isActive={isNavItemActive(item.href!, pathname)}
             />
           ))}
         </nav>

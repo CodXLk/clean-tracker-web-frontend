@@ -7,7 +7,7 @@ interface MeData {
 }
 
 // Clients don't get an Inspections view — supervisor/admin-only surface.
-// (The nav link is already hidden for them in AdminSidebar; this is the route-level guard.)
+// This is the route-level guard (nav-level filtering is deferred to later work).
 export default async function InspectionsLayout({ children }: { children: React.ReactNode }) {
   const result = await callBackend(BACKEND.auth.me);
   const envelope = (result.json ?? {}) as { data?: MeData };

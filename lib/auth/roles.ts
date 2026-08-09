@@ -7,12 +7,16 @@ export const SUPERVISOR_ALLOWED_PREFIXES = [
   "/admin/cleaner-logs",
 ];
 
+/** Merged Complaints/Inventory routes — accessible to every authenticated role. */
+export const SHARED_ADMIN_PREFIXES = ["/admin/complaints", "/admin/inventory"];
+
 export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.has(role);
 }
 
-/** Whether a role may open the given /admin path (admins: all; supervisors: allow-listed). */
+/** Whether a role may open the given /admin path (shared routes: everyone; admins: all; supervisors: allow-listed). */
 export function canAccessAdminPath(role: string | null | undefined, pathname: string): boolean {
+  if (SHARED_ADMIN_PREFIXES.some((p) => pathname.startsWith(p))) return true;
   if (isAdminRole(role)) return true;
   if (role === "SUPERVISOR") {
     return SUPERVISOR_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p));
