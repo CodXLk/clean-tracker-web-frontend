@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useGSAP } from "@gsap/react";
 import { CheckCircle2, Mail, MapPin, Phone } from "lucide-react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { cn } from "@/lib/utils/cn";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
@@ -42,7 +42,11 @@ export function ContactSection() {
         duration: 0.7,
         ease: "power2.out",
         stagger: 0.1,
-        scrollTrigger: { trigger: sectionRef.current, start: "top 75%", once: true },
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top 75%",
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
+        },
       });
     },
     { scope: sectionRef, dependencies: [reduceMotion] },

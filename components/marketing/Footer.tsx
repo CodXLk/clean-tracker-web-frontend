@@ -26,18 +26,38 @@ export function Footer() {
       />
 
       <div className="mx-auto grid w-full max-w-[1512px] gap-10 px-[max(1.25rem,2.712vw)] py-14 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1.2fr] lg:gap-12">
-        <div className="flex flex-col gap-4">
-          <Image
-            src="/images/marketing/brand/logo.png"
-            alt="Primeway Property Services"
-            width={492}
-            height={220}
-            className="h-14 w-auto brightness-0 invert"
-          />
-          <p className="max-w-sm font-body text-sm leading-relaxed text-white/70">
-            A commercial cleaning company based in Victoria, Australia. Established 2021, serving a
-            wide range of industry sectors.
-          </p>
+        {/* `justify-center` centres the brand block down the row. Grid stretches
+            each column to the tallest of them — the six-link Explore list — so
+            without it this shorter column sat pinned to the top and read as
+            hanging off the others. */}
+        <div className="flex flex-col justify-center">
+          {/* Held to the description's own width rather than the column's. The
+              column is the widest of the four, so centring the mark across all
+              of it would strand it far to the right of the text it belongs to;
+              against this box it sits squarely over the copy. The box stays
+              left-aligned, keeping the block flush with the copyright line
+              below it. */}
+          <div className="flex max-w-sm flex-col gap-4">
+            {/* The logo plate is 492x220; declaring anything else hands
+                next/image the wrong aspect ratio and sizes the srcset off it —
+                at 100x100 it picked a 128px-wide render for a mark displayed
+                far wider. An explicit `self-*` because a direct child of a
+                column flex container is stretched to the full width by default,
+                which `w-auto` does not override: the two together painted the
+                2.24:1 mark into a 429x56 box. Sized to content, `h-16 w-auto`
+                resolves the width from the real ratio. */}
+            <Image
+              src="/images/marketing/brand/logo.png"
+              alt="Primeway Property Services"
+              width={492}
+              height={220}
+              className="h-16 w-auto self-center brightness-0 invert"
+            />
+            <p className="font-body text-sm leading-relaxed text-white/70">
+              A commercial cleaning company based in Victoria, Australia. Established 2021, serving
+              a wide range of industry sectors.
+            </p>
+          </div>
         </div>
 
         <FooterNav />

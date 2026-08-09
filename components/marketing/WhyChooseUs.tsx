@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { SectionHeading } from "./SectionHeading";
 
@@ -27,7 +26,6 @@ const POINTS = [
 
 export function WhyChooseUs() {
   const sectionRef = useRef<HTMLElement>(null);
-  const towerRef   = useRef<HTMLDivElement>(null);
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   useGSAP(
@@ -40,27 +38,13 @@ export function WhyChooseUs() {
         duration: 0.8,
         ease: "power2.out",
         stagger: 0.14,
-        scrollTrigger: { trigger: sectionRef.current, start: "top 68%", once: true },
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top 68%",
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
+        },
       });
 
-      // Continues the drift the tower has through the Industries section, so the
-      // two scenes read as one continuous camera move rather than a cut.
-      if (towerRef.current) {
-        gsap.fromTo(
-          towerRef.current,
-          { yPercent: -6 },
-          {
-            yPercent: 6,
-            ease: "none",
-            scrollTrigger: {
-              trigger: sectionRef.current,
-              start: "top bottom",
-              end: "bottom top",
-              scrub: 1,
-            },
-          },
-        );
-      }
     },
     { scope: sectionRef, dependencies: [reduceMotion] },
   );
@@ -73,37 +57,11 @@ export function WhyChooseUs() {
       aria-labelledby="why-choose-us-heading"
       className="relative overflow-hidden"
     >
-      {/* Tower, at the framing Figma gives it in the "Why Choose Us" frame:
-          3059x1708 anchored to (-1147, -486) on the 1512x982 canvas. */}
-      <div
-        ref={towerRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 mx-auto max-w-[1512px] will-change-transform"
-      >
-        <div
-          className="absolute"
-          style={{ left: "-75.86%", top: "-49.49%", width: "202.31%", height: "173.93%" }}
-        >
-          <Image
-            src="/images/marketing/industries/tower.webp"
-            alt=""
-            fill
-            sizes="205vw"
-            className="object-contain object-top"
-          />
-        </div>
-      </div>
-
-      {/* Same reasoning as Industries: on the `lg` canvas the copy occupies the
-          right half, clear of the tower. Stacked it runs straight over the
-          glass and the plaza, so the tower is banked down behind a scrim at
-          those sizes. Outside the parallaxed wrapper above, so it stays put
-          while the tower drifts. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-atmos-top/90 via-atmos-top/80 to-atmos-top/40 lg:hidden"
-      />
-
+      {/* The tower and its stacked-layout scrim both live in `TowerBackdrop`,
+          which spans this section and Industries as one element. This scene
+          used to carry its own copy, anchored differently and scrolling rather
+          than sticky, so across the handover the two were visible together and
+          the building looked cut in half. */}
       <div className="relative mx-auto w-full max-w-[1512px] px-[max(1.25rem,2.712vw)]">
         {/* As in Industries: the full-viewport beat is `lg` pacing. Stacked, it
             padded three short points out to a screenful. */}

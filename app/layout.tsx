@@ -41,7 +41,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${plusJakartaSans.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* suppressHydrationWarning is scoped to this element's own attributes only
+          — it does not hide mismatches elsewhere in the tree. Needed because
+          browser extensions (e.g. ColorZilla) inject attributes like
+          cz-shortcut-listen onto <body> before React hydrates, which is a
+          false-positive mismatch: the extension changed the DOM, not our code. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <QueryProvider>
           <ThemeProvider>
             {children}

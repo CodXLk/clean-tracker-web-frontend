@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
-import { gsap } from "@/lib/gsap";
+import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { SectionHeading } from "./SectionHeading";
 import { ServiceCard, type ServiceKey } from "./ServiceCard";
@@ -70,7 +70,11 @@ export function OurServices() {
         duration: 0.7,
         ease: "power2.out",
         stagger: 0.12,
-        scrollTrigger: { trigger: sectionRef.current, start: "top 70%", once: true },
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: "top 70%",
+          toggleActions: REVEAL_TOGGLE_ACTIONS,
+        },
       });
 
       const scene = sceneRef.current;
@@ -103,7 +107,7 @@ export function OurServices() {
             scrollTrigger: {
               trigger: scene,
               start: "top 68%",
-              once: true,
+              toggleActions: REVEAL_TOGGLE_ACTIONS,
               invalidateOnRefresh: true,
             },
           });
@@ -119,7 +123,7 @@ export function OurServices() {
           duration: 0.7,
           ease: "power2.out",
           stagger: 0.1,
-          scrollTrigger: { trigger: scene, start: "top 85%", once: true },
+          scrollTrigger: { trigger: scene, start: "top 85%", toggleActions: REVEAL_TOGGLE_ACTIONS },
         });
       });
     },
