@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap, REVEAL_TOGGLE_ACTIONS } from "@/lib/gsap";
@@ -37,23 +36,8 @@ const INDUSTRIES = [
 /** How far off-canvas each cluster starts, as a share of the scene width. */
 const ENTRY_SHIFT = { left: -33.27, right: 39.81 } as const;
 
-/**
- * The tower is laid out at the framing the tile scene gives it (3059x1708 at
- * -773.5,-214 on the 1512x982 canvas). These are the same numbers for the
- * earlier text scene (2425x1354 at -93,31) re-expressed as a transform off that
- * layout, so the scroll-linked move stays on the compositor.
- */
-const TOWER_TEXT_FRAMING = { scale: 0.7927, xPercent: 11.885, yPercent: 3.982 } as const;
-const TOWER_TILE_FRAMING = {
-  left: "-51.16%",
-  top: "-21.79%",
-  width: "202.31%",
-  height: "173.93%",
-} as const;
-
 export function IndustriesWeServe() {
   const sectionRef = useRef<HTMLElement>(null);
-  const towerRef   = useRef<HTMLDivElement>(null);
   const diamondsRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
@@ -73,26 +57,6 @@ export function IndustriesWeServe() {
           toggleActions: REVEAL_TOGGLE_ACTIONS,
         },
       });
-
-      // The tower travels between the two framings Figma gives it: right of the
-      // copy while the text reads, then recentred and larger behind the tiles.
-      // The element is laid out at the *second* framing and the first is
-      // expressed as a transform off it, so the scrub only ever touches
-      // compositor properties instead of re-laying-out a 200%-wide image.
-      if (towerRef.current) {
-        gsap.from(towerRef.current, {
-          scale: TOWER_TEXT_FRAMING.scale,
-          xPercent: TOWER_TEXT_FRAMING.xPercent,
-          yPercent: TOWER_TEXT_FRAMING.yPercent,
-          ease: "none",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top top",
-            end: "bottom bottom",
-            scrub: 1,
-          },
-        });
-      }
 
       const scene = diamondsRef.current;
       const diamonds = scene?.querySelectorAll<HTMLElement>("[data-diamond]") ?? [];
@@ -127,31 +91,11 @@ export function IndustriesWeServe() {
       aria-labelledby="industries-heading"
       className="relative"
     >
-      {/* The Aspire Tower render is a single sticky backdrop that both beats of
-          the section scroll past, matching how Figma keeps one tower node
-          moving between frames rather than cutting between images. */}
-      {/* Capped to the 1512px design canvas so the tower keeps its scale
-          relationship with the tiles instead of outgrowing them on wide displays. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 mx-auto max-w-[1512px]">
-        <div className="sticky top-0 h-[100svh] overflow-hidden">
-          <div ref={towerRef} className="absolute will-change-transform" style={TOWER_TILE_FRAMING}>
-            <Image
-              src="/images/marketing/industries/tower.webp"
-              alt=""
-              fill
-              sizes="205vw"
-              className="object-contain object-top"
-            />
-          </div>
-          {/* On the `lg` canvas the copy sits in clear sky to the left of the
-              tower. Once the layout stacks there is no "beside" left and the
-              paragraph lands straight on the glass, where white text and orange
-              highlights both disappear. A scrim under the text — and only at
-              those sizes — restores the contrast without touching the scene. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-atmos-top via-atmos-top/90 to-atmos-top/45 lg:hidden" />
-        </div>
-      </div>
-
+      {/* The tower behind this scene lives in `TowerBackdrop`, mounted around
+          this section and Why Choose Us together. It used to be mounted here,
+          with Why Choose Us carrying a second copy of its own — across the
+          handover both were on screen at different anchors and the building
+          read as cut in half. */}
       <div className="relative mx-auto w-full max-w-[1512px]">
         {/* Beat one — heading and body copy, tower to the right. Full-viewport
             beats are what give the `lg` scene its cinematic pacing; stacked,
