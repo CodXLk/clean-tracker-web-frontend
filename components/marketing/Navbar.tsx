@@ -329,38 +329,40 @@ export function Navbar() {
           })}
         </nav>
 
-        <QuoteButton onNavigate={navigate} className="hidden lg:inline-flex" />
+        <div className="flex items-center gap-[clamp(0.5rem,1vw,1rem)]">
+          <QuoteButton onNavigate={navigate} className="hidden lg:inline-flex" />
 
-        <button
-          ref={toggleRef}
-          type="button"
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen}
-          aria-controls="mobile-nav"
-          onClick={() => setMobileOpen((open) => !open)}
-          className={cn(
-            "relative flex size-11 items-center justify-center rounded-full transition-colors duration-300 lg:hidden",
-            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-            isLight ? "text-white" : "text-black",
-          )}
-        >
-          <Menu
-            size={24}
-            aria-hidden="true"
+          <button
+            ref={toggleRef}
+            type="button"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
+            onClick={() => setMobileOpen((open) => !open)}
             className={cn(
-              "absolute transition-all duration-300",
-              mobileOpen ? "rotate-90 scale-50 opacity-0" : "rotate-0 scale-100 opacity-100",
+              "relative flex size-11 items-center justify-center rounded-full transition-colors duration-300",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+              isLight ? "text-white" : "text-black",
             )}
-          />
-          <X
-            size={24}
-            aria-hidden="true"
-            className={cn(
-              "absolute transition-all duration-300",
-              mobileOpen ? "rotate-0 scale-100 opacity-100" : "-rotate-90 scale-50 opacity-0",
-            )}
-          />
-        </button>
+          >
+            <Menu
+              size={24}
+              aria-hidden="true"
+              className={cn(
+                "absolute transition-all duration-300",
+                mobileOpen ? "rotate-90 scale-50 opacity-0" : "rotate-0 scale-100 opacity-100",
+              )}
+            />
+            <X
+              size={24}
+              aria-hidden="true"
+              className={cn(
+                "absolute transition-all duration-300",
+                mobileOpen ? "rotate-0 scale-100 opacity-100" : "-rotate-90 scale-50 opacity-0",
+              )}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Reading progress — a hairline that fills as the page is consumed. */}
@@ -377,7 +379,7 @@ export function Navbar() {
         ref={sheetRef}
         className={cn(
           "pointer-events-auto absolute inset-x-0 top-full origin-top border-t border-black/5 bg-white/95",
-          "shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)] backdrop-blur-[25px] transition-all duration-300 ease-out lg:hidden",
+          "shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)] backdrop-blur-[25px] transition-all duration-300 ease-out",
           mobileOpen
             ? "visible translate-y-0 opacity-100"
             : "invisible -translate-y-3 opacity-0",

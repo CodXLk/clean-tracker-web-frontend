@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
 import { SiteSelector } from "@/components/shared/SiteSelector";
@@ -74,17 +74,9 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
   const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
 
-  // Only offer sites with tasks scheduled today — plus whichever site the cleaner is
-  // already checked into, so they're never blocked from checking out just because
-  // today's tasks there are all done.
-  const sitesWithTasksToday = useMemo(
-    () => new Set(todayTasks.map((t) => t.siteId)),
-    [todayTasks],
-  );
-  const visibleSites = useMemo(
-    () => sites.filter((s) => sitesWithTasksToday.has(s.siteId) || s.siteId === checkedInSiteId),
-    [sites, sitesWithTasksToday, checkedInSiteId],
-  );
+  // Every assigned site is offered for check-in, so a cleaner covering more than one site
+  // the same day can pick which to check into — the selector below is that site filter.
+  const visibleSites = sites;
 
   // Which of the cleaner's visible sites this single card/slider acts on. Defaults to
   // the checked-in site, but the cleaner can switch via the selector when they have more
@@ -174,14 +166,6 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     return (
       <p className="rounded-2xl bg-white/50 px-4 py-6 text-center text-sm text-grey-500">
         You have no sites assigned yet. Please contact your supervisor.
-      </p>
-    );
-  }
-
-  if (visibleSites.length === 0) {
-    return (
-      <p className="rounded-2xl bg-white/50 px-4 py-6 text-center text-sm text-grey-500">
-        No tasks scheduled for you today — nothing to check in for.
       </p>
     );
   }

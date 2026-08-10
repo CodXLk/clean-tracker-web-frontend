@@ -281,7 +281,13 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             label="Number of cleaners"
             type="number"
             min={0}
-            hint="Creates this many cleaner slots (profiles). Assign cleaners to the slots below after saving."
+            readOnly={isEdit}
+            className={isEdit ? "bg-grey-50 text-grey-500" : undefined}
+            hint={
+              isEdit
+                ? "To add or remove cleaners, use “Cleaner slots” — it guides copying a cleaner’s tasks or removing an empty slot safely."
+                : "Creates this many cleaner slots (profiles). Assign cleaners to the slots after saving."
+            }
             error={errors.numberOfCleaners?.message}
             {...register("numberOfCleaners", { valueAsNumber: true })}
           />

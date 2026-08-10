@@ -11,7 +11,7 @@ export interface SelectOption {
 }
 
 interface SearchableSelectProps {
-  label: string;
+  label?: string;
   options: SelectOption[];
   value: string | null;
   onChange: (value: string) => void;
@@ -79,10 +79,12 @@ export function SearchableSelect({
 
   return (
     <div className="flex flex-col gap-1.5" ref={containerRef}>
-      <label className="text-sm font-medium text-on-surface">
-        {label}
-        {required && <span className="ml-0.5 text-error">*</span>}
-      </label>
+      {label && (
+        <label className="text-sm font-medium text-on-surface">
+          {label}
+          {required && <span className="ml-0.5 text-error">*</span>}
+        </label>
+      )}
 
       <div className="relative">
         <button

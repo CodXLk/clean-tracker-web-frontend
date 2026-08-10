@@ -17,6 +17,8 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/inspections", "Inspections"],
   ["/admin/complaints", "Complaints"],
   ["/admin/inventory", "Inventory"],
+  ["/admin/client-site-management", "Client Site Management"],
+  ["/admin/outsource-management", "Outsource Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],
 ];

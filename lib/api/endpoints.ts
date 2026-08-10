@@ -38,8 +38,15 @@ export const ENDPOINTS = {
     supervisors: (id: string) => `/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/sites/${id}/cleaners`,
     cleanerProfiles: (id: string) => `/sites/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/sites/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) => `/sites/${id}/cleaner-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/sites/${id}/cleaning-schedule/check-in`,
+  },
+  outsourceProjects: {
+    list:   "/outsource-projects",
+    create: "/outsource-projects",
+    byId:   (id: string) => `/outsource-projects/${id}`,
   },
   floors: {
     list:   "/floors",
@@ -188,8 +195,15 @@ export const BACKEND = {
     supervisors: (id: string) => `/api/v1/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/api/v1/sites/${id}/cleaners`,
     cleanerProfiles: (id: string) => `/api/v1/sites/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/api/v1/sites/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/cleaner-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/api/v1/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/api/v1/sites/${id}/cleaning-schedule/check-in`,
+  },
+  outsourceProjects: {
+    list:   "/api/v1/outsource-projects",
+    create: "/api/v1/outsource-projects",
+    byId:   (id: string) => `/api/v1/outsource-projects/${id}`,
   },
   floors: {
     list:   "/api/v1/floors",

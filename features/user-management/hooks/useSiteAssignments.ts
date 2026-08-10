@@ -109,3 +109,45 @@ export function useAssignCleanerProfiles() {
     },
   });
 }
+
+/** Adds one cleaner slot, optionally copying an existing slot's task scope onto the new one. */
+export function useAddCleanerProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      siteId,
+      copyFromProfileId,
+    }: {
+      siteId: string;
+      copyFromProfileId?: string | null;
+    }) => {
+      const { data } = await clientApi.post(ENDPOINTS.sites.addCleanerProfile(siteId), {
+        copyFromProfileId: copyFromProfileId ?? null,
+      });
+      return SiteCleanerProfileListSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleanerProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleaners(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}
+
+/** Removes a cleaner slot that has no tasks assigned. */
+export function useRemoveCleanerProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ siteId, profileId }: { siteId: string; profileId: string }) => {
+      const { data } = await clientApi.delete(
+        ENDPOINTS.sites.removeCleanerProfile(siteId, profileId),
+      );
+      return SiteCleanerProfileListSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleanerProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleaners(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}

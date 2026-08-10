@@ -13,6 +13,7 @@ import {
   Package,
   Footprints,
   CalendarCheck,
+  Handshake,
   X,
   LogOut,
   type LucideIcon,
@@ -47,6 +48,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inventory",   href: "/admin/inventory",  icon: Package },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
+  { label: "Outsource Management", href: "/admin/outsource-management", icon: Handshake },
   {
     label: "Client Management",
     icon: ContactRound,
