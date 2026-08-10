@@ -46,6 +46,7 @@ export const SiteCleanerProfileSchema = z.object({
   label: z.string(),
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
+  taskCount: z.number().nullable().optional(),
 });
 export type SiteCleanerProfile = z.infer<typeof SiteCleanerProfileSchema>;
 

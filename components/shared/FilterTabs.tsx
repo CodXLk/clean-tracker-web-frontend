@@ -7,6 +7,7 @@ interface FilterTabsProps<T extends string> {
   value:    T;
   onChange: (v: T) => void;
   className?: string;
+  getLabel?: (v: T) => string;
 }
 
 export function FilterTabs<T extends string>({
@@ -14,6 +15,7 @@ export function FilterTabs<T extends string>({
   value,
   onChange,
   className,
+  getLabel,
 }: FilterTabsProps<T>) {
   return (
     <div className={cn("flex gap-2 flex-wrap", className)} role="tablist">
@@ -32,7 +34,7 @@ export function FilterTabs<T extends string>({
                 : "border border-primary text-primary hover:bg-primary/10",
             )}
           >
-            {option}
+            {getLabel ? getLabel(option) : option}
           </button>
         );
       })}

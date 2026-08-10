@@ -1,18 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, CalendarCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, CalendarCheck } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
-import { useOccurrences } from "@/features/workforce/hooks/useAssignments";
+import { useOccurrences, useDeleteAssignment } from "@/features/workforce/hooks/useAssignments";
 import {
   useSiteCleaningTemplates,
   useCleaningCheckIn,
 } from "@/features/user-management/hooks/useCleaningSchedule";
 import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
+import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 // ── Date helpers ────────────────────────────────────────────────────────────────
@@ -51,34 +52,46 @@ function occurrenceHex(o: TaskOccurrence): string {
   return o.colorHex ?? TYPE_HEX[o.assignmentType] ?? "#0B585A";
 }
 
-// ── Row model (occurrences grouped by area → task → date) ────────────────────────
+// ── Grouping: one entry per template (assignment) added to an area on a day ───────
 
-interface TaskRow {
-  taskId: string;
-  name: string;
+interface DayTemplate {
+  assignmentId: string;
+  templateName: string;
   hex: string;
-  byDate: Map<string, TaskOccurrence[]>;
 }
 
-function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
-  const byArea = new Map<string, Map<string, TaskRow>>();
+/** areaId → date → the distinct templates checked in that day (deduped by assignment). */
+function templatesByAreaDate(
+  occurrences: TaskOccurrence[],
+): Map<string, Map<string, DayTemplate[]>> {
+  const byArea = new Map<string, Map<string, Map<string, DayTemplate>>>();
   for (const o of occurrences) {
-    const tasks = byArea.get(o.areaId) ?? new Map<string, TaskRow>();
-    byArea.set(o.areaId, tasks);
-    const row =
-      tasks.get(o.taskId) ??
-      { taskId: o.taskId, name: o.name, hex: occurrenceHex(o), byDate: new Map() };
-    const list = row.byDate.get(o.date) ?? [];
-    list.push(o);
-    row.byDate.set(o.date, list);
-    tasks.set(o.taskId, row);
+    const byDate = byArea.get(o.areaId) ?? new Map<string, Map<string, DayTemplate>>();
+    byArea.set(o.areaId, byDate);
+    const byAssignment = byDate.get(o.date) ?? new Map<string, DayTemplate>();
+    byDate.set(o.date, byAssignment);
+    if (!byAssignment.has(o.assignmentId)) {
+      byAssignment.set(o.assignmentId, {
+        assignmentId: o.assignmentId,
+        templateName: o.templateName?.trim() || WORK_TYPE_LABELS[o.assignmentType],
+        hex: occurrenceHex(o),
+      });
+    }
   }
-  const result = new Map<string, TaskRow[]>();
-  for (const [areaId, tasks] of byArea) {
-    result.set(areaId, [...tasks.values()].sort((a, b) => a.name.localeCompare(b.name)));
+  const result = new Map<string, Map<string, DayTemplate[]>>();
+  for (const [areaId, byDate] of byArea) {
+    const dateMap = new Map<string, DayTemplate[]>();
+    for (const [date, byAssignment] of byDate) {
+      dateMap.set(
+        date,
+        [...byAssignment.values()].sort((a, b) => a.templateName.localeCompare(b.templateName)),
+      );
+    }
+    result.set(areaId, dateMap);
   }
   return result;
 }
+
 
 const GRID_TEMPLATE = "minmax(220px, 1.6fr) repeat(7, minmax(72px, 1fr))";
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -109,11 +122,18 @@ export default function ClientSiteManagementPage() {
   const areasQuery = useAreas(undefined, { enabled: !!siteId });
   const templatesQuery = useSiteCleaningTemplates(isHotel ? siteId : undefined);
   const checkIn = useCleaningCheckIn();
+  const deleteAssignment = useDeleteAssignment();
 
   const [openCell, setOpenCell] = useState<{ floorId: string; areaId: string; date: string } | null>(
     null,
   );
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<{
+    assignmentId: string;
+    templateName: string;
+    dayIso: string;
+  } | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const floors = useMemo(
     () => (floorsQuery.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
@@ -129,7 +149,10 @@ export default function ClientSiteManagementPage() {
     return map;
   }, [floors, areasQuery.data]);
 
-  const areaRows = useMemo(() => rowsByArea(occurrencesQuery.data ?? []), [occurrencesQuery.data]);
+  const areaTemplates = useMemo(
+    () => templatesByAreaDate(occurrencesQuery.data ?? []),
+    [occurrencesQuery.data],
+  );
 
   const templates = templatesQuery.data ?? [];
   const structureLoading = floorsQuery.isLoading || areasQuery.isLoading;
@@ -155,6 +178,19 @@ export default function ClientSiteManagementPage() {
     }
   }
 
+  async function removeTemplate() {
+    if (!pendingRemove) return;
+    const { assignmentId, templateName, dayIso } = pendingRemove;
+    setRemoveError(null);
+    try {
+      await deleteAssignment.mutateAsync(assignmentId);
+      setBanner({ kind: "success", text: `${templateName} removed from ${dayIso}.` });
+      setPendingRemove(null);
+    } catch (err) {
+      setRemoveError(getErrorMessage(err));
+    }
+  }
+
   const monthLabel = weekDays[0].toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const taskCount = occurrencesQuery.data?.length ?? 0;
 
@@ -171,7 +207,8 @@ export default function ClientSiteManagementPage() {
         </h1>
         <p className="text-sm text-grey-500">
           View a site&apos;s cleaning schedule by floor and area. For hotels, hover an area and pick a
-          saved template on any day to schedule its tasks and notify the responsible cleaners.
+          saved template on any day to schedule its tasks and notify the responsible cleaners. Click a
+          template to remove it if it was added by mistake.
         </p>
       </header>
 
@@ -292,7 +329,7 @@ export default function ClientSiteManagementPage() {
                   style={{ gridTemplateColumns: GRID_TEMPLATE }}
                 >
                   <div className="flex items-end px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-wide text-grey-500">
-                    Floor / Area / Task
+                    Floor / Area
                   </div>
                   {weekDays.map((day, i) => {
                     const iso = weekISO[i];
@@ -360,25 +397,67 @@ export default function ClientSiteManagementPage() {
                           </div>
                         ) : (
                           floorAreas.map((area) => {
-                            const rows = areaRows.get(area.id) ?? [];
+                            const dayTemplates = areaTemplates.get(area.id);
                             return (
                               <div key={area.id}>
-                                {/* Area band — hover a day cell to add a saved template */}
+                                {/* Area band — each day cell lists the templates added that
+                                    day (click a chip to remove) and a button to add one. */}
                                 <div
                                   className="group/area grid border-b border-grey-200 bg-primary/10"
                                   style={{ gridTemplateColumns: GRID_TEMPLATE }}
                                 >
-                                  <div className="px-4 py-1.5 text-[13px] font-semibold text-primary">
+                                  <div className="flex items-center px-4 py-1.5 text-[13px] font-semibold text-primary">
                                     {area.name}
                                   </div>
                                   {weekISO.map((iso) => {
                                     const isOpen =
                                       openCell?.areaId === area.id && openCell?.date === iso;
+                                    const added = dayTemplates?.get(iso) ?? [];
+                                    const isToday = iso === todayISO;
                                     return (
                                       <div
                                         key={iso}
-                                        className="flex items-center justify-center border-l border-grey-200/60 px-1 py-1"
+                                        className={cn(
+                                          "flex flex-col items-stretch justify-center gap-1 border-l border-grey-200/60 px-1.5 py-1.5",
+                                          isToday && "bg-primary/[0.04]",
+                                        )}
                                       >
+                                        {added.map((tpl) => (
+                                          <button
+                                            key={tpl.assignmentId}
+                                            type="button"
+                                            disabled={deleteAssignment.isPending}
+                                            onClick={() => {
+                                              setBanner(null);
+                                              setRemoveError(null);
+                                              setPendingRemove({
+                                                assignmentId: tpl.assignmentId,
+                                                templateName: tpl.templateName,
+                                                dayIso: iso,
+                                              });
+                                            }}
+                                            title={`${tpl.templateName} — click to remove`}
+                                            className="group/chip flex items-center justify-center gap-1 rounded-lg border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                            style={{
+                                              borderColor: `${tpl.hex}55`,
+                                              backgroundColor: `${tpl.hex}12`,
+                                            }}
+                                          >
+                                            <span
+                                              className="truncate text-[11px] font-semibold"
+                                              style={{ color: tpl.hex }}
+                                            >
+                                              {tpl.templateName}
+                                            </span>
+                                            <X
+                                              size={11}
+                                              aria-hidden="true"
+                                              className="shrink-0 opacity-0 transition-opacity group-hover/chip:opacity-100"
+                                              style={{ color: tpl.hex }}
+                                            />
+                                          </button>
+                                        ))}
+
                                         {isHotel &&
                                           (isOpen ? (
                                             <select
@@ -415,7 +494,12 @@ export default function ClientSiteManagementPage() {
                                                   date: iso,
                                                 });
                                               }}
-                                              className="flex h-5 w-5 items-center justify-center rounded-md text-primary opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0"
+                                              className={cn(
+                                                "mx-auto flex h-5 w-5 items-center justify-center rounded-md text-primary transition-all hover:bg-primary hover:text-white hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0",
+                                                added.length > 0
+                                                  ? "opacity-40 group-hover/area:opacity-70"
+                                                  : "opacity-0 group-hover/area:opacity-70",
+                                              )}
                                             >
                                               <Plus size={12} aria-hidden="true" />
                                             </button>
@@ -424,92 +508,6 @@ export default function ClientSiteManagementPage() {
                                     );
                                   })}
                                 </div>
-
-                                {/* Task rows */}
-                                {rows.length === 0 ? (
-                                  <div
-                                    className="grid border-b border-grey-200"
-                                    style={{ gridTemplateColumns: GRID_TEMPLATE }}
-                                  >
-                                    <div className="px-6 py-2 text-xs text-grey-300">
-                                      No tasks scheduled
-                                    </div>
-                                    {weekISO.map((iso) => (
-                                      <div
-                                        key={iso}
-                                        className="flex items-center justify-center border-l border-grey-200 py-2 text-xs text-grey-300"
-                                      >
-                                        —
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  rows.map((row, ri) => (
-                                    <div
-                                      key={row.taskId}
-                                      className={cn(
-                                        "grid border-b border-grey-200 transition-colors hover:bg-primary/[0.04]",
-                                        ri % 2 === 1 && "bg-grey-100/40",
-                                      )}
-                                      style={{ gridTemplateColumns: GRID_TEMPLATE }}
-                                    >
-                                      <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5 pl-6">
-                                        <span
-                                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                          style={{ backgroundColor: row.hex }}
-                                          aria-hidden="true"
-                                        />
-                                        <span
-                                          className="truncate text-sm text-on-surface"
-                                          title={row.name}
-                                        >
-                                          {row.name}
-                                        </span>
-                                      </div>
-                                      {weekISO.map((iso) => {
-                                        const cell = row.byDate.get(iso) ?? [];
-                                        const first = cell[0];
-                                        const isToday = iso === todayISO;
-                                        return (
-                                          <div
-                                            key={iso}
-                                            className={cn(
-                                              "border-l border-grey-200 p-1.5",
-                                              isToday && "bg-primary/[0.04]",
-                                            )}
-                                          >
-                                            {first && (
-                                              <div
-                                                title={`${
-                                                  first.templateName?.trim() ||
-                                                  WORK_TYPE_LABELS[first.assignmentType]
-                                                } · ${first.startTime.slice(0, 5)}–${first.endTime.slice(0, 5)}`}
-                                                className="rounded-lg border px-2 py-1 text-center"
-                                                style={{
-                                                  borderColor: `${occurrenceHex(first)}55`,
-                                                  backgroundColor: `${occurrenceHex(first)}12`,
-                                                }}
-                                              >
-                                                <p
-                                                  className="truncate text-[11px] font-semibold"
-                                                  style={{ color: occurrenceHex(first) }}
-                                                >
-                                                  {first.templateName?.trim() ||
-                                                    WORK_TYPE_LABELS[first.assignmentType]}
-                                                </p>
-                                                <p className="text-[10px] text-grey-500">
-                                                  {first.startTime.slice(0, 5)}–
-                                                  {first.endTime.slice(0, 5)}
-                                                  {cell.length > 1 ? ` · ${cell.length}` : ""}
-                                                </p>
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ))
-                                )}
                               </div>
                             );
                           })
@@ -523,6 +521,25 @@ export default function ClientSiteManagementPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        title="Remove template"
+        description={
+          pendingRemove
+            ? `Remove "${pendingRemove.templateName}" from ${pendingRemove.dayIso}? Its tasks will be unscheduled for that day.`
+            : ""
+        }
+        confirmLabel="Remove"
+        isPending={deleteAssignment.isPending}
+        error={removeError ?? undefined}
+        onConfirm={removeTemplate}
+        onClose={() => {
+          if (deleteAssignment.isPending) return;
+          setPendingRemove(null);
+          setRemoveError(null);
+        }}
+      />
     </div>
   );
 }

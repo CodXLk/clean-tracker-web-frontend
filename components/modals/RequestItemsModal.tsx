@@ -5,7 +5,13 @@ import { Minus, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
-import { useInventoryItems, useCreateRequest } from "@/features/inventory/hooks/useInventory";
+import {
+  useInventoryItems,
+  useCreateRequest,
+  useSiteInventory,
+  useMyCleanerInventory,
+} from "@/features/inventory/hooks/useInventory";
+import type { RequestType } from "@/features/inventory/schemas/inventory.schema";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface RequestItemsModalProps {
@@ -13,19 +19,42 @@ interface RequestItemsModalProps {
   onClose:  () => void;
 }
 
+const TYPE_OPTIONS: { value: RequestType; label: string }[] = [
+  { value: "SITE", label: "For the site" },
+  { value: "CLEANER", label: "For myself" },
+];
+
 export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
   const sitesQuery = useMySites();
   const itemsQuery = useInventoryItems(true);
   const createMutation = useCreateRequest();
 
-  const [siteId,     setSiteId]     = useState("");
-  const [search,     setSearch]     = useState("");
-  const [note,       setNote]       = useState("");
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [error,      setError]      = useState<string | null>(null);
+  const [siteId,      setSiteId]      = useState("");
+  const [requestType, setRequestType] = useState<RequestType>("SITE");
+  const [search,      setSearch]      = useState("");
+  const [note,        setNote]        = useState("");
+  const [quantities,  setQuantities]  = useState<Record<string, number>>({});
+  const [error,       setError]       = useState<string | null>(null);
+
+  // Current stock for the chosen context: the site's stock, or the cleaner's own stock.
+  const siteInvQuery = useSiteInventory(requestType === "SITE" ? siteId || undefined : undefined);
+  const myInvQuery = useMyCleanerInventory();
 
   const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+
+  const currentStock = useMemo(() => {
+    const map = new Map<string, number>();
+    if (requestType === "SITE") {
+      for (const row of siteInvQuery.data ?? []) map.set(row.itemId, row.quantity);
+    } else {
+      for (const row of myInvQuery.data?.items ?? []) map.set(row.itemId, row.quantity);
+    }
+    return map;
+  }, [requestType, siteInvQuery.data, myInvQuery.data]);
+
+  const stockLoading = requestType === "SITE" ? siteInvQuery.isLoading : myInvQuery.isLoading;
+  const contextReady = !itemsQuery.isLoading && (requestType === "CLEANER" || !!siteId) && !stockLoading;
 
   useEffect(() => {
     if (open) {
@@ -33,6 +62,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       setNote("");
       setQuantities({});
       setError(null);
+      setRequestType("SITE");
       createMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,32 +75,33 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
     }
   }, [open, siteId, sites]);
 
+  // Pre-load every item's quantity with its current stock whenever the context
+  // (type / site) changes and the stock has finished loading. A key gate keeps
+  // background refetches from clobbering the cleaner's edits.
+  const syncKey = `${requestType}:${siteId}:${contextReady ? "ready" : "loading"}`;
+  const [syncedKey, setSyncedKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !contextReady || syncedKey === syncKey) return;
+    setSyncedKey(syncKey);
+    const next: Record<string, number> = {};
+    for (const item of items) next[item.id] = currentStock.get(item.id) ?? 0;
+    setQuantities(next);
+  }, [open, contextReady, syncKey, syncedKey, items, currentStock]);
+  useEffect(() => {
+    if (!open) setSyncedKey(null);
+  }, [open]);
+
   if (!open) return null;
 
   const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const selectedItems = items.filter((item) => (quantities[item.id] ?? 0) > 0);
+  const chosenCount = items.filter((item) => (quantities[item.id] ?? 0) > 0).length;
 
-  function addItem(id: string) {
-    setQuantities((prev) => ({ ...prev, [id]: 1 }));
-  }
-
-  function increment(id: string) {
-    setQuantities((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
-  }
-
-  function decrement(id: string) {
-    setQuantities((prev) => {
-      const next = (prev[id] ?? 0) - 1;
-      if (next <= 0) {
-        const updated = { ...prev };
-        delete updated[id];
-        return updated;
-      }
-      return { ...prev, [id]: next };
-    });
+  function setQty(id: string, value: number) {
+    const q = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    setQuantities((prev) => ({ ...prev, [id]: q }));
   }
 
   function handleSubmit() {
@@ -79,16 +110,21 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       setError("Select a site to request items for.");
       return;
     }
-    const lines = selectedItems.map((item) => ({
-      itemId: item.id,
-      requestedQuantity: quantities[item.id],
-    }));
+    const lines = items
+      .filter((item) => (quantities[item.id] ?? 0) > 0)
+      .map((item) => ({ itemId: item.id, requestedQuantity: quantities[item.id] }));
     if (lines.length === 0) {
-      setError("Add at least one item.");
+      setError("Set a quantity for at least one item.");
       return;
     }
     createMutation.mutate(
-      { siteId, note: note.trim() || undefined, lines },
+      {
+        siteId,
+        requestType,
+        // CLEANER requests default to the requester's own cleaner profile on the backend.
+        note: note.trim() || undefined,
+        lines,
+      },
       { onSuccess: onClose },
     );
   }
@@ -125,6 +161,33 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           </button>
         </div>
 
+        {/* Request type */}
+        <div className="mb-4">
+          <span className="mb-1.5 block text-xs font-medium text-grey-700">Request for</span>
+          <div className="flex gap-2">
+            {TYPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setRequestType(opt.value)}
+                className={cn(
+                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                  requestType === opt.value
+                    ? "border-primary bg-primary text-white"
+                    : "border-grey-300 text-on-surface hover:bg-grey-100",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-grey-500">
+            {requestType === "SITE"
+              ? "Quantities below show the site's current stock. Edit them and confirm."
+              : "Quantities below show your current stock. Edit them and confirm."}
+          </p>
+        </div>
+
         {/* Site selector (shown when the cleaner covers more than one site) */}
         {sites.length > 1 && (
           <div className="mb-4">
@@ -158,94 +221,57 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           />
         </div>
 
-        {/* Item list */}
-        <div className="mb-5 flex flex-col gap-2">
-          {itemsQuery.isLoading ? (
-            <p className="py-4 text-center text-sm text-grey-500">Loading items…</p>
+        {/* Item list — every item, quantity pre-loaded with current stock */}
+        <div className="mb-5 flex flex-col gap-1.5">
+          {itemsQuery.isLoading || stockLoading ? (
+            <p className="py-4 text-center text-sm text-grey-500">Loading stock…</p>
           ) : filtered.length === 0 ? (
             <p className="py-4 text-center text-sm text-grey-500">No items found.</p>
           ) : (
             filtered.map((item) => {
               const qty = quantities[item.id] ?? 0;
+              const inStock = currentStock.get(item.id) ?? 0;
               return (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+                  className="flex items-center justify-between gap-3 rounded-xl px-3 py-2"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-on-surface truncate">
-                      {item.name}
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-on-surface">{item.name}</span>
+                    <span className="text-[11px] text-grey-500">
+                      In stock: {inStock} {item.unit}
                     </span>
                   </div>
-                  {qty === 0 ? (
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <button
-                      onClick={() => addItem(item.id)}
-                      className="shrink-0 rounded-xl border border-primary px-3 py-1 text-sm text-primary transition-colors hover:bg-primary/10"
+                      onClick={() => setQty(item.id, qty - 1)}
+                      aria-label={`Remove one ${item.name}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-grey-100 text-on-surface hover:bg-grey-200"
                     >
-                      + Add
+                      <Minus size={12} strokeWidth={2.5} />
                     </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => decrement(item.id)}
-                        aria-label={`Remove one ${item.name}`}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                      >
-                        <Minus size={12} strokeWidth={2.5} />
-                      </button>
-                      <span className="w-6 text-center text-sm font-semibold text-on-surface">{qty}</span>
-                      <button
-                        onClick={() => increment(item.id)}
-                        aria-label={`Add one ${item.name}`}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                      >
-                        <Plus size={12} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  )}
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      aria-label={`Quantity for ${item.name}`}
+                      value={qty}
+                      onChange={(e) => setQty(item.id, e.target.valueAsNumber)}
+                      className="w-14 rounded-lg border border-grey-300 px-2 py-1 text-center text-sm text-on-surface outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={() => setQty(item.id, qty + 1)}
+                      aria-label={`Add one ${item.name}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white"
+                    >
+                      <Plus size={12} strokeWidth={2.5} />
+                    </button>
+                  </div>
                 </div>
               );
             })
           )}
         </div>
-
-        {/* Selected items */}
-        {selectedItems.length > 0 && (
-          <>
-            <hr className="mb-4 border-grey-300" />
-            <h3 className="mb-3 text-sm font-semibold text-grey-700">Selected Items</h3>
-            <div className="mb-4 flex flex-col gap-2">
-              {selectedItems.map((item) => {
-                const qty = quantities[item.id] ?? 0;
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-grey-100 px-4 py-3"
-                  >
-                    <span className="text-sm font-medium text-on-surface">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => decrement(item.id)}
-                        aria-label={`Remove one ${item.name}`}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                      >
-                        <Minus size={12} strokeWidth={2.5} />
-                      </button>
-                      <span className="w-6 text-center text-sm font-semibold text-on-surface">{qty}</span>
-                      <button
-                        onClick={() => increment(item.id)}
-                        aria-label={`Add one ${item.name}`}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white"
-                      >
-                        <Plus size={12} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
 
         {/* Note */}
         <textarea
@@ -268,9 +294,9 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           variant="teal"
           className="w-full"
           onClick={handleSubmit}
-          disabled={selectedItems.length === 0 || createMutation.isPending}
+          disabled={chosenCount === 0 || createMutation.isPending}
         >
-          {createMutation.isPending ? "Submitting…" : "Submit Request"}
+          {createMutation.isPending ? "Submitting…" : `Confirm & Send (${chosenCount})`}
         </PillButton>
 
         <p className="mt-3 text-center text-xs text-grey-500">
