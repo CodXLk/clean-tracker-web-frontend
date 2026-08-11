@@ -438,7 +438,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           aria-modal="true"
           aria-label="Complete selected tasks"
           className={cn(
-            "fixed z-40 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]",
+            "fixed z-[60] bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]",
             "inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-3xl",
             dragPosition
               ? "lg:max-h-[85vh] lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl"
