@@ -132,7 +132,7 @@ export default function ComplaintsPage() {
   return (
     <>
       {/* ---------- Desktop (admin-style row list) ---------- */}
-      <div className="hidden p-6 lg:block lg:p-8">
+      <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -148,7 +148,7 @@ export default function ComplaintsPage() {
             )}
           </div>
 
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
             <AdminStatCard
               icon={MessageSquare}
               iconBg="bg-[#ED5F25]/10"
@@ -205,7 +205,7 @@ export default function ComplaintsPage() {
 
       {/* ---------- Mobile (cleaner-style card list) ---------- */}
       <div
-        className="min-h-screen lg:hidden"
+        className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
         style={{
           background:
             "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",

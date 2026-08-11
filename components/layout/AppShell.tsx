@@ -21,6 +21,7 @@ interface AppShellProps {
  */
 export function AppShell({ children }: AppShellProps) {
   const setMobileNav = useUIStore((s) => s.setMobileNav);
+  const headerAction = useUIStore((s) => s.headerAction);
   const pathname = usePathname();
   const title = sectionTitle(pathname);
   const useDrawerNav = useIsDrawerNav();
@@ -50,6 +51,16 @@ export function AppShell({ children }: AppShellProps) {
             {title}
           </h1>
           <div className="flex shrink-0 items-center gap-1">
+            {headerAction && (
+              <button
+                type="button"
+                onClick={headerAction.onClick}
+                aria-label={headerAction.label}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-grey-600 transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <headerAction.icon size={20} aria-hidden="true" />
+              </button>
+            )}
             <NotificationBell />
           </div>
         </header>

@@ -15,6 +15,7 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
@@ -111,28 +112,112 @@ export default function ProfilePage() {
   }
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background:
-          "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
-      }}
-    >
-      {!useDrawerNav && (
-        <div className="lg:hidden">
-          <PageHeader title="Profile" />
-        </div>
-      )}
+    <>
+      {/* ---------- Desktop (admin-style console) ---------- */}
+      <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-6">
+            <p className="text-sm text-grey-500">Your account details and settings</p>
+          </div>
 
-      <main
-        className={cn(
-          "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
-          !useDrawerNav ? "-mt-5" : "pt-5",
-        )}
+          <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
+            {stats.map((stat) => (
+              <AdminStatCard
+                key={stat.label}
+                icon={stat.icon}
+                iconBg={stat.iconBg}
+                iconColor={stat.iconColor}
+                value={stat.value}
+                label={stat.label}
+              />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <section className="rounded-2xl bg-surface p-5 shadow-sm">
+              <div className="relative">
+                <span className="absolute right-0 top-0 rounded-lg bg-[#ED5F25] px-2 py-0.5 text-xs font-semibold text-white">
+                  Id · {me.data ? me.data.id.slice(0, 8).toUpperCase() : "…"}
+                </span>
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                  <div>
+                    <p className="text-xl font-bold text-on-surface">
+                      {me.data ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ") : "…"}
+                    </p>
+                    <p className="text-xs text-grey-500">
+                      Joined · {me.data?.createdAt ? formatDate(me.data.createdAt) : "…"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-surface p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-on-surface">Settings</h2>
+              <div className="flex flex-col">
+                <button
+                  onClick={() => setInvoicesOpen(true)}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText size={18} className="text-primary" />
+                    <div>
+                      <p className="text-sm font-medium text-on-surface">My Invoices</p>
+                      <p className="text-xs text-grey-500">View payment history</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </button>
+
+                {SETTINGS_ROWS.map((row) => {
+                  const Icon = row.icon;
+                  return (
+                    <button
+                      key={row.id}
+                      onClick={() => handleSettingsClick(row.id)}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} className="text-grey-700" />
+                        <span className="text-sm font-medium text-on-surface">{row.label}</span>
+                      </div>
+                      <ChevronRight size={16} className="text-grey-500" />
+                    </button>
+                  );
+                })}
+
+                <button
+                  onClick={handleSignOutClick}
+                  disabled={logout.isPending}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50 disabled:opacity-60"
+                >
+                  <div className="flex items-center gap-3">
+                    <LogOut size={18} className="text-danger" />
+                    <span className="text-sm font-medium text-danger">
+                      {logout.isPending ? "Signing out…" : "Sign out"}
+                    </span>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- Mobile (cleaner-style layout) ---------- */}
+      <div
+        className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
+        style={{
+          background:
+            "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
+        }}
       >
-        <div className="flex flex-col gap-4 pt-5 lg:grid lg:grid-cols-2 lg:items-start">
-          {/* Left column */}
-          <div className="flex flex-col gap-4">
+        {!useDrawerNav && <PageHeader title="Profile" />}
+
+        <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "-mt-5" : "pt-5")}>
+          <div className="flex flex-col gap-4 pt-5">
             {/* Profile card */}
             <div className="relative rounded-2xl bg-white p-4 shadow-sm">
               {/* ID badge */}
@@ -204,33 +289,33 @@ export default function ProfilePage() {
               </div>
               <ChevronRight size={16} className="text-grey-500" />
             </button>
-          </div>
 
-          {/* Right column — Stats grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {stats.map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <div
-                  key={stat.label}
-                  className="flex flex-col items-start gap-2 rounded-2xl bg-white p-4 shadow-sm"
-                >
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {stats.map((stat) => {
+                const Icon = stat.icon;
+                return (
                   <div
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      stat.iconBg,
-                    )}
+                    key={stat.label}
+                    className="flex flex-col items-start gap-2 rounded-2xl bg-white p-4 shadow-sm"
                   >
-                    <Icon size={18} className={stat.iconColor} />
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full",
+                        stat.iconBg,
+                      )}
+                    >
+                      <Icon size={18} className={stat.iconColor} />
+                    </div>
+                    <p className="text-xl font-bold text-on-surface leading-none">{stat.value}</p>
+                    <p className="text-xs text-grey-500 leading-snug">{stat.label}</p>
                   </div>
-                  <p className="text-xl font-bold text-on-surface leading-none">{stat.value}</p>
-                  <p className="text-xs text-grey-500 leading-snug">{stat.label}</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
       {/* Modals */}
       <InvoicesModal
@@ -255,6 +340,6 @@ export default function ProfilePage() {
         onCancel={() => setSignOutOpen(false)}
         isPending={logout.isPending}
       />
-    </div>
+    </>
   );
 }

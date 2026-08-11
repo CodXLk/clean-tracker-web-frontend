@@ -62,6 +62,7 @@ export default function InventoryPage() {
 /* ---------- Desktop (admin-style back-office console) ---------- */
 
 function DesktopInventoryConsole() {
+  const useDrawerNav = useIsDrawerNav();
   const { data: me } = useMe();
   const canManage = isManagementUser(me);
   const lowStockQuery = useLowStock();
@@ -72,7 +73,7 @@ function DesktopInventoryConsole() {
   const [tab, setTab] = useState<AdminTab>("Warehouse");
 
   return (
-    <div className="hidden p-6 lg:block lg:p-8">
+    <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <p className="text-sm text-grey-500">Warehouse stock, site deliveries and consumption.</p>
@@ -166,7 +167,7 @@ function MobileInventory() {
 
   return (
     <div
-      className="min-h-screen lg:hidden"
+      className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
       style={{
         background:
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",

@@ -155,7 +155,7 @@ export default function InspectionsPage() {
         </div>
 
         {/* KPIs */}
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
           <AdminStatCard
             icon={CheckCircle2}
             iconBg="bg-primary/10"
