@@ -3,7 +3,6 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Camera, ImagePlus, Square, SquareCheck, X } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -558,8 +557,6 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
       {/* Calendar Modal */}
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
-
-      <BottomNavBar hideMobileBar={hasSelection} />
     </div>
   );
 }

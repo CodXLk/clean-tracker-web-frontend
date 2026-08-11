@@ -14,7 +14,6 @@ import {
   Star,
   CalendarCheck,
 } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
@@ -66,11 +65,6 @@ export default function ProfilePage() {
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [signOutOpen,       setSignOutOpen]       = useState(false);
-
-  // Hide the mobile bottom nav while any of these bottom-sheet modals is open, same
-  // fix applied to the inventory popups — the desktop sidebar is unaffected.
-  const modalOpen =
-    invoicesOpen || editProfileOpen || resetPasswordOpen || notificationsOpen || signOutOpen;
 
   const router = useRouter();
   const logout = useLogout();
@@ -250,8 +244,6 @@ export default function ProfilePage() {
         onCancel={() => setSignOutOpen(false)}
         isPending={logout.isPending}
       />
-
-      <BottomNavBar hideMobileBar={modalOpen} />
     </div>
   );
 }

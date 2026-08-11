@@ -1,24 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard,
-  Users,
-  UsersRound,
-  ContactRound,
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
+  ContactRound,
+  Footprints,
+  Handshake,
+  Home,
+  LayoutDashboard,
+  LogOut,
   MessageSquare,
   Package,
-  Footprints,
+  User,
+  Users,
+  UsersRound,
   CalendarCheck,
-  Handshake,
   X,
-  LogOut,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
@@ -39,13 +42,22 @@ interface NavItemConfig {
   children?: NavChild[];
 }
 
+/**
+ * Merged nav — union of the old cleaner and admin nav lists. "Complaints" and
+ * "Inventory" are the only items that existed under the same name in both, so
+ * they collapse into a single entry pointing at the merged page. Everything
+ * else is shown to every authenticated user for now; role-based trimming is
+ * deferred to later work.
+ */
 const NAV_ITEMS: NavItemConfig[] = [
+  { label: "Home", href: "/dashboard", icon: Home },
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "Tasks", href: "/dashboard/tasks", icon: ClipboardList },
+  { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
+  { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
   { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
-  { label: "Complaints",  href: "/admin/complaints",  icon: MessageSquare },
-  { label: "Inventory",   href: "/admin/inventory",  icon: Package },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Outsource Management", href: "/admin/outsource-management", icon: Handshake },
@@ -58,17 +70,115 @@ const NAV_ITEMS: NavItemConfig[] = [
       { label: "Site Management", href: "/admin/user-management/sites" },
     ],
   },
+  { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
-interface SidebarNavItemProps {
+/** Routes that render their own in-page PageHeader at every breakpoint — the
+ *  shared top bar renders nothing for these (just the floating drawer trigger
+ *  on mobile) to avoid a duplicate heading. */
+const ROUTES_WITH_OWN_HEADER = new Set([
+  "/dashboard",
+  "/dashboard/tasks",
+  "/dashboard/profile",
+]);
+
+/** Routes that render their own PageHeader on mobile only (their desktop
+ *  branch has no title of its own) — the shared top bar's title/bell stay
+ *  desktop-only here so mobile doesn't get two headers. */
+const ROUTES_WITH_MOBILE_ONLY_HEADER = new Set(["/admin/complaints", "/admin/inventory"]);
+
+/** Ordered most-specific first so longest-prefix wins. */
+const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
+  ["/admin/user-management/client-companies", "Client-Company Management"],
+  ["/admin/user-management/clients", "Client-Contact"],
+  ["/admin/user-management/sites", "Site Management"],
+  ["/admin/dashboard", "Dashboard"],
+  ["/admin/users", "Users"],
+  ["/admin/companies", "Client Companies"],
+  ["/admin/workforce", "Workforce & Management"],
+  ["/admin/inspections", "Inspections"],
+  ["/admin/complaints", "Complaints"],
+  ["/admin/inventory", "Inventory"],
+  ["/admin/client-site-management", "Client Site Management"],
+  ["/admin/outsource-management", "Outsource Management"],
+  ["/admin/cleaner-logs", "Cleaner Logs"],
+  ["/admin/notifications", "Notifications"],
+];
+
+export function sectionTitle(pathname: string): string {
+  if (ROUTES_WITH_OWN_HEADER.has(pathname)) return "";
+  const match = SECTION_TITLES.find(
+    ([path]) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+  return match?.[1] ?? "";
+}
+
+/** True when the current route already shows its own title on mobile (via
+ *  PageHeader), so the shared top bar's title/bell should stay desktop-only. */
+export function hasMobileOnlyHeader(pathname: string): boolean {
+  return ROUTES_WITH_MOBILE_ONLY_HEADER.has(pathname);
+}
+
+function isItemActive(item: NavItemConfig, pathname: string): boolean {
+  if (!item.href) return false;
+  if (item.href === "/dashboard") return pathname === "/dashboard";
+  return pathname === item.href || pathname.startsWith(item.href + "/");
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile bottom tab bar (cleaner style) — used when NAV_ITEMS.length <= 5 */
+/* ------------------------------------------------------------------ */
+
+function BottomBarItem({ item, isActive }: { item: NavItemConfig; isActive: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href ?? "#"}
+      aria-current={isActive ? "page" : undefined}
+      className="flex flex-1 flex-col items-center gap-1 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-200",
+          isActive ? "bg-primary" : "bg-transparent",
+        )}
+      >
+        <Icon
+          size={22}
+          strokeWidth={isActive ? 2.5 : 1.75}
+          className={cn(
+            "transition-colors duration-200",
+            isActive ? "text-on-primary" : "text-nav-icon-inactive",
+          )}
+          aria-hidden="true"
+        />
+      </span>
+      <span
+        className={cn(
+          "text-[11px] leading-none transition-colors duration-200",
+          isActive ? "font-semibold text-primary" : "font-medium text-nav-icon-inactive",
+        )}
+      >
+        {item.label}
+      </span>
+    </Link>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Desktop sidebar / mobile drawer (admin style) */
+/* ------------------------------------------------------------------ */
+
+function SidebarNavItem({
+  item,
+  isActive,
+  onClick,
+}: {
   item: NavItemConfig;
   isActive: boolean;
   onClick?: () => void;
-}
-
-function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
+}) {
   const Icon = item.icon;
-
   return (
     <Link
       href={item.href ?? "#"}
@@ -76,9 +186,7 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
       onClick={onClick}
       className={cn(
         "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
-        isActive
-          ? "bg-[#ED5F25] text-white font-medium"
-          : "text-white/70 hover:bg-white/10 font-normal",
+        isActive ? "bg-[#ED5F25] text-white font-medium" : "text-white/70 hover:bg-white/10 font-normal",
       )}
     >
       <Icon size={20} strokeWidth={isActive ? 2.5 : 1.75} aria-hidden="true" />
@@ -87,21 +195,20 @@ function SidebarNavItem({ item, isActive, onClick }: SidebarNavItemProps) {
   );
 }
 
-interface SidebarNavGroupProps {
+function SidebarNavGroup({
+  item,
+  pathname,
+  onLinkClick,
+}: {
   item: NavItemConfig;
   pathname: string;
   onLinkClick?: () => void;
-}
-
-function SidebarNavGroup({ item, pathname, onLinkClick }: SidebarNavGroupProps) {
+}) {
   const Icon = item.icon;
   const children = item.children ?? [];
   const isChildActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const groupActive = children.some((child) => isChildActive(child.href));
-
-  // Collapsed by default; opens automatically when viewing one of its pages.
   const [expanded, setExpanded] = useState(groupActive);
-
   const submenuId = `submenu-${item.label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
@@ -163,33 +270,6 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const me = useMe();
   const logout = useLogout();
 
-  // Clients don't get an Inspections view — supervisor/admin-only surface.
-  // Supervisors get the Workforce & Management surfaces (Workforce, Client
-  // Management, Cleaner Logs) in the admin console, alongside the cleaner app.
-  const role = me.data?.role;
-  const SUPERVISOR_ITEMS = new Set(["/admin/workforce", "/admin/cleaner-logs"]);
-  // Client Site Management (cleaning schedule) is limited to top-level admins for now.
-  const ADMIN_ONLY_ITEMS = new Set(["/admin/client-site-management"]);
-  const canSeeAdminOnly = role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
-  const roleFiltered =
-    role === "SUPERVISOR"
-      ? NAV_ITEMS.filter(
-          (item) =>
-            (item.href && SUPERVISOR_ITEMS.has(item.href)) ||
-            item.label === "Client Management",
-        )
-      : role === "CLIENT"
-        ? NAV_ITEMS.filter((item) => item.label !== "Inspections")
-        : NAV_ITEMS;
-  const navItems = roleFiltered.filter(
-    (item) => !(item.href && ADMIN_ONLY_ITEMS.has(item.href)) || canSeeAdminOnly,
-  );
-
-  function isItemActive(item: NavItemConfig): boolean {
-    if (!item.href) return false;
-    return pathname === item.href || pathname.startsWith(item.href + "/");
-  }
-
   const fullName = me.data
     ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ")
     : "…";
@@ -201,34 +281,26 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-primary">
-      {/* Logo / Brand */}
       <div className="px-4 py-6">
         <p className="text-lg font-bold text-white">Primeway</p>
         <p className="text-xs text-white/50">Cleaning Management</p>
       </div>
 
-      {/* Navigation */}
-      <nav aria-label="Admin navigation" className="mt-2 flex flex-col gap-1 px-3">
-        {navItems.map((item) =>
+      <nav aria-label="Main navigation" className="mt-2 flex flex-col gap-1 overflow-y-auto px-3">
+        {NAV_ITEMS.map((item) =>
           item.children ? (
-            <SidebarNavGroup
-              key={item.label}
-              item={item}
-              pathname={pathname}
-              onLinkClick={onLinkClick}
-            />
+            <SidebarNavGroup key={item.label} item={item} pathname={pathname} onLinkClick={onLinkClick} />
           ) : (
             <SidebarNavItem
               key={item.href}
               item={item}
-              isActive={isItemActive(item)}
+              isActive={isItemActive(item, pathname)}
               onClick={onLinkClick}
             />
           ),
         )}
       </nav>
 
-      {/* User profile */}
       <div className="mt-auto border-t border-white/10 px-4 py-4">
         <div className="flex items-center gap-3">
           <div
@@ -257,12 +329,18 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   );
 }
 
-export function AdminSidebar() {
+function DesktopSidebar() {
+  return (
+    <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 lg:block">
+      <SidebarContent />
+    </aside>
+  );
+}
+
+function MobileDrawer() {
   const mobileOpen = useUIStore((s) => s.mobileNavOpen);
   const setMobileNav = useUIStore((s) => s.setMobileNav);
 
-  // Close the drawer on Escape, and if the viewport is resized up to desktop
-  // while it's open (avoids a stuck open drawer behind the persistent sidebar).
   useEffect(() => {
     if (!mobileOpen) return;
 
@@ -277,7 +355,6 @@ export function AdminSidebar() {
     document.addEventListener("keydown", onKeyDown);
     desktopQuery.addEventListener("change", onViewportChange);
 
-    // Prevent the page from scrolling behind the open drawer.
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -286,16 +363,10 @@ export function AdminSidebar() {
       desktopQuery.removeEventListener("change", onViewportChange);
       document.body.style.overflow = previousOverflow;
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, setMobileNav]);
 
   return (
     <>
-      {/* Desktop sidebar — fixed off-flow; main is offset with lg:ml-64 */}
-      <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 lg:block">
-        <SidebarContent />
-      </aside>
-
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -304,13 +375,12 @@ export function AdminSidebar() {
         />
       )}
 
-      {/* Mobile drawer */}
       <aside
         className={cn(
           "fixed bottom-0 left-0 top-0 z-50 w-64 max-w-[80vw] transform transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
-        aria-label="Mobile admin navigation"
+        aria-label="Mobile navigation"
         aria-hidden={!mobileOpen}
       >
         <div className="relative h-full">
@@ -328,3 +398,42 @@ export function AdminSidebar() {
     </>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Public component */
+/* ------------------------------------------------------------------ */
+
+/** Whether the mobile experience shows the cleaner-style bottom bar (≤5 items)
+ *  or the admin-style hamburger + drawer (>5 items). Exported so AppShell's
+ *  top bar can decide whether to render the hamburger trigger. */
+export const USE_DRAWER_NAV = NAV_ITEMS.length > 5;
+
+export function AppNav() {
+  const pathname = usePathname();
+
+  return (
+    <>
+      {/* Desktop: always the fixed admin-style sidebar */}
+      <DesktopSidebar />
+
+      {USE_DRAWER_NAV ? (
+        <MobileDrawer />
+      ) : (
+        // Cleaner-style bottom tab bar for the (currently unused, role
+        // filtering pending) case where a user's nav has ≤5 items. Desktop's
+        // sidebar (above) already provides logout, so this needs no footer.
+        <nav
+          aria-label="Main navigation"
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-grey-300 bg-surface"
+        >
+          {NAV_ITEMS.filter((i) => i.href).map((item) => (
+            <BottomBarItem key={item.href} item={item} isActive={isItemActive(item, pathname)} />
+          ))}
+        </nav>
+      )}
+    </>
+  );
+}
+
+export { NAV_ITEMS };
+export type { NavItemConfig };

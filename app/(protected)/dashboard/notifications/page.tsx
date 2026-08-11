@@ -16,7 +16,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
 import {
   useNotifications,
   useMarkRead,
@@ -56,11 +55,11 @@ function linkFor(type: NotificationType): string | null {
     case "TASK_REDO_ASSIGNED":
       return "/dashboard/tasks";
     case "COMPLAINT_RAISED":
-      return "/dashboard/complaints";
+      return "/admin/complaints";
     case "DELIVERY_DISPATCHED":
     case "DELIVERY_CONFIRMED":
     case "LOW_STOCK":
-      return "/dashboard/inventory";
+      return "/admin/inventory";
     default:
       return null;
   }
@@ -172,8 +171,6 @@ export default function CleanerNotificationsPage() {
           </ul>
         )}
       </main>
-
-      <BottomNavBar />
     </div>
   );
 }
