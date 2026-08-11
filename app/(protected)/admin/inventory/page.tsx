@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, CalendarClock, Package, RotateCcw } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { PillButton } from "@/components/shared/PillButton";
@@ -157,6 +157,7 @@ function DesktopInventoryConsole() {
 /* ---------- Mobile (cleaner-style request flow) ---------- */
 
 function MobileInventory() {
+  const useDrawerNav = useIsDrawerNav();
   const [activeFilter, setActiveFilter] = useState<MobileStatusTab>("All");
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<InventoryRequest | null>(null);
@@ -171,9 +172,9 @@ function MobileInventory() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      {!USE_DRAWER_NAV && <PageHeader title="Inventory" />}
+      {!useDrawerNav && <PageHeader title="Inventory" />}
 
-      <main className={cn("mx-auto max-w-2xl px-5 pb-10", !USE_DRAWER_NAV ? "" : "pt-5")}>
+      <main className={cn("mx-auto max-w-2xl px-5 pb-10", !useDrawerNav ? "" : "pt-5")}>
         <div className="flex flex-col gap-4">
           <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
 

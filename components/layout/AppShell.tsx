@@ -5,7 +5,7 @@ import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useUIStore } from "@/store/ui.store";
 import { NotificationBell } from "@/components/admin/NotificationBell";
-import { AppNav, USE_DRAWER_NAV, sectionTitle } from "@/components/layout/AppNav";
+import { AppNav, useIsDrawerNav, sectionTitle } from "@/components/layout/AppNav";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -23,6 +23,7 @@ export function AppShell({ children }: AppShellProps) {
   const setMobileNav = useUIStore((s) => s.setMobileNav);
   const pathname = usePathname();
   const title = sectionTitle(pathname);
+  const useDrawerNav = useIsDrawerNav();
 
   return (
     <div className="min-h-screen bg-[#F8FAFB]">
@@ -32,10 +33,10 @@ export function AppShell({ children }: AppShellProps) {
         <header
           className={cn(
             "sticky top-0 z-30 h-16 shrink-0 items-center gap-3 bg-[#F8FAFB] px-4 lg:flex lg:px-8",
-            USE_DRAWER_NAV ? "flex" : "hidden",
+            useDrawerNav ? "flex" : "hidden",
           )}
         >
-          {USE_DRAWER_NAV && (
+          {useDrawerNav && (
             <button
               type="button"
               aria-label="Open navigation"

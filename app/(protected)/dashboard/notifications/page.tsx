@@ -15,7 +15,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { cn } from "@/lib/utils/cn";
 import {
   useNotifications,
@@ -80,6 +80,7 @@ function formatWhen(iso: string): string {
 }
 
 export default function CleanerNotificationsPage() {
+  const useDrawerNav = useIsDrawerNav();
   const router = useRouter();
   const { data, isLoading, isError } = useNotifications();
   const markRead = useMarkRead();
@@ -102,7 +103,7 @@ export default function CleanerNotificationsPage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      {!USE_DRAWER_NAV && (
+      {!useDrawerNav && (
         <div className="lg:hidden">
           <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 mb-5">
             <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
@@ -126,7 +127,7 @@ export default function CleanerNotificationsPage() {
       <main
         className={cn(
           "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
-          !USE_DRAWER_NAV ? "pt-5 -mt-5" : "pt-5",
+          !useDrawerNav ? "pt-5 -mt-5" : "pt-5",
         )}
       >
         {unread > 0 && (

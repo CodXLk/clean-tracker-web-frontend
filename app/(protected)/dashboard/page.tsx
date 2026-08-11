@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -71,6 +71,7 @@ function DashboardContent() {
 
   const { data: sites = [], isLoading } = useMySites();
   const { data: me } = useMe();
+  const useDrawerNav = useIsDrawerNav();
 
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const range = useMemo(() => {
@@ -125,7 +126,7 @@ function DashboardContent() {
     >
       {/* Header — only on mobile when the nav has ≤5 items; otherwise the
           shared admin-style top bar (AppShell) covers the title/bell. */}
-      {!USE_DRAWER_NAV && (
+      {!useDrawerNav && (
         <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 lg:hidden">
           <div className="flex items-center justify-between">
             {/* Left: avatar + greeting */}

@@ -73,9 +73,35 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
+/** Cleaner role sees a minimal 5-item nav (Home, Tasks, Complaints, Inventory,
+ *  Profile) — everyone else still sees the full merged list for now, until
+ *  their own restriction is defined. */
+const CLEANER_HREFS = new Set([
+  "/dashboard",
+  "/dashboard/tasks",
+  "/admin/complaints",
+  "/admin/inventory",
+  "/dashboard/profile",
+]);
+const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => item.href && CLEANER_HREFS.has(item.href),
+);
+
+/** The nav items visible to the current user, based on role. */
+function useVisibleNavItems(): NavItemConfig[] {
+  const { data: me } = useMe();
+  return me?.role === "CLEANER" ? CLEANER_NAV_ITEMS : NAV_ITEMS;
+}
+
+/** Whether the mobile experience shows the cleaner-style bottom bar (≤5 items)
+ *  or the admin-style hamburger + drawer (>5 items), for the current user. */
+export function useIsDrawerNav(): boolean {
+  return useVisibleNavItems().length > 5;
+}
+
 /** Ordered most-specific first so longest-prefix wins. Every route resolves a
  *  title now — the shared top bar shows everywhere (see AppShell); pages only
- *  add their own green PageHeader on mobile when USE_DRAWER_NAV is false. */
+ *  add their own green PageHeader on mobile when useIsDrawerNav() is false. */
 const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/user-management/client-companies", "Client-Company Management"],
   ["/admin/user-management/clients", "Client-Contact"],
@@ -254,6 +280,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const router = useRouter();
   const me = useMe();
   const logout = useLogout();
+  const items = useVisibleNavItems();
 
   const fullName = me.data
     ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ")
@@ -272,7 +299,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
       </div>
 
       <nav aria-label="Main navigation" className="mt-2 flex flex-col gap-1 overflow-y-auto px-3">
-        {NAV_ITEMS.map((item) =>
+        {items.map((item) =>
           item.children ? (
             <SidebarNavGroup key={item.label} item={item} pathname={pathname} onLinkClick={onLinkClick} />
           ) : (
@@ -388,30 +415,27 @@ function MobileDrawer() {
 /* Public component */
 /* ------------------------------------------------------------------ */
 
-/** Whether the mobile experience shows the cleaner-style bottom bar (≤5 items)
- *  or the admin-style hamburger + drawer (>5 items). Exported so AppShell's
- *  top bar can decide whether to render the hamburger trigger. */
-export const USE_DRAWER_NAV = NAV_ITEMS.length > 5;
-
 export function AppNav() {
   const pathname = usePathname();
+  const items = useVisibleNavItems();
+  const useDrawerNav = items.length > 5;
 
   return (
     <>
       {/* Desktop: always the fixed admin-style sidebar */}
       <DesktopSidebar />
 
-      {USE_DRAWER_NAV ? (
+      {useDrawerNav ? (
         <MobileDrawer />
       ) : (
-        // Cleaner-style bottom tab bar for the (currently unused, role
-        // filtering pending) case where a user's nav has ≤5 items. Desktop's
-        // sidebar (above) already provides logout, so this needs no footer.
+        // Cleaner-style bottom tab bar — shown once the current user's nav has
+        // ≤5 items (e.g. the CLEANER role). Desktop's sidebar (above) already
+        // provides logout, so this needs no footer.
         <nav
           aria-label="Main navigation"
           className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-grey-300 bg-surface"
         >
-          {NAV_ITEMS.filter((i) => i.href).map((item) => (
+          {items.filter((i) => i.href).map((item) => (
             <BottomBarItem key={item.href} item={item} isActive={isItemActive(item, pathname)} />
           ))}
         </nav>

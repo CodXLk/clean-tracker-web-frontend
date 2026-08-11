@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
@@ -31,6 +31,7 @@ interface AreaCount {
 }
 
 export default function TasksPage() {
+  const useDrawerNav = useIsDrawerNav();
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
   const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useActiveSite(today);
@@ -108,7 +109,7 @@ export default function TasksPage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      {!USE_DRAWER_NAV && (
+      {!useDrawerNav && (
         <div className="lg:hidden">
           <PageHeader title="Tasks" showCalendar onCalendarClick={() => setCalendarOpen(true)} />
         </div>
@@ -117,7 +118,7 @@ export default function TasksPage() {
       <main
         className={cn(
           "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
-          !USE_DRAWER_NAV ? "-mt-5" : "pt-5",
+          !useDrawerNav ? "-mt-5" : "pt-5",
         )}
       >
         <div className="flex justify-end pt-3">

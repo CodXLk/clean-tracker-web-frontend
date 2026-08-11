@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -46,6 +46,7 @@ interface AreaTaskPageProps {
 }
 
 export default function AreaTaskPage({ params }: AreaTaskPageProps) {
+  const useDrawerNav = useIsDrawerNav();
   const { area } = use(params);
   const areaName = decodeURIComponent(area);
 
@@ -264,7 +265,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      {!USE_DRAWER_NAV && (
+      {!useDrawerNav && (
         <div className="lg:hidden">
           <PageHeader title={areaName} showCalendar onCalendarClick={() => setCalendarOpen(true)} />
         </div>
@@ -273,7 +274,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
       <main
         className={cn(
           "mx-auto max-w-2xl px-5 lg:max-w-5xl",
-          !USE_DRAWER_NAV ? "pt-5 -mt-5" : "pt-5",
+          !useDrawerNav ? "pt-5 -mt-5" : "pt-5",
           hasSelection ? "pb-[22rem]" : "pb-28",
         )}
       >

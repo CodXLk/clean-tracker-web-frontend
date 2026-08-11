@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle, CheckCircle2, Clock, MessageSquare } from "lucide-react";
-import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterTabs } from "@/components/shared/FilterTabs";
@@ -61,6 +61,7 @@ function pad(n: number): string {
 }
 
 export default function ComplaintsPage() {
+  const useDrawerNav = useIsDrawerNav();
   const { data, isLoading, isError } = useComplaints();
   const resolveComplaintMutation = useResolveComplaint();
   const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useActiveSite();
@@ -210,12 +211,12 @@ export default function ComplaintsPage() {
             "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
         }}
       >
-        {!USE_DRAWER_NAV && <PageHeader title="Complaints" />}
+        {!useDrawerNav && <PageHeader title="Complaints" />}
 
         <main
           className={cn(
             "mx-auto max-w-2xl px-5 pb-10",
-            !USE_DRAWER_NAV ? "-mt-5" : "pt-5",
+            !useDrawerNav ? "-mt-5" : "pt-5",
           )}
         >
           {sites.length > 1 && (
