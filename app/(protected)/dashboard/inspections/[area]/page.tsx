@@ -175,7 +175,11 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
 
   function handlePhotosPicked(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
-    setPhotos((prev) => [...prev, ...Array.from(fileList)]);
+    // Snapshot into a plain array immediately — fileList is a live reference to the
+    // input's FileList, and the input gets cleared (value = "") right after this call
+    // returns, which would otherwise empty it out before the setState updater below runs.
+    const files = Array.from(fileList);
+    setPhotos((prev) => [...prev, ...files]);
   }
 
   function removePhoto(index: number) {
@@ -474,25 +478,6 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               </button>
             </div>
 
-            {/* Photo thumbnails */}
-            {photos.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {previews.map((url, index) => (
-                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                    <button
-                      onClick={() => removePhoto(index)}
-                      aria-label="Remove photo"
-                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Add photos */}
             <div className="mb-3 flex gap-2">
               <button
@@ -510,6 +495,25 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                 Add Photos
               </button>
             </div>
+
+            {/* Photo thumbnails — preview of what will upload with Complete */}
+            {photos.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {previews.map((url, index) => (
+                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => removePhoto(index)}
+                      aria-label="Remove photo"
+                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Note */}
             <textarea
