@@ -6,18 +6,25 @@ import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
-import { CreateUserSchema, type CreateUserInput } from "@/features/users/schemas/user.schema";
+import { CreateUserSchema, type CreateUserInput, type Role } from "@/features/users/schemas/user.schema";
 import { useCreateUser, getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useRoles } from "@/features/users/hooks/useRoles";
 
 interface CreateUserModalProps {
   open: boolean;
   onClose: () => void;
+  /** When set, the role is locked to this value and the role selector is hidden —
+   *  used by Cleaner Management to always create CLEANER accounts. */
+  fixedRole?: Role;
+  /** Role names to omit from the dropdown when `fixedRole` is not set (e.g. the
+   *  general Users invite flow never offers Cleaner). */
+  excludeRoleNames?: Role[];
 }
 
-export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
+export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: CreateUserModalProps) {
   const createUser = useCreateUser();
   const rolesQuery = useRoles();
+  const roleOptions = (rolesQuery.data ?? []).filter((role) => !excludeRoleNames?.includes(role.name));
 
   const {
     register,
@@ -32,6 +39,7 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
       lastName: "",
       email: "",
       phoneNumber: "",
+      ...(fixedRole ? { role: fixedRole } : {}),
     },
   });
 
@@ -49,35 +57,41 @@ export function CreateUserModal({ open, onClose }: CreateUserModalProps) {
     <Modal
       open={open}
       onClose={close}
-      title="Invite a user"
-      description="They will receive an email with a temporary password and a setup link."
+      title={fixedRole ? "Add a new cleaner" : "Invite a user"}
+      description={
+        fixedRole
+          ? "They will receive an email with a temporary password and a setup link to join as a Cleaner."
+          : "They will receive an email with a temporary password and a setup link."
+      }
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="role" className="text-sm font-medium text-on-surface">
-            Role<span className="ml-0.5 text-error">*</span>
-          </label>
-          <select
-            id="role"
-            className="h-11 w-full rounded-xl border border-grey-300 bg-white px-3.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            defaultValue=""
-            disabled={rolesQuery.isLoading}
-            {...register("role")}
-          >
-            <option value="" disabled>
-              {rolesQuery.isLoading ? "Loading roles…" : "Select a role"}
-            </option>
-            {rolesQuery.data?.map((role) => (
-              <option key={role.name} value={role.name}>
-                {role.label}
+        {!fixedRole && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="role" className="text-sm font-medium text-on-surface">
+              Role<span className="ml-0.5 text-error">*</span>
+            </label>
+            <select
+              id="role"
+              className="h-11 w-full rounded-xl border border-grey-300 bg-white px-3.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              defaultValue=""
+              disabled={rolesQuery.isLoading}
+              {...register("role")}
+            >
+              <option value="" disabled>
+                {rolesQuery.isLoading ? "Loading roles…" : "Select a role"}
               </option>
-            ))}
-          </select>
-          {rolesQuery.isError && (
-            <p className="text-xs font-medium text-error">Failed to load roles. Please try again.</p>
-          )}
-          {errors.role?.message && <p className="text-xs font-medium text-error">{errors.role.message}</p>}
-        </div>
+              {roleOptions.map((role) => (
+                <option key={role.name} value={role.name}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+            {rolesQuery.isError && (
+              <p className="text-xs font-medium text-error">Failed to load roles. Please try again.</p>
+            )}
+            {errors.role?.message && <p className="text-xs font-medium text-error">{errors.role.message}</p>}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField label="First name" required error={errors.firstName?.message} {...register("firstName")} />
