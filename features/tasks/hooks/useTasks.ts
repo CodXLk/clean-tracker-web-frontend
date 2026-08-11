@@ -69,3 +69,52 @@ export function useReviewComplete() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }
+
+export interface CompleteForInspectionInput {
+  occurrences: { taskId: string; date: string }[];
+  note?: string;
+  photos?: File[];
+}
+
+/** Supervisor: complete a task occurrence (with optional photos) so it can then be inspected. */
+export function useCompleteForInspection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CompleteForInspectionInput) => {
+      const formData = new FormData();
+      const payload = {
+        occurrences: input.occurrences,
+        note: input.note?.trim() ? input.note.trim() : undefined,
+      };
+      formData.append(
+        "data",
+        new Blob([JSON.stringify(payload)], { type: "application/json" }),
+      );
+      for (const photo of input.photos ?? []) {
+        formData.append("photos", photo);
+      }
+      await clientApi.post(ENDPOINTS.tasks.inspectComplete, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+  });
+}
+
+export interface SubmitInspectionInput {
+  occurrences: { taskId: string; date: string }[];
+  /** Exactly one of rating/complaintId must be set. */
+  rating?: number;
+  complaintId?: string;
+}
+
+/** Supervisor: close out an inspection of the selected occurrences via rating or a linked complaint. */
+export function useSubmitInspection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SubmitInspectionInput) => {
+      await clientApi.post(ENDPOINTS.tasks.inspect, input);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskKeys.all }),
+  });
+}

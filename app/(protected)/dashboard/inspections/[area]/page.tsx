@@ -7,14 +7,23 @@ import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/tasks/hooks/useTasks";
+import {
+  useMyTasks,
+  useCompleteTasks,
+  useCompleteForInspection,
+  useSubmitInspection,
+} from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
+import { ENDPOINTS } from "@/lib/api/endpoints";
+import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
+
+const RATINGS = Array.from({ length: 10 }, (_, i) => i + 1);
 
 const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
   SCHEDULED: "Scheduled",
@@ -57,18 +66,24 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const { data: occurrences = [], isLoading } = useMyTasks(date);
   const { data: sites = [] } = useMySites(date);
   const completeTasks = useCompleteTasks();
-  const reviewComplete = useReviewComplete();
+  const completeForInspection = useCompleteForInspection();
+  const submitInspection = useSubmitInspection();
   const createComplaint = useCreateComplaint();
   const complaintWithRedo = useComplaintWithRedo();
 
   const role = useMe().data?.role;
-  const isSupervisor = role === "SUPERVISOR";
+  // Management (SUPER_ADMIN/COMPANY_ADMIN/CLIENT_SERVICE_MANAGER) gets the same
+  // inspection panel as a SUPERVISOR — the backend already grants them the same
+  // access (see AccessGuard.isManagement / requireSupervisorSite).
+  const isSupervisor = role === "SUPERVISOR" || isAdminRole(role);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [rating, setRating] = useState<number | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
+  const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState<string | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -190,8 +205,10 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     setSelectedIds(new Set());
     setNote("");
     setPhotos([]);
+    setRating(null);
     setDragPosition(null);
     setCompleteBlockedError(null);
+    setFullscreenPhotoUrl(null);
   }
 
   function handleComplete() {
@@ -217,12 +234,37 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     );
   }
 
-  function handleReviewComplete() {
-    // Redo occurrences are completed by cleaners, not marked done during review.
+  function handleCompleteForInspection() {
+    // Redo occurrences are completed by cleaners, not by a supervisor here.
     const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
     if (selected.length === 0) return;
-    reviewComplete.mutate(
-      selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+    completeForInspection.mutate(
+      {
+        occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+        note: note.trim() || undefined,
+        photos,
+      },
+      {
+        // Keep the selection open — once the refetch lands the task(s) show as COMPLETED
+        // and this same panel switches to the rating/complaint inspection actions.
+        onSuccess: () => {
+          setNote("");
+          setPhotos([]);
+        },
+      },
+    );
+  }
+
+  function handleCompleteInspection() {
+    if (rating === null) return;
+    // Redo occurrences are completed by cleaners, not inspected directly.
+    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
+    if (selected.length === 0) return;
+    submitInspection.mutate(
+      {
+        occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+        rating,
+      },
       { onSuccess: resetActionState },
     );
   }
@@ -238,7 +280,17 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
         },
         photos,
       },
-      { onSuccess: resetActionState },
+      {
+        onSuccess: (complaint) => {
+          submitInspection.mutate(
+            {
+              occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+              complaintId: complaint.id,
+            },
+            { onSuccess: resetActionState },
+          );
+        },
+      },
     );
   }
 
@@ -253,13 +305,47 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
         },
         photos,
       },
-      { onSuccess: resetActionState },
+      {
+        onSuccess: (complaint) => {
+          submitInspection.mutate(
+            {
+              occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+              complaintId: complaint.id,
+            },
+            { onSuccess: resetActionState },
+          );
+        },
+      },
     );
   }
 
   const supervisorPending =
-    reviewComplete.isPending || createComplaint.isPending || complaintWithRedo.isPending;
+    submitInspection.isPending ||
+    createComplaint.isPending ||
+    complaintWithRedo.isPending ||
+    completeForInspection.isPending;
   const hasSelection = selectedIds.size > 0;
+
+  // Completion photos are shown read-only when exactly one already-completed task is
+  // selected — reviewing what the cleaner uploaded, distinct from the supervisor's own
+  // new complaint photos below.
+  const singleSelectedTask = useMemo(() => {
+    if (!isSupervisor || selectedIds.size !== 1) return null;
+    const [key] = selectedIds;
+    return tasks.find((t) => occKey(t) === key) ?? null;
+  }, [isSupervisor, selectedIds, tasks]);
+  const completionPhotoIds =
+    singleSelectedTask?.status === "COMPLETED" ? singleSelectedTask.completionPhotoIds : [];
+
+  // A supervisor can only inspect (rate/complain) tasks that are already completed —
+  // otherwise the panel walks them through completing it first.
+  const selectedTasksForSupervisor = useMemo(
+    () => tasks.filter((t) => selectedIds.has(occKey(t))),
+    [tasks, selectedIds],
+  );
+  const allSelectedCompleted =
+    selectedTasksForSupervisor.length > 0 &&
+    selectedTasksForSupervisor.every((t) => t.status === "COMPLETED");
 
   return (
     <div
@@ -478,6 +564,31 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               </button>
             </div>
 
+            {/* Cleaner's completion photos — read-only, shown when reviewing a single
+                already-completed task. */}
+            {completionPhotoIds.length > 0 && (
+              <div className="mb-3">
+                <p className="mb-1.5 text-sm font-medium text-on-surface">Completion Photos</p>
+                <div className="flex flex-wrap gap-2">
+                  {completionPhotoIds.map((photoId) => {
+                    const url = `/api${ENDPOINTS.tasks.photo(photoId)}`;
+                    return (
+                      <button
+                        key={photoId}
+                        type="button"
+                        onClick={() => setFullscreenPhotoUrl(url)}
+                        aria-label="View photo full screen"
+                        className="relative h-16 w-16 overflow-hidden rounded-lg bg-grey-100"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt="Task completion" className="h-full w-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Add photos */}
             <div className="mb-3 flex gap-2">
               <button
@@ -526,33 +637,84 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
             />
 
             {isSupervisor ? (
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleComplaintWithRedo}
-                  disabled={supervisorPending}
-                  className="w-full rounded-xl bg-[#7C3AED] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                >
-                  {complaintWithRedo.isPending
-                    ? "Scheduling…"
-                    : "Complaint + Redo (next shift)"}
-                </button>
-                <div className="flex gap-2">
+              allSelectedCompleted ? (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium text-on-surface">
+                      Inspection Rating <span className="text-grey-500">(only needed to complete without a complaint)</span>
+                    </p>
+                    <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                      {RATINGS.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setRating((prev) => (prev === value ? null : value))}
+                          aria-pressed={rating === value}
+                          className={cn(
+                            "rounded-xl border py-2 text-sm font-medium transition-colors",
+                            rating === value
+                              ? "border-primary bg-primary text-white"
+                              : "border-grey-300 text-on-surface hover:bg-grey-100",
+                          )}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {rating === null ? (
+                    <>
+                      <button
+                        onClick={handleComplaintWithRedo}
+                        disabled={supervisorPending}
+                        className="w-full rounded-xl bg-[#7C3AED] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                      >
+                        {complaintWithRedo.isPending
+                          ? "Scheduling…"
+                          : "Complaint + Redo (next shift)"}
+                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleComplaint}
+                          disabled={supervisorPending}
+                          className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        >
+                          {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
+                        </button>
+                        <button
+                          onClick={handleCompleteInspection}
+                          disabled={supervisorPending || rating === null}
+                          className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        >
+                          {submitInspection.isPending ? "Saving…" : "Complete Inspection"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleCompleteInspection}
+                      disabled={supervisorPending}
+                      className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {submitInspection.isPending ? "Saving…" : "Complete Inspection"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-grey-600">
+                    This task isn&apos;t completed yet. Add photos above if needed, then complete it before you can inspect it.
+                  </p>
                   <button
-                    onClick={handleComplaint}
+                    onClick={handleCompleteForInspection}
                     disabled={supervisorPending}
-                    className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                   >
-                    {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
-                  </button>
-                  <button
-                    onClick={handleReviewComplete}
-                    disabled={supervisorPending}
-                    className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                  >
-                    {reviewComplete.isPending ? "Saving…" : "Mark as Completed"}
+                    {completeForInspection.isPending ? "Completing…" : "Complete Task"}
                   </button>
                 </div>
-              </div>
+              )
             ) : (
               <>
                 {completeBlockedError && !hasCheckedInToAreaSiteToday && (
@@ -576,6 +738,33 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
 
       {/* Calendar Modal */}
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
+
+      {/* Full-screen completion photo viewer */}
+      {fullscreenPhotoUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full-screen photo"
+          onClick={() => setFullscreenPhotoUrl(null)}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+        >
+          <button
+            type="button"
+            onClick={() => setFullscreenPhotoUrl(null)}
+            aria-label="Close full-screen photo"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={fullscreenPhotoUrl}
+            alt="Task completion, full screen"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+        </div>
+      )}
     </div>
   );
 }

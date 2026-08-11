@@ -73,6 +73,8 @@ export const ENDPOINTS = {
     myOccurrences:   "/tasks/my-occurrences",
     complete:        "/tasks/complete",
     reviewComplete:  "/tasks/review-complete",
+    inspect:         "/tasks/inspect",
+    inspectComplete: "/tasks/inspect/complete",
     photo:           (id: string) => `/tasks/completions/photos/${id}`,
   },
   assignments: {
@@ -230,6 +232,8 @@ export const BACKEND = {
     myOccurrences:   "/api/v1/tasks/my-occurrences",
     complete:        "/api/v1/tasks/complete",
     reviewComplete:  "/api/v1/tasks/review-complete",
+    inspect:         "/api/v1/tasks/inspect",
+    inspectComplete: "/api/v1/tasks/inspect/complete",
     photo:           (id: string) => `/api/v1/tasks/completions/photos/${id}`,
   },
   assignments: {

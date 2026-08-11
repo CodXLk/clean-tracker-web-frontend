@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils/cn";
 interface AreaCount {
   areaId: string;
   area: string;
-  completed: number;
+  inspected: number;
   total: number;
 }
 
@@ -77,17 +77,17 @@ export default function InspectionsPage() {
     const byArea = new Map<string, AreaCount>();
     for (const o of occurrences) {
       if (o.floorName !== selectedFloor || !o.areaId || !o.areaName) continue;
-      const isCompleted = o.status === "COMPLETED";
+      const isInspected = o.inspected === true;
       const existing = byArea.get(o.areaId);
       if (existing) {
         existing.total += 1;
-        if (isCompleted) existing.completed += 1;
+        if (isInspected) existing.inspected += 1;
       } else {
         byArea.set(o.areaId, {
           areaId: o.areaId,
           area: o.areaName,
           total: 1,
-          completed: isCompleted ? 1 : 0,
+          inspected: isInspected ? 1 : 0,
         });
       }
     }
@@ -180,7 +180,7 @@ export default function InspectionsPage() {
                           className="flex flex-col items-center justify-center gap-1 rounded-xl border border-grey-200 bg-grey-50 p-3 text-center transition-shadow hover:shadow-md"
                         >
                           <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
+                            {String(item.inspected).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
                           </span>
                           <span className="text-xs text-on-surface">{item.area}</span>
                         </Link>
@@ -273,7 +273,7 @@ export default function InspectionsPage() {
                           className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
                         >
                           <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
+                            {String(item.inspected).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
                           </span>
                           <span className="text-xs text-on-surface">{item.area}</span>
                         </Link>
