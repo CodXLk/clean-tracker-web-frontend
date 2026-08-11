@@ -16,7 +16,9 @@ import {
   useSiteSupervisors,
   useAssignSupervisors,
 } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
 import { useUsers } from "@/features/users/hooks/useUsers";
+import { useMe } from "@/features/auth/hooks/useMe";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 function personName(first?: string | null, last?: string | null): string {
@@ -28,6 +30,8 @@ export function SiteManagement() {
   const deleteMutation = useDeleteSite();
 
   const usersQuery = useUsers();
+  const me = useMe();
+  const isSupervisor = me.data?.role === "SUPERVISOR";
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -39,6 +43,13 @@ export function SiteManagement() {
   const siteSupervisors = useSiteSupervisors(supervisorsSite?.id);
   const assignSupervisors = useAssignSupervisors();
 
+  // A supervisor only ever sees sites they're assigned to — there's no bulk "my
+  // sites" endpoint, so this filters the full list against each site's roster.
+  const supervisorSites = useSupervisorSiteFilter(
+    isSupervisor ? query.data ?? [] : [],
+    isSupervisor ? me.data?.id : undefined,
+  );
+
   const supervisorOptions: AssignOption[] = useMemo(
     () =>
       (usersQuery.data ?? [])
@@ -48,7 +59,7 @@ export function SiteManagement() {
   );
 
   const rows = useMemo(() => {
-    const list = query.data ?? [];
+    const list = isSupervisor ? supervisorSites.sites : query.data ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
@@ -59,7 +70,7 @@ export function SiteManagement() {
         (s.contactPersonName ?? "").toLowerCase().includes(q) ||
         (s.streetAddress ?? "").toLowerCase().includes(q),
     );
-  }, [query.data, search]);
+  }, [query.data, search, isSupervisor, supervisorSites.sites]);
 
   const columns: Column<Site>[] = [
     {
@@ -133,32 +144,42 @@ export function SiteManagement() {
         <div className="flex justify-end">
           <RowMenu
             label={`Actions for ${s.name}`}
-            items={[
-              {
-                label: "Assign Supervisors",
-                icon: UserCog,
-                onClick: () => setSupervisorsSite(s),
-              },
-              {
-                label: "Assign Cleaners",
-                icon: Users,
-                onClick: () => setCleanersSite(s),
-              },
-              {
-                label: "Edit",
-                icon: Pencil,
-                onClick: () => {
-                  setEditing(s);
-                  setFormOpen(true);
-                },
-              },
-              {
-                label: "Delete",
-                icon: Trash2,
-                destructive: true,
-                onClick: () => setDeleting(s),
-              },
-            ]}
+            items={
+              isSupervisor
+                ? [
+                    {
+                      label: "Assign Cleaners",
+                      icon: Users,
+                      onClick: () => setCleanersSite(s),
+                    },
+                  ]
+                : [
+                    {
+                      label: "Assign Supervisors",
+                      icon: UserCog,
+                      onClick: () => setSupervisorsSite(s),
+                    },
+                    {
+                      label: "Assign Cleaners",
+                      icon: Users,
+                      onClick: () => setCleanersSite(s),
+                    },
+                    {
+                      label: "Edit",
+                      icon: Pencil,
+                      onClick: () => {
+                        setEditing(s);
+                        setFormOpen(true);
+                      },
+                    },
+                    {
+                      label: "Delete",
+                      icon: Trash2,
+                      destructive: true,
+                      onClick: () => setDeleting(s),
+                    },
+                  ]
+            }
           />
         </div>
       ),
@@ -187,25 +208,31 @@ export function SiteManagement() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput value={search} onChange={setSearch} placeholder="Search sites…" className="sm:max-w-xs" />
-        <button
-          type="button"
-          onClick={openCreate}
-          className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
-        >
-          <Plus size={18} aria-hidden="true" />
-          Add site
-        </button>
+        {!isSupervisor && (
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
+          >
+            <Plus size={18} aria-hidden="true" />
+            Add site
+          </button>
+        )}
       </div>
 
       <DataTable
         rows={rows}
         columns={columns}
         getRowId={(s) => s.id}
-        isLoading={query.isLoading}
+        isLoading={query.isLoading || (isSupervisor && supervisorSites.isLoading)}
         isError={query.isError}
         errorMessage="Failed to load sites."
         emptyTitle="No sites yet"
-        emptyDescription="Add your first site and link it to a client-company and client."
+        emptyDescription={
+          isSupervisor
+            ? "No sites are assigned to you yet."
+            : "Add your first site and link it to a client-company and client."
+        }
       />
 
       <SiteFormModal open={formOpen} onClose={() => setFormOpen(false)} site={editing} />
@@ -244,6 +271,7 @@ export function SiteManagement() {
         open={!!cleanersSite}
         onClose={() => setCleanersSite(null)}
         site={cleanersSite}
+        restrictToAssignOnly={isSupervisor}
       />
     </div>
   );

@@ -12,9 +12,12 @@ import {
   Handshake,
   Home,
   LayoutDashboard,
+  ListChecks,
   LogOut,
+  MapPin,
   MessageSquare,
   Package,
+  Sparkles,
   User,
   Users,
   UsersRound,
@@ -27,6 +30,7 @@ import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useUIStore } from "@/store/ui.store";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
+import { SUPERVISOR_ALLOWED_HREFS } from "@/lib/auth/roles";
 
 interface NavChild {
   label: string;
@@ -53,21 +57,23 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Tasks", href: "/dashboard/tasks", icon: ClipboardList },
+  { label: "Inspections", href: "/dashboard/inspections", icon: ListChecks },
   { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Cleaner Management", href: "/admin/cleaner-management", icon: Sparkles },
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
-  { label: "Inspections", href: "/admin/inspections", icon: ClipboardCheck },
+  { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Outsource Management", href: "/admin/outsource-management", icon: Handshake },
+  { label: "Site Management", href: "/admin/user-management/sites", icon: MapPin },
   {
     label: "Client Management",
     icon: ContactRound,
     children: [
       { label: "Client-Company", href: "/admin/user-management/client-companies" },
       { label: "Client-Contact", href: "/admin/user-management/clients" },
-      { label: "Site Management", href: "/admin/user-management/sites" },
     ],
   },
   { label: "Profile", href: "/dashboard/profile", icon: User },
@@ -87,10 +93,18 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && CLEANER_HREFS.has(item.href),
 );
 
-/** Super admins don't need the cleaner-facing Home/Tasks pages. */
-const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/dashboard/tasks"]);
+/** Super admins don't need the cleaner-facing Home page, but do need Tasks and
+ *  Inspections since those are surfaced in the Admin Panel. */
+const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard"]);
 const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
+);
+
+/** Supervisors get a fixed subset of the Admin Panel — kept in sync with proxy.ts,
+ *  which also enforces this at the route level (see SUPERVISOR_ALLOWED_HREFS). */
+const SUPERVISOR_HREFS = new Set<string>(SUPERVISOR_ALLOWED_HREFS);
+const SUPERVISOR_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => item.href && SUPERVISOR_HREFS.has(item.href),
 );
 
 /** The nav items visible to the current user, based on role. */
@@ -98,6 +112,7 @@ function useVisibleNavItems(): NavItemConfig[] {
   const { data: me } = useMe();
   if (me?.role === "CLEANER") return CLEANER_NAV_ITEMS;
   if (me?.role === "SUPER_ADMIN") return SUPER_ADMIN_NAV_ITEMS;
+  if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
   return NAV_ITEMS;
 }
 
@@ -116,9 +131,10 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/user-management/sites", "Site Management"],
   ["/admin/dashboard", "Dashboard"],
   ["/admin/users", "Users"],
+  ["/admin/cleaner-management", "Cleaner Management"],
   ["/admin/companies", "Client Companies"],
   ["/admin/workforce", "Workforce & Management"],
-  ["/admin/inspections", "Inspections"],
+  ["/admin/inspections", "Inspections Dashboard"],
   ["/admin/complaints", "Complaints"],
   ["/admin/inventory", "Inventory"],
   ["/admin/client-site-management", "Client Site Management"],
@@ -126,6 +142,7 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],
   ["/dashboard/tasks", "Tasks"],
+  ["/dashboard/inspections", "Inspections"],
   ["/dashboard/profile", "Profile"],
   ["/dashboard/notifications", "Notifications"],
   ["/dashboard", "Home"],

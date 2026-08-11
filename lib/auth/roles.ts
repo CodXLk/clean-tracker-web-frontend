@@ -30,3 +30,28 @@ export function roleFromToken(token: string | undefined | null): string | null {
     return null;
   }
 }
+
+/**
+ * Root hrefs of the only Admin Panel sections a SUPERVISOR may access. This is the
+ * single source of truth for that restriction — AppNav.tsx filters the nav against
+ * it, and proxy.ts enforces it at the route level so a Supervisor can't reach a
+ * hidden section by typing its URL directly.
+ */
+export const SUPERVISOR_ALLOWED_HREFS = [
+  "/dashboard",
+  "/dashboard/inspections",
+  "/admin/complaints",
+  "/admin/inventory",
+  "/admin/cleaner-management",
+  "/admin/workforce",
+  "/admin/cleaner-logs",
+  "/admin/user-management/sites",
+  "/dashboard/profile",
+] as const;
+
+/** "/dashboard" (Home) only matches exactly; every other entry also allows its subroutes. */
+export function isSupervisorRouteAllowed(pathname: string): boolean {
+  return SUPERVISOR_ALLOWED_HREFS.some(
+    (href) => pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`)),
+  );
+}

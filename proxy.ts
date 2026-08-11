@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "@/lib/constants";
-import { landingPath, roleFromToken } from "@/lib/auth/roles";
+import { landingPath, roleFromToken, isSupervisorRouteAllowed } from "@/lib/auth/roles";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
@@ -25,6 +25,12 @@ export function proxy(request: NextRequest) {
     // Already-authenticated users hitting an auth page go to their role's home.
     if (isAuthPage) {
       return NextResponse.redirect(new URL(landingPath(role), request.url));
+    }
+
+    // Supervisors only get a fixed subset of Admin Panel sections — block direct
+    // navigation to anything else, not just hide it from the nav (AppNav.tsx).
+    if (isProtected && role === "SUPERVISOR" && !isSupervisorRouteAllowed(pathname)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

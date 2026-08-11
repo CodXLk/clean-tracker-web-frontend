@@ -37,9 +37,18 @@ interface CleanerProfilesModalProps {
   open: boolean;
   onClose: () => void;
   site: Site | null;
+  /** When set, only assigning a cleaner to an existing slot is allowed — the
+   *  add/remove-slot actions are hidden. Used for Supervisors, who may reassign
+   *  cleaners but not change a site's cleaner-slot structure. */
+  restrictToAssignOnly?: boolean;
 }
 
-export function CleanerProfilesModal({ open, onClose, site }: CleanerProfilesModalProps) {
+export function CleanerProfilesModal({
+  open,
+  onClose,
+  site,
+  restrictToAssignOnly,
+}: CleanerProfilesModalProps) {
   const profilesQuery = useSiteCleanerProfiles(open ? site?.id : undefined);
   const cleanersQuery = useCleaners();
   const assign = useAssignCleanerProfiles();
@@ -350,16 +359,20 @@ export function CleanerProfilesModal({ open, onClose, site }: CleanerProfilesMod
         // ── No slots yet ──────────────────────────────────────────────────────────
         <div className="flex flex-col gap-4">
           <p className="py-6 text-center text-sm text-grey-500">
-            This site has no cleaner slots yet.
+            {restrictToAssignOnly
+              ? "This site has no cleaner slots yet. Contact an administrator to add cleaner slots."
+              : "This site has no cleaner slots yet."}
           </p>
-          <div className="flex justify-center">
-            <PillButton type="button" variant="teal" onClick={openAddView} className="w-auto px-6">
-              <span className="inline-flex items-center gap-2">
-                <Plus size={16} aria-hidden="true" />
-                Add a cleaner slot
-              </span>
-            </PillButton>
-          </div>
+          {!restrictToAssignOnly && (
+            <div className="flex justify-center">
+              <PillButton type="button" variant="teal" onClick={openAddView} className="w-auto px-6">
+                <span className="inline-flex items-center gap-2">
+                  <Plus size={16} aria-hidden="true" />
+                  Add a cleaner slot
+                </span>
+              </PillButton>
+            </div>
+          )}
         </div>
       ) : (
         // ── Assign cleaners to slots ──────────────────────────────────────────────
@@ -373,24 +386,26 @@ export function CleanerProfilesModal({ open, onClose, site }: CleanerProfilesMod
             <span className="text-sm font-medium text-on-surface">
               {profiles.length} cleaner slot{profiles.length === 1 ? "" : "s"}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openAddView}
-                className="inline-flex items-center gap-1.5 rounded-full border border-teal-500 px-3 py-1.5 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-50"
-              >
-                <Plus size={14} aria-hidden="true" />
-                Add cleaner
-              </button>
-              <button
-                type="button"
-                onClick={openRemoveView}
-                className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
-              >
-                <Minus size={14} aria-hidden="true" />
-                Remove cleaner
-              </button>
-            </div>
+            {!restrictToAssignOnly && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openAddView}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-teal-500 px-3 py-1.5 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-50"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Add cleaner
+                </button>
+                <button
+                  type="button"
+                  onClick={openRemoveView}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
+                >
+                  <Minus size={14} aria-hidden="true" />
+                  Remove cleaner
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3">

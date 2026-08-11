@@ -41,11 +41,11 @@ function occKey(task: TaskOccurrence): string {
   return task.redoId ?? (task.taskId as string);
 }
 
-interface AreaTaskPageProps {
+interface AreaInspectionPageProps {
   params: Promise<PageParams>;
 }
 
-export default function AreaTaskPage({ params }: AreaTaskPageProps) {
+export default function AreaInspectionPage({ params }: AreaInspectionPageProps) {
   const useDrawerNav = useIsDrawerNav();
   const { area } = use(params);
   const areaName = decodeURIComponent(area);
