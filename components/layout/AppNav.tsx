@@ -87,10 +87,18 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && CLEANER_HREFS.has(item.href),
 );
 
+/** Super admins don't need the cleaner-facing Home/Tasks pages. */
+const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/dashboard/tasks"]);
+const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
+);
+
 /** The nav items visible to the current user, based on role. */
 function useVisibleNavItems(): NavItemConfig[] {
   const { data: me } = useMe();
-  return me?.role === "CLEANER" ? CLEANER_NAV_ITEMS : NAV_ITEMS;
+  if (me?.role === "CLEANER") return CLEANER_NAV_ITEMS;
+  if (me?.role === "SUPER_ADMIN") return SUPER_ADMIN_NAV_ITEMS;
+  return NAV_ITEMS;
 }
 
 /** Whether the mobile experience shows the cleaner-style bottom bar (≤5 items)
