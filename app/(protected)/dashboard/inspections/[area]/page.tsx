@@ -149,18 +149,23 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       (s) => s.siteId === areaSiteId && (s.status === "CHECKED_IN" || s.status === "CHECKED_OUT"),
     );
 
-  // Supervisors review everything in original order. Cleaners see everything too, but
-  // completed tasks are pushed to the bottom (stable partition, relative order preserved
-  // within each group) as they finish.
+  // Three-tier ordering (stable within each group): not-yet-completed first, then
+  // completed-but-not-yet-checked, then checked (inspected) last.
   const tasks = useMemo(() => {
-    if (isSupervisor) return areaTasks;
     const incomplete: TaskOccurrence[] = [];
     const completed: TaskOccurrence[] = [];
+    const checked: TaskOccurrence[] = [];
     for (const o of areaTasks) {
-      (o.status === "COMPLETED" ? completed : incomplete).push(o);
+      if (o.status !== "COMPLETED") {
+        incomplete.push(o);
+      } else if (o.inspected) {
+        checked.push(o);
+      } else {
+        completed.push(o);
+      }
     }
-    return [...incomplete, ...completed];
-  }, [areaTasks, isSupervisor]);
+    return [...incomplete, ...completed, ...checked];
+  }, [areaTasks]);
 
   // Cleaners can't act on an already-completed task; supervisors can select any status.
   const selectableIds = useMemo(() => {
@@ -269,6 +274,28 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     );
   }
 
+  // Closes out the inspection (links it to the just-created complaint) after the complaint
+  // itself is already raised. This runs "fire and forget" from the panel's perspective —
+  // the complaint is the primary action and has already succeeded by the time this is
+  // called, so a failure here (logged, not thrown at the user) must not leave the panel
+  // stuck open, since retrying the visible button would re-raise a duplicate complaint.
+  function closeInspectionForComplaint(
+    selected: TaskOccurrence[],
+    complaintId: string,
+  ) {
+    submitInspection.mutate(
+      {
+        occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+        complaintId,
+      },
+      {
+        onError: (error) => {
+          console.error("Failed to close out inspection for complaint", complaintId, error);
+        },
+      },
+    );
+  }
+
   function handleComplaint() {
     const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
     if (selected.length === 0) return;
@@ -282,13 +309,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       },
       {
         onSuccess: (complaint) => {
-          submitInspection.mutate(
-            {
-              occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
-              complaintId: complaint.id,
-            },
-            { onSuccess: resetActionState },
-          );
+          closeInspectionForComplaint(selected, complaint.id);
+          resetActionState();
         },
       },
     );
@@ -307,13 +329,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       },
       {
         onSuccess: (complaint) => {
-          submitInspection.mutate(
-            {
-              occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
-              complaintId: complaint.id,
-            },
-            { onSuccess: resetActionState },
-          );
+          closeInspectionForComplaint(selected, complaint.id);
+          resetActionState();
         },
       },
     );
@@ -408,6 +425,12 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               const selected = selectedIds.has(key);
               const isRedo = Boolean(task.isRedo);
               const isCompleted = task.status === "COMPLETED";
+              // A completed task the supervisor has already closed out (rating or
+              // complaint) reads as "Checked" instead of the generic "Completed" —
+              // the underlying status stays COMPLETED everywhere else (Tasks page,
+              // inventory deduction, KPI stats); this is purely a display distinction
+              // driven by the inspection record.
+              const isChecked = isCompleted && task.inspected === true;
               // Cleaners have no valid action on an already-completed task; supervisors
               // keep full interactivity on every status (review/complaint flows).
               const isSelectable = isSupervisor || !isCompleted;
@@ -415,7 +438,11 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               const cardClassName = cn(
                 "flex w-full items-start gap-3 rounded-2xl p-4 text-left shadow-sm transition-shadow",
                 isSelectable && "hover:shadow-md",
-                isCompleted ? "border border-success/20 bg-success/10" : "bg-white",
+                isChecked
+                  ? "border border-indigo-500/20 bg-indigo-500/10"
+                  : isCompleted
+                    ? "border border-success/20 bg-success/10"
+                    : "bg-white",
                 selected && "ring-2 ring-primary",
                 isRedo && "border-l-4",
               );
@@ -433,7 +460,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                         <Square size={20} className="text-grey-500" />
                       )
                     ) : (
-                      <SquareCheck size={20} className="text-success" />
+                      <SquareCheck size={20} className={isChecked ? "text-indigo-600" : "text-success"} />
                     )}
                   </span>
 
@@ -463,10 +490,10 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-3 py-0.5 text-xs font-medium",
-                        STATUS_COLOR_MAP[task.status],
+                        isChecked ? "bg-indigo-500/15 text-indigo-600" : STATUS_COLOR_MAP[task.status],
                       )}
                     >
-                      {STATUS_LABEL_MAP[task.status]}
+                      {isChecked ? "Checked" : STATUS_LABEL_MAP[task.status]}
                     </span>
                   </div>
                 </>
