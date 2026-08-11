@@ -175,7 +175,7 @@ function MobileInventory() {
     >
       {!useDrawerNav && <PageHeader title="Inventory" />}
 
-      <main className={cn("mx-auto max-w-2xl px-5 pb-10", !useDrawerNav ? "" : "pt-5")}>
+      <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "" : "pt-5")}>
         <div className="flex flex-col gap-4">
           <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
 

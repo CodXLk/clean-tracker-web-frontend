@@ -260,7 +260,7 @@ function DashboardContent() {
         {/* Header — only when the nav has ≤5 items; otherwise the shared
             admin-style top bar (AppShell) covers the title/bell. */}
         {!useDrawerNav && (
-          <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8">
+          <header className="bg-primary rounded-b-[40px] px-5 pt-8 pb-8">
             <div className="flex items-center justify-between">
               {/* Left: avatar + greeting */}
               <div className="flex items-center gap-3">

@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Bell,
   AlertTriangle,
   PackageCheck,
@@ -105,16 +104,8 @@ export default function CleanerNotificationsPage() {
     >
       {!useDrawerNav && (
         <div className="lg:hidden">
-          <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 mb-5">
+          <header className="bg-primary rounded-b-[40px] px-5 pt-8 pb-8 mb-5">
             <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
-              <button
-                type="button"
-                aria-label="Back"
-                onClick={() => router.back()}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80 active:opacity-60"
-              >
-                <ArrowLeft size={20} strokeWidth={2} />
-              </button>
               <div className="flex-1">
                 <h1 className="text-2xl font-semibold leading-tight text-white">Notifications</h1>
                 <p className="text-xs text-white/70">{unread > 0 ? `${unread} unread` : "All caught up"}</p>

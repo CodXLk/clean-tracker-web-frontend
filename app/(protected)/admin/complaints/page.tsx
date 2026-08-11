@@ -215,7 +215,7 @@ export default function ComplaintsPage() {
 
         <main
           className={cn(
-            "mx-auto max-w-2xl px-5 pb-10",
+            "mx-auto max-w-2xl px-5 pb-28",
             !useDrawerNav ? "-mt-5" : "pt-5",
           )}
         >

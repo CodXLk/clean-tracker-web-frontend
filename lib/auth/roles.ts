@@ -4,9 +4,9 @@ export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.has(role);
 }
 
-/** Landing route for a role: admins go to the console, everyone else to the cleaner app. */
+/** Landing route for a role: admins and clients go to the console, everyone else to the cleaner app. */
 export function landingPath(role: string | null | undefined): string {
-  return isAdminRole(role) ? "/admin/dashboard" : "/dashboard";
+  return isAdminRole(role) || role === "CLIENT" ? "/admin/dashboard" : "/dashboard";
 }
 
 /**

@@ -8,7 +8,9 @@ import {
   Building2,
   type LucideIcon,
 } from "lucide-react";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { cn } from "@/lib/utils/cn";
 
 // ── Static data ───────────────────────────────────────────────────────────────
@@ -135,8 +137,17 @@ const PENDING_INSPECTIONS: InspectionItem[] = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminDashboardPage() {
+  const useDrawerNav = useIsDrawerNav();
+
   return (
-    <div className="p-6 lg:p-8">
+    <>
+      {!useDrawerNav && (
+        <div className="lg:hidden">
+          <PageHeader title="Dashboard" />
+        </div>
+      )}
+
+      <div className={cn("px-6 pt-6 lg:px-8 lg:pt-8", !useDrawerNav ? "pb-28 lg:pb-8" : "pb-6 lg:pb-8")}>
       <div className="mx-auto max-w-7xl">
         {/* Page header */}
         <div className="mb-6">
@@ -248,5 +259,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
