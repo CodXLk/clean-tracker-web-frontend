@@ -100,17 +100,6 @@ const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
 );
 
-/** Clients see a minimal 4-item nav: Dashboard, Complaints, Workforce, Profile. */
-const CLIENT_HREFS = new Set([
-  "/admin/dashboard",
-  "/admin/complaints",
-  "/admin/workforce",
-  "/dashboard/profile",
-]);
-const CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href && CLIENT_HREFS.has(item.href),
-);
-
 /** Supervisors get a fixed subset of the Admin Panel — kept in sync with proxy.ts,
  *  which also enforces this at the route level (see SUPERVISOR_ALLOWED_HREFS). */
 const SUPERVISOR_HREFS = new Set<string>(SUPERVISOR_ALLOWED_HREFS);
@@ -136,7 +125,6 @@ function useVisibleNavItems(): NavItemConfig[] {
   if (me?.role === "SUPER_ADMIN") return SUPER_ADMIN_NAV_ITEMS;
   if (me?.role === "CLIENT") return CLIENT_NAV_ITEMS;
   if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
-  if (me?.role === "CLIENT") return CLIENT_NAV_ITEMS;
   return NAV_ITEMS;
 }
 
