@@ -14,6 +14,7 @@ import {
   Star,
   CalendarCheck,
 } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
@@ -116,9 +117,18 @@ export default function ProfilePage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <PageHeader title="Profile" />
+      {!USE_DRAWER_NAV && (
+        <div className="lg:hidden">
+          <PageHeader title="Profile" />
+        </div>
+      )}
 
-      <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl -mt-5">
+      <main
+        className={cn(
+          "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
+          !USE_DRAWER_NAV ? "-mt-5" : "pt-5",
+        )}
+      >
         <div className="flex flex-col gap-4 pt-5 lg:grid lg:grid-cols-2 lg:items-start">
           {/* Left column */}
           <div className="flex flex-col gap-4">

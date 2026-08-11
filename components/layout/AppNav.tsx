@@ -73,21 +73,9 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
-/** Routes that render their own in-page PageHeader at every breakpoint — the
- *  shared top bar renders nothing for these (just the floating drawer trigger
- *  on mobile) to avoid a duplicate heading. */
-const ROUTES_WITH_OWN_HEADER = new Set([
-  "/dashboard",
-  "/dashboard/tasks",
-  "/dashboard/profile",
-]);
-
-/** Routes that render their own PageHeader on mobile only (their desktop
- *  branch has no title of its own) — the shared top bar's title/bell stay
- *  desktop-only here so mobile doesn't get two headers. */
-const ROUTES_WITH_MOBILE_ONLY_HEADER = new Set(["/admin/complaints", "/admin/inventory"]);
-
-/** Ordered most-specific first so longest-prefix wins. */
+/** Ordered most-specific first so longest-prefix wins. Every route resolves a
+ *  title now — the shared top bar shows everywhere (see AppShell); pages only
+ *  add their own green PageHeader on mobile when USE_DRAWER_NAV is false. */
 const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/user-management/client-companies", "Client-Company Management"],
   ["/admin/user-management/clients", "Client-Contact"],
@@ -103,20 +91,17 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/outsource-management", "Outsource Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],
+  ["/dashboard/tasks", "Tasks"],
+  ["/dashboard/profile", "Profile"],
+  ["/dashboard/notifications", "Notifications"],
+  ["/dashboard", "Home"],
 ];
 
 export function sectionTitle(pathname: string): string {
-  if (ROUTES_WITH_OWN_HEADER.has(pathname)) return "";
   const match = SECTION_TITLES.find(
     ([path]) => pathname === path || pathname.startsWith(`${path}/`),
   );
   return match?.[1] ?? "";
-}
-
-/** True when the current route already shows its own title on mobile (via
- *  PageHeader), so the shared top bar's title/bell should stay desktop-only. */
-export function hasMobileOnlyHeader(pathname: string): boolean {
-  return ROUTES_WITH_MOBILE_ONLY_HEADER.has(pathname);
 }
 
 function isItemActive(item: NavItemConfig, pathname: string): boolean {

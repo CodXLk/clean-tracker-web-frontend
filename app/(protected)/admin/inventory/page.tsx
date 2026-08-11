@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, CalendarClock, Package, RotateCcw } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { PillButton } from "@/components/shared/PillButton";
@@ -16,6 +17,7 @@ import {
   useInventoryStats,
 } from "@/features/inventory/hooks/useInventory";
 import { isManagementUser, fmtQty, fmtDateTime } from "@/features/inventory/lib/inventory";
+import { cn } from "@/lib/utils/cn";
 import { WarehouseTab } from "@/features/inventory/components/WarehouseTab";
 import { RequestsTab } from "@/features/inventory/components/RequestsTab";
 import { DeliveriesTab } from "@/features/inventory/components/DeliveriesTab";
@@ -169,9 +171,9 @@ function MobileInventory() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <PageHeader title="Inventory" />
+      {!USE_DRAWER_NAV && <PageHeader title="Inventory" />}
 
-      <main className="mx-auto max-w-2xl px-5 pb-10">
+      <main className={cn("mx-auto max-w-2xl px-5 pb-10", !USE_DRAWER_NAV ? "" : "pt-5")}>
         <div className="flex flex-col gap-4">
           <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
 

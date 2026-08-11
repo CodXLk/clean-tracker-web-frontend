@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -122,38 +123,41 @@ function DashboardContent() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      {/* Header */}
-      <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8">
-        <div className="flex items-center justify-between">
-          {/* Left: avatar + greeting */}
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
-            <div>
-              <p className="text-xs text-white/70">{greeting}</p>
-              <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>
-              <CheckInBadge
-                checkedIn={checkedIn}
-                checkInTime={checkInTime ?? undefined}
-                className="mt-1"
-              />
+      {/* Header — only on mobile when the nav has ≤5 items; otherwise the
+          shared admin-style top bar (AppShell) covers the title/bell. */}
+      {!USE_DRAWER_NAV && (
+        <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 lg:hidden">
+          <div className="flex items-center justify-between">
+            {/* Left: avatar + greeting */}
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+              <div>
+                <p className="text-xs text-white/70">{greeting}</p>
+                <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>
+                <CheckInBadge
+                  checkedIn={checkedIn}
+                  checkInTime={checkInTime ?? undefined}
+                  className="mt-1"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Bell */}
-          <Link
-            href="/dashboard/notifications"
-            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
-          >
-            <Bell size={20} strokeWidth={2} />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </Link>
-        </div>
-      </header>
+            {/* Bell */}
+            <Link
+              href="/dashboard/notifications"
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
+            >
+              <Bell size={20} strokeWidth={2} />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </Link>
+          </div>
+        </header>
+      )}
 
       {/* Body */}
       <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl mt-5">

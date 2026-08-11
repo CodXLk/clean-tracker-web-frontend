@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle, CheckCircle2, Clock, MessageSquare } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterTabs } from "@/components/shared/FilterTabs";
@@ -209,9 +210,14 @@ export default function ComplaintsPage() {
             "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
         }}
       >
-        <PageHeader title="Complaints" />
+        {!USE_DRAWER_NAV && <PageHeader title="Complaints" />}
 
-        <main className="mx-auto max-w-2xl px-5 pb-10 -mt-5">
+        <main
+          className={cn(
+            "mx-auto max-w-2xl px-5 pb-10",
+            !USE_DRAWER_NAV ? "-mt-5" : "pt-5",
+          )}
+        >
           {sites.length > 1 && (
             <div className="pt-5">
               <SiteSelector

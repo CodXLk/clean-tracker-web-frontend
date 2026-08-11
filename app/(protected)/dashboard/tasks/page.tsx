@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { CalendarDays } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
@@ -106,11 +108,30 @@ export default function TasksPage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <PageHeader title="Tasks" showCalendar onCalendarClick={() => setCalendarOpen(true)} />
+      {!USE_DRAWER_NAV && (
+        <div className="lg:hidden">
+          <PageHeader title="Tasks" showCalendar onCalendarClick={() => setCalendarOpen(true)} />
+        </div>
+      )}
 
-      <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl -mt-5">
+      <main
+        className={cn(
+          "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
+          !USE_DRAWER_NAV ? "-mt-5" : "pt-5",
+        )}
+      >
+        <div className="flex justify-end pt-3">
+          <button
+            type="button"
+            onClick={() => setCalendarOpen(true)}
+            aria-label="Open calendar"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+          >
+            <CalendarDays size={18} strokeWidth={2} />
+          </button>
+        </div>
         {sites.length > 1 && (
-          <div className="pt-5">
+          <div className="pt-3">
             <SiteSelector
               sites={sites}
               selectedSiteId={selectedSiteId}

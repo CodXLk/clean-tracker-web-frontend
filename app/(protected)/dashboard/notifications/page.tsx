@@ -15,6 +15,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
+import { USE_DRAWER_NAV } from "@/components/layout/AppNav";
 import { cn } from "@/lib/utils/cn";
 import {
   useNotifications,
@@ -101,34 +102,46 @@ export default function CleanerNotificationsPage() {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 mb-5">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => router.back()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80 active:opacity-60"
-          >
-            <ArrowLeft size={20} strokeWidth={2} />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold leading-tight text-white">Notifications</h1>
-            <p className="text-xs text-white/70">{unread > 0 ? `${unread} unread` : "All caught up"}</p>
-          </div>
-          {unread > 0 && (
+      {!USE_DRAWER_NAV && (
+        <div className="lg:hidden">
+          <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8 mb-5">
+            <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-5xl">
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => router.back()}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80 active:opacity-60"
+              >
+                <ArrowLeft size={20} strokeWidth={2} />
+              </button>
+              <div className="flex-1">
+                <h1 className="text-2xl font-semibold leading-tight text-white">Notifications</h1>
+                <p className="text-xs text-white/70">{unread > 0 ? `${unread} unread` : "All caught up"}</p>
+              </div>
+            </div>
+          </header>
+        </div>
+      )}
+
+      <main
+        className={cn(
+          "mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl",
+          !USE_DRAWER_NAV ? "pt-5 -mt-5" : "pt-5",
+        )}
+      >
+        {unread > 0 && (
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-grey-500">{unread} unread</p>
             <button
               type="button"
               onClick={() => markAllRead.mutate()}
               disabled={markAllRead.isPending}
-              className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+              className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
             >
               Mark all read
             </button>
-          )}
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-2xl px-5 pb-28 pt-5 lg:max-w-5xl -mt-5">
+          </div>
+        )}
         {isLoading ? (
           <p className="py-16 text-center text-sm text-grey-500">Loading…</p>
         ) : isError ? (
