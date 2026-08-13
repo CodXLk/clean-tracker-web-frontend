@@ -7,18 +7,22 @@ import { UserListSchema, type User } from "@/features/users/schemas/user.schema"
 import { CleanerListSchema, type Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
 import {
   SiteCleanerProfileSchema,
+  SiteSupervisorProfileSchema,
   type SiteCleanerProfile,
+  type SiteSupervisorProfile,
 } from "@/features/user-management/schemas/site.schema";
 import { z } from "zod";
 import { siteKeys } from "./keys";
 
 const SiteCleanerProfileListSchema = z.array(SiteCleanerProfileSchema);
+const SiteSupervisorProfileListSchema = z.array(SiteSupervisorProfileSchema);
 
 export const siteAssignmentKeys = {
   all: ["site-assignments"] as const,
   supervisors: (siteId: string) => [...siteAssignmentKeys.all, "supervisors", siteId] as const,
   cleaners: (siteId: string) => [...siteAssignmentKeys.all, "cleaners", siteId] as const,
   cleanerProfiles: (siteId: string) => [...siteAssignmentKeys.all, "cleaner-profiles", siteId] as const,
+  supervisorProfiles: (siteId: string) => [...siteAssignmentKeys.all, "supervisor-profiles", siteId] as const,
 };
 
 // ── Supervisors ─────────────────────────────────────────────────────────────────
@@ -147,6 +151,80 @@ export function useRemoveCleanerProfile() {
     onSuccess: (_data, { siteId }) => {
       queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleanerProfiles(siteId) });
       queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleaners(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}
+
+// ── Supervisor profiles (per-site supervisor slots) ───────────────────────────────
+
+async function fetchSiteSupervisorProfiles(siteId: string): Promise<SiteSupervisorProfile[]> {
+  const { data } = await clientApi.get(ENDPOINTS.sites.supervisorProfiles(siteId));
+  return SiteSupervisorProfileListSchema.parse(data);
+}
+
+export function useSiteSupervisorProfiles(siteId: string | undefined) {
+  return useQuery({
+    queryKey: siteAssignmentKeys.supervisorProfiles(siteId ?? ""),
+    queryFn: () => fetchSiteSupervisorProfiles(siteId!),
+    enabled: !!siteId,
+  });
+}
+
+export interface SupervisorProfileAssignmentInput {
+  profileId: string;
+  supervisorId: string | null;
+}
+
+export function useAssignSupervisorProfiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      siteId,
+      profiles,
+    }: {
+      siteId: string;
+      profiles: SupervisorProfileAssignmentInput[];
+    }) => {
+      const { data } = await clientApi.put(ENDPOINTS.sites.supervisorProfiles(siteId), { profiles });
+      return SiteSupervisorProfileListSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.supervisorProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.supervisors(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}
+
+/** Adds one supervisor slot to a site. */
+export function useAddSupervisorProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ siteId }: { siteId: string }) => {
+      const { data } = await clientApi.post(ENDPOINTS.sites.addSupervisorProfile(siteId), {});
+      return SiteSupervisorProfileListSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.supervisorProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}
+
+/** Removes a supervisor slot (a site keeps at least one). */
+export function useRemoveSupervisorProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ siteId, profileId }: { siteId: string; profileId: string }) => {
+      const { data } = await clientApi.delete(
+        ENDPOINTS.sites.removeSupervisorProfile(siteId, profileId),
+      );
+      return SiteSupervisorProfileListSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.supervisorProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.supervisors(siteId) });
       queryClient.invalidateQueries({ queryKey: siteKeys.all });
     },
   });

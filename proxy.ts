@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "@/lib/constants";
-import { canAccessAdminPath, landingPath, roleFromToken } from "@/lib/auth/roles";
+import { landingPath, roleFromToken, isSupervisorRouteAllowed } from "@/lib/auth/roles";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
@@ -27,9 +27,9 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(landingPath(role), request.url));
     }
 
-    // Keep non-admin roles inside the cleaner app, except where a supervisor is
-    // explicitly allowed (e.g. the Cleaner Logs page).
-    if (pathname.startsWith("/admin") && !canAccessAdminPath(role, pathname)) {
+    // Supervisors only get a fixed subset of Admin Panel sections — block direct
+    // navigation to anything else, not just hide it from the nav (AppNav.tsx).
+    if (isProtected && role === "SUPERVISOR" && !isSupervisorRouteAllowed(pathname)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }

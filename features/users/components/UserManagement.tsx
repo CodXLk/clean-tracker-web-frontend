@@ -33,6 +33,8 @@ export function UserManagement() {
   const resend = useResendSetup();
 
   const allowedRoles = useMemo(() => creatableRoles(me.data?.role), [me.data?.role]);
+  // Cleaner accounts are managed exclusively from the Cleaner Management tab.
+  const users = useMemo(() => usersQuery.data?.filter((u) => u.role !== "CLEANER"), [usersQuery.data]);
 
   return (
     <div className="p-6 lg:p-8">
@@ -60,7 +62,7 @@ export function UserManagement() {
             </div>
           ) : usersQuery.isError ? (
             <div className="p-6 text-sm font-medium text-error">Failed to load users.</div>
-          ) : usersQuery.data && usersQuery.data.length > 0 ? (
+          ) : users && users.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
@@ -73,7 +75,7 @@ export function UserManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {usersQuery.data.map((user) => (
+                  {users.map((user) => (
                     <tr key={user.id} className="border-b border-grey-100 last:border-0">
                       <td className="px-5 py-3.5 font-medium text-on-surface">
                         {[user.firstName, user.lastName].filter(Boolean).join(" ")}
@@ -126,7 +128,7 @@ export function UserManagement() {
       </div>
 
       {allowedRoles.length > 0 && (
-        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} />
+        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} excludeRoleNames={["CLEANER"]} />
       )}
     </div>
   );

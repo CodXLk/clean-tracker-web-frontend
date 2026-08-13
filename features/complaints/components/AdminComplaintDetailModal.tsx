@@ -48,15 +48,21 @@ export function AdminComplaintDetailModal({
   const canResolve = complaint.status === "open" || complaint.status === "in_progress";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="complaint-detail-title"
-    >
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} aria-hidden="true" />
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={handleClose} aria-hidden="true" />
 
-      <div className="relative z-10 w-full max-w-xl rounded-3xl bg-surface shadow-2xl">
+      {/* Panel — bottom sheet on mobile (cleaner style), centered dialog on desktop (admin style) */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="complaint-detail-title"
+        className={cn(
+          "fixed z-50 flex flex-col bg-surface",
+          "inset-x-0 bottom-0 max-h-[85vh] rounded-t-3xl",
+          "lg:inset-0 lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-full lg:max-w-xl lg:max-h-[85vh] lg:rounded-3xl lg:shadow-2xl",
+        )}
+      >
         <div className="flex items-start justify-between px-6 pt-6 pb-4">
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25]/10">
@@ -79,7 +85,7 @@ export function AdminComplaintDetailModal({
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto px-6 pb-2">
+        <div className="flex-1 overflow-y-auto px-6 pb-2">
           <div className="mb-4 flex items-center gap-2">
             <span className={cn("rounded-xl px-2.5 py-1 text-xs", STATUS_CLASSES[complaint.status])}>
               {STATUS_LABEL[complaint.status]}
@@ -185,6 +191,6 @@ export function AdminComplaintDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

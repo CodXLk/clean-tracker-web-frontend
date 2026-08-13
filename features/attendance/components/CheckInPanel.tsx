@@ -7,7 +7,7 @@ import { SiteSelector } from "@/components/shared/SiteSelector";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
-import { useCheckIn, useCheckOut } from "@/features/attendance/hooks/useAttendance";
+import { useCheckIn, useCheckOut, useAttendanceHeartbeat } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
@@ -60,6 +60,8 @@ interface CheckInPanelProps {
 export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
+  // 15-min location heartbeat while checked in (auto-pauses server-side if off-site).
+  useAttendanceHeartbeat(sites);
   const today = toLocalDateString(new Date());
   const { data: todayTasks = [] } = useMyTasks(today);
 
@@ -71,12 +73,19 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     { site: CleanerSite; tasks: TaskOccurrence[] } | null
   >(null);
   const [confirming, setConfirming] = useState(false);
+  // NFC support is resolved after mount to avoid an SSR/hydration mismatch.
+  const [nfcSupported, setNfcSupported] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  useEffect(() => {
+    setNfcSupported(isNfcSupported());
+  }, []);
 
   const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
 
-  // Every assigned site is offered for check-in, so a cleaner covering more than one site
-  // the same day can pick which to check into — the selector below is that site filter.
-  const visibleSites = sites;
+  // Check-in is only offered for sites that actually have work today (any status), so a
+  // stale checked-out site with no tasks doesn't surface a "Shift complete" card.
+  const siteHasTasksToday = (siteId: string) => todayTasks.some((t) => t.siteId === siteId);
+  const visibleSites = sites.filter((s) => siteHasTasksToday(s.siteId));
 
   // Which of the cleaner's visible sites this single card/slider acts on. Defaults to
   // the checked-in site, but the cleaner can switch via the selector when they have more
@@ -108,6 +117,37 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
     const payload = await acquirePayload(site);
     await checkOut.mutateAsync({ ...payload, acknowledgeIncomplete });
+  }
+
+  // Tap-to-scan NFC and check in automatically to whichever assigned site the tag belongs
+  // to (the server validates the tag against each candidate site).
+  async function scanAndCheckIn() {
+    const current = sites.find((s) => s.siteId === selectedSiteId) ?? sites[0];
+    if (!current) return;
+    setScanning(true);
+    setErrors((prev) => ({ ...prev, [current.siteId]: "" }));
+    try {
+      const uid = await readNfcTag();
+      const candidates = sites
+        .filter((s) => s.nfcRegistered && s.status !== "CHECKED_IN" && s.status !== "CHECKED_OUT")
+        .sort((a, b) => (a.siteId === current.siteId ? -1 : b.siteId === current.siteId ? 1 : 0));
+      let lastError: unknown = new Error("The scanned tag doesn't match any of your sites today.");
+      for (const s of candidates) {
+        try {
+          await checkIn.mutateAsync({ siteId: s.siteId, method: "NFC", nfcTagId: uid });
+          return;
+        } catch (e) {
+          lastError = e;
+          // Keep trying other sites only when this one simply didn't match the tag.
+          if (!/does not match/i.test(getMessage(e, ""))) throw e;
+        }
+      }
+      throw lastError;
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [current.siteId]: getMessage(err, "NFC check-in failed.") }));
+    } finally {
+      setScanning(false);
+    }
   }
 
   async function run(site: CleanerSite, mode: "in" | "out") {
@@ -170,11 +210,25 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
+  if (visibleSites.length === 0) {
+    return (
+      <div className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
+        <SlideButton
+          label="No assigned sites today"
+          variant="teal"
+          disabled
+          onComplete={() => {}}
+        />
+      </div>
+    );
+  }
+
   const site = visibleSites.find((s) => s.siteId === selectedSiteId) ?? visibleSites[0];
   const error = errors[site.siteId];
   const resetKey = resetKeys[site.siteId] ?? 0;
   const checkedIn = site.status === "CHECKED_IN";
   const checkedOut = site.status === "CHECKED_OUT";
+  const paused = site.status === "PAUSED";
   const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
 
   return (
@@ -244,6 +298,21 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
           </div>
         )}
 
+        {paused && (
+          <div className="rounded-xl border border-[#ED5F25]/40 bg-[#ED5F25]/10 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-[#ED5F25]">
+              <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
+              Shift paused — you moved away from {site.siteName}
+            </p>
+            <p className="mt-1 text-[11px] text-grey-600">
+              {site.awayDistanceMeters
+                ? `You were about ${Math.round(site.awayDistanceMeters)} m from the site. `
+                : ""}
+              Check in again to keep completing tasks — they are view-only until you do.
+            </p>
+          </div>
+        )}
+
         {checkedOut ? (
           <div className="flex items-center justify-center gap-2 rounded-full bg-success/10 px-4 py-3 text-sm font-semibold text-success">
             <Check size={16} aria-hidden="true" /> Shift complete
@@ -257,13 +326,26 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             onComplete={() => run(site, "out")}
           />
         ) : (
-          <SlideButton
-            key={`in-${resetKey}`}
-            label="Slide to Check In"
-            variant="teal"
-            completedLabel="Checking in…"
-            onComplete={() => run(site, "in")}
-          />
+          <div className="flex flex-col gap-2">
+            <SlideButton
+              key={`in-${resetKey}`}
+              label={paused ? "Slide to Check In again" : "Slide to Check In"}
+              variant="teal"
+              completedLabel="Checking in…"
+              onComplete={() => run(site, "in")}
+            />
+            {site.nfcRegistered && nfcSupported && (
+              <button
+                type="button"
+                onClick={scanAndCheckIn}
+                disabled={scanning}
+                className="flex items-center justify-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+              >
+                <Nfc size={16} aria-hidden="true" />
+                {scanning ? "Scanning… tap your phone to the tag" : "Scan NFC to check in"}
+              </button>
+            )}
+          </div>
         )}
 
         {(checkedIn || checkedOut) && (
@@ -301,7 +383,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                   <AlertTriangle size={18} aria-hidden="true" />
                 </span>
                 <h2 id="pending-tasks-title" className="text-base font-semibold text-on-surface">
-                  Incomplete tasks
+                  Forced check-out
                 </h2>
               </div>
               <button
@@ -317,10 +399,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
             <div className="px-5 pt-3">
               <p className="text-sm text-grey-700">
-                You still have {pendingPrompt.tasks.length} unfinished task
+                This is a forced check-out — you still have {pendingPrompt.tasks.length} unfinished task
                 {pendingPrompt.tasks.length === 1 ? "" : "s"} at{" "}
                 <span className="font-medium text-on-surface">{pendingPrompt.site.siteName}</span>.
-                If you check out now, your supervisor will be notified.
+                Your supervisor and company admin will be notified to assign a cleaner to this site.
               </p>
 
               <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto rounded-2xl bg-white/70 p-3">
@@ -350,7 +432,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 onClick={confirmPendingCheckout}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-error px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:opacity-60"
               >
-                {confirming ? "Checking out…" : "Check out anyway"}
+                {confirming ? "Checking out…" : "Force check-out"}
               </button>
             </div>
           </div>

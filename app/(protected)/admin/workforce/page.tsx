@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Users2, Calendar, Star, Building2, FileText, type LucideIcon } from "lucide-react";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { ActiveTaskCard } from "@/components/admin/ActiveTaskCard";
 import { WorkforceCalendar, type AssignmentPrefill } from "@/components/admin/WorkforceCalendar";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
@@ -14,6 +16,7 @@ import { useDrafts } from "@/features/workforce/hooks/useDrafts";
 import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { AssignmentDraft } from "@/features/workforce/schemas/draft.schema";
 import { todayISODate } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/cn";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +64,7 @@ type Tab = (typeof TABS)[number];
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function WorkforcePage() {
+  const useDrawerNav = useIsDrawerNav();
   const [tab, setTab] = useState<Tab>("Operations");
   const [newAssignmentOpen, setNewAssignmentOpen] = useState(false);
   const [prefill, setPrefill] = useState<AssignmentPrefill>({});
@@ -156,7 +160,14 @@ export default function WorkforcePage() {
   }
 
   return (
-    <div className="p-6 lg:p-8">
+    <>
+      {!useDrawerNav && (
+        <div className="lg:hidden">
+          <PageHeader title="Workforce" />
+        </div>
+      )}
+
+      <div className={cn("px-6 pt-6 lg:px-8 lg:pt-8", !useDrawerNav ? "pb-28 lg:pb-8" : "pb-6 lg:pb-8")}>
       <div className="mx-auto max-w-7xl">
         {/* Page header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -201,7 +212,7 @@ export default function WorkforcePage() {
         ) : (
           <>
         {/* Stats row */}
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
           {stats.map((stat) => (
             <AdminStatCard key={stat.label} {...stat} />
           ))}
@@ -262,5 +273,6 @@ export default function WorkforcePage() {
       {/* Drafts Modal */}
       <DraftsModal open={draftsOpen} onClose={() => setDraftsOpen(false)} onLoad={handleLoadDraft} />
     </div>
+    </>
   );
 }

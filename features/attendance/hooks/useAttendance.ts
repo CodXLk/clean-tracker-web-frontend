@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
+import { getCurrentPosition } from "@/lib/geolocation";
 import {
   AttendanceLogListSchema,
   AttendanceLogSchema,
@@ -10,6 +12,7 @@ import {
   type AttendanceLog,
   type CheckInPayload,
   type CleanerSite,
+  type HeartbeatPayload,
 } from "@/features/attendance/schemas/attendance.schema";
 
 export const attendanceKeys = {
@@ -60,6 +63,57 @@ export function useCheckOut() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: attendanceKeys.all }),
   });
+}
+
+export function useHeartbeat() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: HeartbeatPayload) => {
+      const { data } = await clientApi.post(ENDPOINTS.attendance.heartbeat, payload);
+      return AttendanceLogSchema.parse(data);
+    },
+    // A ping may flip the shift to PAUSED — refresh so the UI reflects it.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: attendanceKeys.all }),
+  });
+}
+
+const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * While the cleaner is checked in at a geolocated site, sends a location heartbeat every
+ * 15 minutes. If a ping lands outside the geofence the server auto-pauses the shift, which
+ * this surfaces by invalidating the attendance queries. Only runs while the app is open.
+ */
+export function useAttendanceHeartbeat(sites: CleanerSite[]) {
+  const heartbeat = useHeartbeat();
+  const activeSiteId =
+    sites.find((s) => s.status === "CHECKED_IN" && s.hasCoordinates)?.siteId ?? null;
+
+  useEffect(() => {
+    if (!activeSiteId) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const pos = await getCurrentPosition();
+        if (cancelled) return;
+        await heartbeat.mutateAsync({
+          siteId: activeSiteId,
+          latitude: pos.lat,
+          longitude: pos.lng,
+          accuracyMeters: pos.accuracy,
+        });
+      } catch {
+        // Best-effort: a failed/denied ping doesn't pause the shift.
+      }
+    };
+    const id = setInterval(tick, HEARTBEAT_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // heartbeat mutation identity is stable enough; re-run only when the active site changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSiteId]);
 }
 
 async function fetchLogs(filters: AttendanceLogFilters): Promise<AttendanceLog[]> {

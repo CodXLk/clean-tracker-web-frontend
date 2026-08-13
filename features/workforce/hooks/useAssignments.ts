@@ -119,6 +119,41 @@ export function useEditOccurrence() {
   });
 }
 
+/** Content fields of one occurrence that a scoped content-edit can change. */
+export interface EditOccurrenceContentInput {
+  scope: OccurrenceScope;
+  name?: string;
+  durationMinutes?: number;
+  description?: string;
+  colorHex?: string;
+  profileIds?: string[];
+  cleanerIds?: string[];
+  supervisorIds?: string[];
+  items?: { itemId: string; quantity: number }[];
+}
+
+export function useEditOccurrenceContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      occurrenceDate,
+      input,
+    }: {
+      taskId: string;
+      occurrenceDate: string;
+      input: EditOccurrenceContentInput;
+    }) => {
+      const { data } = await clientApi.put(
+        ENDPOINTS.assignments.occurrenceContent(taskId, occurrenceDate),
+        input,
+      );
+      return AssignmentSchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
 export function useDeleteOccurrence() {
   const queryClient = useQueryClient();
   return useMutation({

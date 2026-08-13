@@ -2,8 +2,8 @@
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, Camera, ImagePlus, Square, SquareCheck, X } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
+import { AlertTriangle, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -11,8 +11,8 @@ import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/task
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
-import { useAuthStore } from "@/features/auth/store/auth.store";
-import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { toLocalDateString, assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
@@ -46,6 +46,7 @@ interface AreaTaskPageProps {
 }
 
 export default function AreaTaskPage({ params }: AreaTaskPageProps) {
+  const useDrawerNav = useIsDrawerNav();
   const { area } = use(params);
   const areaName = decodeURIComponent(area);
 
@@ -60,7 +61,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const createComplaint = useCreateComplaint();
   const complaintWithRedo = useComplaintWithRedo();
 
-  const role = useAuthStore((s) => s.user?.role);
+  const role = useMe().data?.role;
   const isSupervisor = role === "SUPERVISOR";
 
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -121,17 +122,15 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     [occurrences, areaId],
   );
 
-  // A cleaner must have checked in to this area's site at some point today to complete
-  // tasks here. They don't need to be checked in right now — CHECKED_OUT still counts,
-  // since that status is only ever reached after an earlier check-in the same day; only
-  // never having checked in at all (no status) blocks them.
+  // A cleaner may only complete this area's tasks while actively checked in at its site.
+  // A paused shift (moved off-site) or a checked-out shift makes the tasks view-only until
+  // they check in again — mirrors the server-side guard.
   const areaSiteId = areaTasks[0]?.siteId ?? null;
   const areaSiteName = areaTasks[0]?.siteName ?? "this site";
-  const hasCheckedInToAreaSiteToday =
-    areaSiteId !== null &&
-    sites.some(
-      (s) => s.siteId === areaSiteId && (s.status === "CHECKED_IN" || s.status === "CHECKED_OUT"),
-    );
+  const areaSiteStatus = areaSiteId
+    ? sites.find((s) => s.siteId === areaSiteId)?.status ?? null
+    : null;
+  const isCheckedInToAreaSite = areaSiteStatus === "CHECKED_IN";
 
   // Supervisors review everything in original order. Cleaners see everything too, but
   // completed tasks are pushed to the bottom (stable partition, relative order preserved
@@ -174,7 +173,11 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
   function handlePhotosPicked(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
-    setPhotos((prev) => [...prev, ...Array.from(fileList)]);
+    // Snapshot into a plain array immediately — fileList is a live reference to the
+    // input's FileList, and the input gets cleared (value = "") right after this call
+    // returns, which would otherwise empty it out before the setState updater below runs.
+    const files = Array.from(fileList);
+    setPhotos((prev) => [...prev, ...files]);
   }
 
   function removePhoto(index: number) {
@@ -190,9 +193,11 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   }
 
   function handleComplete() {
-    if (!hasCheckedInToAreaSiteToday) {
+    if (!isSupervisor && !isCheckedInToAreaSite) {
       setCompleteBlockedError(
-        `You need to check in to ${areaSiteName} today before you can complete tasks here.`,
+        areaSiteStatus === "PAUSED"
+          ? `Your shift at ${areaSiteName} is paused because you moved away. Check in again to complete tasks here.`
+          : `You need to check in to ${areaSiteName} before you can complete tasks here.`,
       );
       return;
     }
@@ -264,16 +269,29 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
       }}
     >
-      <PageHeader title={areaName} showCalendar onCalendarClick={() => setCalendarOpen(true)} />
+      {!useDrawerNav && (
+        <div className="lg:hidden">
+          <PageHeader title={areaName} showCalendar onCalendarClick={() => setCalendarOpen(true)} />
+        </div>
+      )}
 
       <main
         className={cn(
-          "mx-auto max-w-2xl px-5 pt-5 lg:max-w-5xl -mt-5",
+          "mx-auto max-w-2xl px-5 lg:max-w-5xl",
+          !useDrawerNav ? "pt-5 -mt-5" : "pt-5",
           hasSelection ? "pb-[22rem]" : "pb-28",
         )}
       >
-        {selectableIds.length > 0 && (
-          <div className="flex items-center justify-end pb-3">
+        <div className="flex items-center justify-between pb-3">
+          <button
+            type="button"
+            onClick={() => setCalendarOpen(true)}
+            aria-label="Open calendar"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+          >
+            <CalendarDays size={18} strokeWidth={2} />
+          </button>
+          {selectableIds.length > 0 && (
             <button
               onClick={toggleSelectAll}
               aria-pressed={allSelected}
@@ -286,8 +304,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               )}
               Select All
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center py-16">
@@ -309,15 +327,16 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               const isSelectable = isSupervisor || !isCompleted;
 
               const cardClassName = cn(
-                "flex w-full items-start gap-3 rounded-2xl p-4 text-left shadow-sm transition-shadow",
+                "flex w-full items-start gap-3 rounded-2xl border-l-4 p-4 text-left shadow-sm transition-shadow",
                 isSelectable && "hover:shadow-md",
-                isCompleted ? "border border-success/20 bg-success/10" : "bg-white",
+                isCompleted ? "border-y border-r border-success/20 bg-success/10" : "bg-white",
                 selected && "ring-2 ring-primary",
-                isRedo && "border-l-4",
               );
-              const cardStyle = isRedo
-                ? { borderLeftColor: task.colorHex ?? "#7C3AED" }
-                : undefined;
+              // Left accent: category colour for normal tasks, the redo colour for redos.
+              const accentColor = isRedo
+                ? task.colorHex ?? "#7C3AED"
+                : assignmentTypeColor(task.assignmentType);
+              const cardStyle = { borderLeftColor: accentColor };
 
               const cardContent = (
                 <>
@@ -339,6 +358,14 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
                         <span className="text-sm font-semibold leading-snug text-[#1A1A1A]">
                           {task.name}
                         </span>
+                        {!isRedo && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: accentColor, backgroundColor: `${accentColor}1A` }}
+                          >
+                            {assignmentTypeLabel(task.assignmentType ?? "OTHER")}
+                          </span>
+                        )}
                         {isRedo && (
                           <span
                             className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
@@ -424,7 +451,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           aria-modal="true"
           aria-label="Complete selected tasks"
           className={cn(
-            "fixed z-40 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]",
+            "fixed z-[60] bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]",
             "inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-3xl",
             dragPosition
               ? "lg:max-h-[85vh] lg:w-full lg:max-w-md lg:rounded-3xl lg:shadow-2xl"
@@ -460,25 +487,6 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               </button>
             </div>
 
-            {/* Photo thumbnails */}
-            {photos.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {previews.map((url, index) => (
-                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                    <button
-                      onClick={() => removePhoto(index)}
-                      aria-label="Remove photo"
-                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Add photos */}
             <div className="mb-3 flex gap-2">
               <button
@@ -496,6 +504,25 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
                 Add Photos
               </button>
             </div>
+
+            {/* Photo thumbnails — preview of what will upload with Complete */}
+            {photos.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {previews.map((url, index) => (
+                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => removePhoto(index)}
+                      aria-label="Remove photo"
+                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Note */}
             <textarea
@@ -537,7 +564,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               </div>
             ) : (
               <>
-                {completeBlockedError && !hasCheckedInToAreaSiteToday && (
+                {completeBlockedError && !isCheckedInToAreaSite && (
                   <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                     {completeBlockedError}
@@ -558,8 +585,6 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
       {/* Calendar Modal */}
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
-
-      <BottomNavBar hideMobileBar={hasSelection} />
     </div>
   );
 }

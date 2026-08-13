@@ -3,8 +3,9 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
-import { BottomNavBar } from "@/components/layout/BottomNavBar";
+import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, MapPin, X } from "lucide-react";
+import { useIsDrawerNav } from "@/components/layout/AppNav";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -71,6 +72,7 @@ function DashboardContent() {
 
   const { data: sites = [], isLoading } = useMySites();
   const { data: me } = useMe();
+  const useDrawerNav = useIsDrawerNav();
 
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const range = useMemo(() => {
@@ -98,11 +100,13 @@ function DashboardContent() {
   const taskKpis = useMemo(() => {
     let pending = 0;
     let completed = 0;
+    const siteIds = new Set<string>();
     for (const o of todayTasks) {
       if (o.status === "COMPLETED") completed += 1;
       else pending += 1;
+      if (o.siteId) siteIds.add(o.siteId);
     }
-    return { pending, completed, total: todayTasks.length };
+    return { pending, completed, total: todayTasks.length, sites: siteIds.size };
   }, [todayTasks]);
 
   const openComplaints = useMemo(
@@ -116,74 +120,207 @@ function DashboardContent() {
   const upcomingShifts = useMemo(() => buildUpcomingShifts(upcomingTasks), [upcomingTasks]);
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background:
-          "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
-      }}
-    >
-      {/* Header */}
-      <header className="bg-primary rounded-b-[40px] px-5 pt-14 pb-8">
-        <div className="flex items-center justify-between">
-          {/* Left: avatar + greeting */}
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
-            <div>
-              <p className="text-xs text-white/70">{greeting}</p>
-              <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>
-              <CheckInBadge
-                checkedIn={checkedIn}
-                checkInTime={checkInTime ?? undefined}
-                className="mt-1"
-              />
+    <>
+      {/* ---------- Desktop (admin-style console) ---------- */}
+      <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-6">
+            <p className="text-sm text-grey-500">
+              {greeting}, {firstName} — here&apos;s what&apos;s happening today.
+            </p>
+          </div>
+
+          {showAdminDeniedBanner && (
+            <div className="mb-6 flex items-start justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-on-surface">
+              <p>Your account doesn&apos;t have access to the admin console, so you were brought here instead.</p>
+              <button
+                type="button"
+                onClick={() => setAdminDeniedDismissed(true)}
+                aria-label="Dismiss"
+                className="shrink-0 rounded-full p-1 text-on-surface/60 transition-opacity hover:opacity-80"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
             </div>
+          )}
+
+          <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
+            <AdminStatCard
+              icon={MapPin}
+              iconBg="bg-primary/10"
+              iconColor="text-primary"
+              value={taskKpis.sites}
+              label="Sites Today"
+            />
+            <AdminStatCard
+              icon={ClipboardList}
+              iconBg="bg-[#ED5F25]/10"
+              iconColor="text-[#ED5F25]"
+              value={taskKpis.pending}
+              label="Pending Tasks"
+            />
+            <AdminStatCard
+              icon={ClipboardList}
+              iconBg="bg-success/10"
+              iconColor="text-success"
+              value={taskKpis.completed}
+              label="Completed Tasks"
+            />
+            <AdminStatCard
+              icon={AlertTriangle}
+              iconBg={openComplaints.length > 0 ? "bg-danger/10" : "bg-success/10"}
+              iconColor={openComplaints.length > 0 ? "text-danger" : "text-success"}
+              value={openComplaints.length}
+              label="Open Complaints"
+            />
           </div>
 
-          {/* Bell */}
-          <Link
-            href="/dashboard/notifications"
-            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
-          >
-            <Bell size={20} strokeWidth={2} />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </Link>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <section aria-labelledby="attendance-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Clock size={18} className="text-primary" aria-hidden="true" />
+                <h2 id="attendance-heading" className="text-sm font-semibold text-on-surface">
+                  Attendance
+                </h2>
+              </div>
+              <CheckInPanel sites={sites} isLoading={isLoading} />
+            </section>
+
+            <section aria-labelledby="complaints-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <AlertTriangle
+                  size={18}
+                  className={openComplaints.length > 0 ? "text-danger" : "text-success"}
+                  aria-hidden="true"
+                />
+                <h2 id="complaints-heading" className="text-sm font-semibold text-on-surface">
+                  Complaints Alert
+                </h2>
+              </div>
+              {openComplaints.length > 0 ? (
+                <>
+                  <div className="mb-4 flex flex-col gap-2">
+                    {openComplaints.slice(0, 3).map((c) => {
+                      const location = [c.floor, c.area].filter(Boolean).join(" · ");
+                      return (
+                        <div key={c.id} className="rounded-xl border border-grey-200 bg-grey-50 px-3 py-2.5">
+                          <p className="text-xs font-semibold text-on-surface">{c.title}</p>
+                          {location && <p className="text-xs text-grey-500">{location}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Link
+                    href="/admin/complaints"
+                    className="block w-full rounded-xl bg-danger py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    View All Complaints
+                  </Link>
+                </>
+              ) : (
+                <p className="text-sm text-grey-500">No open complaints right now.</p>
+              )}
+            </section>
+
+            <section aria-labelledby="shifts-heading" className="rounded-2xl bg-surface p-5 shadow-sm lg:col-span-2">
+              <div className="mb-4 flex items-center gap-2">
+                <Calendar size={18} className="text-primary" aria-hidden="true" />
+                <h2 id="shifts-heading" className="text-sm font-semibold text-on-surface">
+                  Upcoming Shifts
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {upcomingShifts.length === 0 ? (
+                  <p className="rounded-xl bg-grey-50 px-4 py-3 text-center text-xs text-grey-500 sm:col-span-2">
+                    No upcoming shifts scheduled.
+                  </p>
+                ) : (
+                  upcomingShifts.map((shift) => (
+                    <div key={shift.id} className="flex items-center justify-between rounded-xl bg-grey-50 px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-on-surface">{shift.date}</p>
+                        <p className="text-xs text-grey-500">{shift.site}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-primary">{shift.timeRange}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
         </div>
-      </header>
+      </div>
 
-      {/* Body */}
-      <main className="mx-auto max-w-2xl px-5 pb-28 lg:max-w-5xl mt-5">
-        {showAdminDeniedBanner && (
-          <div className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-on-surface">
-            <p>Your account doesn&apos;t have access to the admin console, so you were brought here instead.</p>
-            <button
-              type="button"
-              onClick={() => setAdminDeniedDismissed(true)}
-              aria-label="Dismiss"
-              className="shrink-0 rounded-full p-1 text-on-surface/60 transition-opacity hover:opacity-80"
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          </div>
+      {/* ---------- Mobile (cleaner-style layout) ---------- */}
+      <div
+        className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
+        style={{
+          background:
+            "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
+        }}
+      >
+        {/* Header — only when the nav has ≤5 items; otherwise the shared
+            admin-style top bar (AppShell) covers the title/bell. */}
+        {!useDrawerNav && (
+          <header className="bg-primary rounded-b-[40px] px-5 pt-8 pb-8">
+            <div className="flex items-center justify-between">
+              {/* Left: avatar + greeting */}
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                <div>
+                  <p className="text-xs text-white/70">{greeting}</p>
+                  <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>
+                  <CheckInBadge
+                    checkedIn={checkedIn}
+                    checkInTime={checkInTime ?? undefined}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Bell */}
+              <Link
+                href="/dashboard/notifications"
+                aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+                className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-opacity hover:opacity-80"
+              >
+                <Bell size={20} strokeWidth={2} />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-primary">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            </div>
+          </header>
         )}
-        <div className="lg:grid lg:grid-cols-2 lg:gap-6">
-          {/* Left column */}
+
+        {/* Body */}
+        <main className="mx-auto max-w-2xl px-5 pb-28 mt-5">
+          {showAdminDeniedBanner && (
+            <div className="mb-5 flex items-start justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-on-surface">
+              <p>Your account doesn&apos;t have access to the admin console, so you were brought here instead.</p>
+              <button
+                type="button"
+                onClick={() => setAdminDeniedDismissed(true)}
+                aria-label="Dismiss"
+                className="shrink-0 rounded-full p-1 text-on-surface/60 transition-opacity hover:opacity-80"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            </div>
+          )}
           <div className="flex flex-col gap-6">
             {/* Attendance section */}
             <section
-              aria-labelledby="attendance-heading"
+              aria-labelledby="attendance-heading-mobile"
               className="flex flex-col gap-3 rounded-3xl bg-white/60 p-5 shadow-sm backdrop-blur-sm"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Clock size={18} className="text-primary" />
                   <h2
-                    id="attendance-heading"
+                    id="attendance-heading-mobile"
                     className="text-sm font-semibold text-on-surface"
                   >
                     Attendance
@@ -196,14 +333,14 @@ function DashboardContent() {
 
             {/* Today's Tasks KPI */}
             <section
-              aria-labelledby="tasks-heading"
+              aria-labelledby="tasks-heading-mobile"
               className="rounded-3xl bg-white p-5 shadow-sm"
             >
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ClipboardList size={18} className="text-primary" />
                   <h2
-                    id="tasks-heading"
+                    id="tasks-heading-mobile"
                     className="text-sm font-semibold text-on-surface"
                   >
                     Today&apos;s Tasks
@@ -215,23 +352,20 @@ function DashboardContent() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
+                  <KpiCard label="Sites" value={taskKpis.sites} color="teal" />
+                </Link>
+                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
                   <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
                 </Link>
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
                   <KpiCard label="Completed" value={taskKpis.completed} color="green" />
                 </Link>
-                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
-                  <KpiCard label="Total" value={taskKpis.total} color="grey" />
-                </Link>
               </div>
             </section>
-          </div>
 
-          {/* Right column */}
-          <div className="flex flex-col gap-6 mt-6 lg:mt-0">
             {/* Complaints Alert */}
             <section
-              aria-labelledby="complaints-heading"
+              aria-labelledby="complaints-heading-mobile"
               className={cn(
                 "rounded-3xl p-5 shadow-sm border",
                 openComplaints.length > 0
@@ -253,7 +387,7 @@ function DashboardContent() {
                 </div>
                 <div>
                   <h2
-                    id="complaints-heading"
+                    id="complaints-heading-mobile"
                     className={cn(
                       "text-sm font-bold",
                       openComplaints.length > 0 ? "text-danger" : "text-on-surface",
@@ -289,7 +423,7 @@ function DashboardContent() {
               )}
 
               <Link
-                href="/dashboard/complaints"
+                href="/admin/complaints"
                 className="block w-full rounded-2xl bg-gradient-to-r from-danger to-red-600 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
               >
                 View All Complaints
@@ -298,13 +432,13 @@ function DashboardContent() {
 
             {/* Upcoming Shifts */}
             <section
-              aria-labelledby="shifts-heading"
+              aria-labelledby="shifts-heading-mobile"
               className="rounded-3xl border border-white/20 bg-white/40 p-5 shadow-sm backdrop-blur-sm"
             >
               <div className="mb-3 flex items-center gap-2">
                 <Calendar size={18} className="text-primary" />
                 <h2
-                  id="shifts-heading"
+                  id="shifts-heading-mobile"
                   className="text-sm font-semibold text-on-surface"
                 >
                   Upcoming Shifts
@@ -332,11 +466,9 @@ function DashboardContent() {
               </div>
             </section>
           </div>
-        </div>
-      </main>
-
-      <BottomNavBar />
-    </div>
+        </main>
+      </div>
+    </>
   );
 }
 
@@ -345,7 +477,7 @@ function DashboardContent() {
 interface KpiCardProps {
   label: string;
   value: string | number;
-  color: "orange" | "green" | "grey";
+  color: "orange" | "green" | "grey" | "teal";
 }
 
 function KpiCard({ label, value, color }: KpiCardProps) {
@@ -353,6 +485,7 @@ function KpiCard({ label, value, color }: KpiCardProps) {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
     green:  "text-success bg-success/10",
     grey:   "text-grey-700 bg-grey-100",
+    teal:   "text-primary bg-primary/10",
   };
 
   return (

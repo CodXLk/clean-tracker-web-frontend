@@ -50,6 +50,12 @@ export const TaskOccurrenceSchema = z.object({
   redoId: z.string().uuid().nullable().optional(),
   isRedo: z.boolean().optional().default(false),
   isComplaint: z.boolean().optional().default(false),
+  /** True once a supervisor has closed out an inspection of this occurrence (rating or complaint). */
+  inspected: z.boolean().optional().default(false),
+  /** Set only when the inspection was closed via a 1-10 rating. */
+  inspectionRating: z.number().nullable().optional(),
+  /** Cleaner-uploaded completion photo IDs — populated only when COMPLETED with photos. */
+  completionPhotoIds: z.array(z.string().uuid()).optional().default([]),
 });
 export const TaskOccurrenceListSchema = z.array(TaskOccurrenceSchema);
 export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;

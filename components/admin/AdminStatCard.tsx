@@ -21,17 +21,17 @@ export function AdminStatCard({
   badgeColor,
 }: AdminStatCardProps) {
   return (
-    <div className="rounded-2xl bg-surface p-5 shadow-sm">
+    <div className="rounded-xl bg-surface p-2.5 shadow-sm sm:rounded-2xl sm:p-5">
       <div className="flex items-start justify-between">
-        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", iconBg)}>
-          <Icon size={20} className={iconColor} aria-hidden="true" />
+        <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl", iconBg)}>
+          <Icon className={cn("h-3.5 w-3.5 sm:h-5 sm:w-5", iconColor)} aria-hidden="true" />
         </div>
         {badge !== undefined && (
-          <span className={cn("text-xs font-medium", badgeColor)}>{badge}</span>
+          <span className={cn("text-[10px] font-medium sm:text-xs", badgeColor)}>{badge}</span>
         )}
       </div>
-      <p className="mt-3 text-3xl font-bold text-on-surface">{value}</p>
-      <p className="mt-1 text-sm text-grey-500">{label}</p>
+      <p className="mt-1.5 truncate text-base font-bold text-on-surface sm:mt-3 sm:text-3xl">{value}</p>
+      <p className="mt-0.5 truncate text-[10px] text-grey-500 sm:mt-1 sm:text-sm">{label}</p>
     </div>
   );
 }

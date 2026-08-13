@@ -3,7 +3,7 @@ import { z } from "zod";
 export const CheckInMethodSchema = z.enum(["NFC", "GEO"]);
 export type CheckInMethod = z.infer<typeof CheckInMethodSchema>;
 
-export const AttendanceStatusSchema = z.enum(["CHECKED_IN", "CHECKED_OUT"]);
+export const AttendanceStatusSchema = z.enum(["CHECKED_IN", "PAUSED", "CHECKED_OUT"]);
 export type AttendanceStatus = z.infer<typeof AttendanceStatusSchema>;
 
 // Mirrors backend CleanerSiteResponse — a site the cleaner is assigned to plus
@@ -21,6 +21,10 @@ export const CleanerSiteSchema = z.object({
   status: AttendanceStatusSchema.nullable().optional(),
   checkInAt: z.string().nullable().optional(),
   checkOutAt: z.string().nullable().optional(),
+  pausedAt: z.string().nullable().optional(),
+  awayDistanceMeters: z.number().nullable().optional(),
+  lastPingAt: z.string().nullable().optional(),
+  lastPingDistanceMeters: z.number().nullable().optional(),
 });
 export const CleanerSiteListSchema = z.array(CleanerSiteSchema);
 export type CleanerSite = z.infer<typeof CleanerSiteSchema>;
@@ -46,6 +50,13 @@ export const AttendanceLogSchema = z.object({
   checkOutLatitude: z.number().nullable().optional(),
   checkOutLongitude: z.number().nullable().optional(),
   checkOutDistanceMeters: z.number().nullable().optional(),
+  pausedAt: z.string().nullable().optional(),
+  resumedAt: z.string().nullable().optional(),
+  awayDistanceMeters: z.number().nullable().optional(),
+  lastPingAt: z.string().nullable().optional(),
+  lastPingLatitude: z.number().nullable().optional(),
+  lastPingLongitude: z.number().nullable().optional(),
+  lastPingDistanceMeters: z.number().nullable().optional(),
 });
 export const AttendanceLogListSchema = z.array(AttendanceLogSchema);
 export type AttendanceLog = z.infer<typeof AttendanceLogSchema>;
@@ -59,4 +70,12 @@ export interface CheckInPayload {
   accuracyMeters?: number;
   /** Cleaner consents to checking out with incomplete tasks. */
   acknowledgeIncomplete?: boolean;
+}
+
+/** Periodic location heartbeat sent while checked in. */
+export interface HeartbeatPayload {
+  siteId: string;
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
 }

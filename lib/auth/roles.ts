@@ -1,29 +1,12 @@
 export const ADMIN_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER"]);
 
-/** Admin-console routes a SUPERVISOR may access, despite not being a full admin. */
-export const SUPERVISOR_ALLOWED_PREFIXES = [
-  "/admin/workforce",
-  "/admin/user-management",
-  "/admin/cleaner-logs",
-];
-
 export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.has(role);
 }
 
-/** Whether a role may open the given /admin path (admins: all; supervisors: allow-listed). */
-export function canAccessAdminPath(role: string | null | undefined, pathname: string): boolean {
-  if (isAdminRole(role)) return true;
-  if (role === "SUPERVISOR") {
-    return SUPERVISOR_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p));
-  }
-  return false;
-}
-
-
-/** Landing route for a role: admins go to the console, everyone else to the cleaner app. */
+/** Landing route for a role: admins and clients go to the console, everyone else to the cleaner app. */
 export function landingPath(role: string | null | undefined): string {
-  return isAdminRole(role) ? "/admin/dashboard" : "/dashboard";
+  return isAdminRole(role) || role === "CLIENT" ? "/admin/dashboard" : "/dashboard";
 }
 
 /**
@@ -46,4 +29,29 @@ export function roleFromToken(token: string | undefined | null): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Root hrefs of the only Admin Panel sections a SUPERVISOR may access. This is the
+ * single source of truth for that restriction — AppNav.tsx filters the nav against
+ * it, and proxy.ts enforces it at the route level so a Supervisor can't reach a
+ * hidden section by typing its URL directly.
+ */
+export const SUPERVISOR_ALLOWED_HREFS = [
+  "/dashboard",
+  "/dashboard/inspections",
+  "/admin/complaints",
+  "/admin/inventory",
+  "/admin/cleaner-management",
+  "/admin/workforce",
+  "/admin/cleaner-logs",
+  "/admin/user-management/sites",
+  "/dashboard/profile",
+] as const;
+
+/** "/dashboard" (Home) only matches exactly; every other entry also allows its subroutes. */
+export function isSupervisorRouteAllowed(pathname: string): boolean {
+  return SUPERVISOR_ALLOWED_HREFS.some(
+    (href) => pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`)),
+  );
 }

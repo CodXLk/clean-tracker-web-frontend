@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   useOccurrences,
@@ -16,6 +16,7 @@ import { useAreas, useCreateArea, useUpdateArea, useDeleteArea } from "@/feature
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
 import { NameFormModal } from "@/components/admin/NameFormModal";
+import { EditOccurrenceModal } from "@/components/admin/EditOccurrenceModal";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
@@ -50,6 +51,14 @@ export interface CalendarEvent {
   grouped?: boolean;
   /** Underlying per-task events when grouped (length > 1). */
   members?: CalendarEvent[];
+  /** Assigned cleaner slots (profiles) and who fills them. */
+  cleanerProfiles?: { label: string; name?: string | null }[];
+  /** Supervisor slots (profiles) responsible for review. */
+  supervisorProfiles?: { label: string; name?: string | null }[];
+  /** Expected inventory items consumed on completion. */
+  items?: { name: string; quantity: number; unit?: string | null }[];
+  /** The underlying occurrence (present for single-task events; drives the full edit modal). */
+  raw?: TaskOccurrence;
 }
 
 /** Prefill for the New Assignment modal, opened from a calendar slot or a scope cell. */
@@ -246,6 +255,10 @@ function mapOccurrenceToEvent(occurrence: TaskOccurrence): CalendarEvent {
     assignmentType: occurrence.assignmentType,
     siteName: occurrence.siteName,
     templateName: occurrence.templateName ?? null,
+    cleanerProfiles: occurrence.cleanerProfiles,
+    supervisorProfiles: occurrence.supervisorProfiles,
+    items: occurrence.items,
+    raw: occurrence,
   };
 }
 
@@ -418,9 +431,11 @@ interface EventDetailModalProps {
   onClose: () => void;
   onSave: (updated: CalendarEvent) => void;
   onDelete: (id: string) => void;
+  /** Open the full prefilled editor for a single-task occurrence. */
+  onEditDetails?: (occurrence: TaskOccurrence) => void;
 }
 
-function EventDetailModal({ event, onClose, onSave, onDelete }: EventDetailModalProps) {
+function EventDetailModal({ event, onClose, onSave, onDelete, onEditDetails }: EventDetailModalProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -505,7 +520,7 @@ function EventDetailModal({ event, onClose, onSave, onDelete }: EventDetailModal
               <button
                 type="button"
                 aria-label="Edit event"
-                onClick={() => setEditing(true)}
+                onClick={() => (event.raw && onEditDetails ? onEditDetails(event.raw) : setEditing(true))}
                 className="flex h-7 w-7 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <Pencil size={14} aria-hidden="true" />
@@ -602,6 +617,69 @@ function EventDetailModal({ event, onClose, onSave, onDelete }: EventDetailModal
             )
           )}
 
+          {/* Assigned profiles + items (read-only) */}
+          {!editing && (
+            <div className="mt-3 flex flex-col gap-3">
+              {(event.cleanerProfiles?.length ?? 0) > 0 && (
+                <section>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-grey-500">
+                    <Users size={12} aria-hidden="true" /> Cleaner profiles
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {event.cleanerProfiles!.map((p, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between rounded-lg bg-grey-50 px-2.5 py-1 text-xs"
+                      >
+                        <span className="font-medium text-on-surface">{p.label}</span>
+                        <span className="text-grey-500">{p.name ?? "Vacant"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {(event.supervisorProfiles?.length ?? 0) > 0 && (
+                <section>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-grey-500">
+                    <UserCog size={12} aria-hidden="true" /> Supervisor profiles
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {event.supervisorProfiles!.map((p, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between rounded-lg bg-grey-50 px-2.5 py-1 text-xs"
+                      >
+                        <span className="font-medium text-on-surface">{p.label}</span>
+                        <span className="text-grey-500">{p.name ?? "Vacant"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {(event.items?.length ?? 0) > 0 && (
+                <section>
+                  <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-grey-500">
+                    <Package size={12} aria-hidden="true" /> Items
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {event.items!.map((it, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between rounded-lg bg-grey-50 px-2.5 py-1 text-xs"
+                      >
+                        <span className="text-on-surface">{it.name}</span>
+                        <span className="text-grey-500">
+                          {it.quantity}
+                          {it.unit ? ` ${it.unit}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
+          )}
+
           {/* Color picker (edit mode) */}
           {editing && (
             <div className="mt-3">
@@ -653,7 +731,7 @@ function EventDetailModal({ event, onClose, onSave, onDelete }: EventDetailModal
               </button>
               <button
                 type="button"
-                onClick={() => setEditing(true)}
+                onClick={() => (event.raw && onEditDetails ? onEditDetails(event.raw) : setEditing(true))}
                 className="flex-1 rounded-xl bg-primary py-2 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 Edit event
@@ -1222,6 +1300,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     show: false, date: "", time: "", x: 0, y: 0,
   });
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [editOccurrence, setEditOccurrence] = useState<TaskOccurrence | null>(null);
   const [scopeDialog, setScopeDialog] = useState<ScopeDialogState | null>(null);
 
   // Floor/area management (scope view, single site selected).
@@ -1794,7 +1873,16 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           onClose={() => setSelectedEvent(null)}
           onSave={handleEventUpdate}
           onDelete={handleDeleteEvent}
+          onEditDetails={(occurrence) => {
+            setSelectedEvent(null);
+            setEditOccurrence(occurrence);
+          }}
         />
+      )}
+
+      {/* Full prefilled task editor (profiles / supervisors / items) with scope */}
+      {editOccurrence && (
+        <EditOccurrenceModal occurrence={editOccurrence} onClose={() => setEditOccurrence(null)} />
       )}
 
       {/* Scope dialog (recurring events) */}

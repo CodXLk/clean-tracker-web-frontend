@@ -293,7 +293,7 @@ export default function ClientSiteManagementPage() {
           {isHotel && templates.length === 0 && !templatesQuery.isLoading && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
               No cleaning templates are configured for this site yet. Add them in the site&apos;s edit
-              form (Client Management → Site Management).
+              form (Site Management).
             </p>
           )}
 
