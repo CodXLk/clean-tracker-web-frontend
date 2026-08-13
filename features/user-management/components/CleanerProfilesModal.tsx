@@ -11,6 +11,7 @@ import {
   useAssignCleanerProfiles,
   useAddCleanerProfile,
   useRemoveCleanerProfile,
+  useEligibleSiteCleaners,
   type ProfileAssignmentInput,
 } from "@/features/user-management/hooks/useSiteAssignments";
 import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
@@ -50,7 +51,14 @@ export function CleanerProfilesModal({
   restrictToAssignOnly,
 }: CleanerProfilesModalProps) {
   const profilesQuery = useSiteCleanerProfiles(open ? site?.id : undefined);
-  const cleanersQuery = useCleaners();
+  const requiresCerts = (site?.requiredCertificates?.length ?? 0) > 0;
+  // When a site gates on certificates, only offer cleaners who satisfy them.
+  const allCleanersQuery = useCleaners();
+  const eligibleCleanersQuery = useEligibleSiteCleaners(
+    open && requiresCerts ? site?.id : undefined,
+    requiresCerts,
+  );
+  const cleanersQuery = requiresCerts ? eligibleCleanersQuery : allCleanersQuery;
   const assign = useAssignCleanerProfiles();
   const addProfile = useAddCleanerProfile();
   const removeProfile = useRemoveCleanerProfile();

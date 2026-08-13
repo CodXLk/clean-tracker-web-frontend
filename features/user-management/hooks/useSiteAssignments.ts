@@ -40,6 +40,18 @@ export function useSiteSupervisors(siteId: string | undefined) {
   });
 }
 
+/** Active supervisors who satisfy the site's required certificates. */
+export function useEligibleSiteSupervisors(siteId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["site-eligible", "supervisors", siteId ?? ""],
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.sites.eligibleSupervisors(siteId!));
+      return UserListSchema.parse(data);
+    },
+    enabled: !!siteId && enabled,
+  });
+}
+
 export function useAssignSupervisors() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -64,6 +76,18 @@ export function useSiteCleaners(siteId: string | undefined) {
     queryKey: siteAssignmentKeys.cleaners(siteId ?? ""),
     queryFn: () => fetchSiteCleaners(siteId!),
     enabled: !!siteId,
+  });
+}
+
+/** Cleaners who satisfy the site's required certificates. */
+export function useEligibleSiteCleaners(siteId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["site-eligible", "cleaners", siteId ?? ""],
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.sites.eligibleCleaners(siteId!));
+      return CleanerListSchema.parse(data);
+    },
+    enabled: !!siteId && enabled,
   });
 }
 

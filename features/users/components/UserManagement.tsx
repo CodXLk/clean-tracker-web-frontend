@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserPlus, RefreshCw, Ban } from "lucide-react";
+import { UserPlus, RefreshCw, Ban, FileText } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useDeactivateUser, useResendSetup } from "@/features/users/hooks/useUserActions";
 import { CreateUserModal } from "./CreateUserModal";
+import { UserDocumentsModal } from "./UserDocumentsModal";
 import { ROLE_LABELS, type User } from "@/features/users/schemas/user.schema";
 import { creatableRoles } from "@/features/users/lib/permissions";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -27,6 +28,7 @@ function StatusPill({ user }: { user: User }) {
 
 export function UserManagement() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [docsUser, setDocsUser] = useState<User | null>(null);
   const me = useMe();
   const usersQuery = useUsers();
   const deactivate = useDeactivateUser();
@@ -90,6 +92,16 @@ export function UserManagement() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex justify-end gap-2">
+                          {user.role === "SUPERVISOR" && (
+                            <button
+                              type="button"
+                              onClick={() => setDocsUser(user)}
+                              title="Manage compliance documents"
+                              className="flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-100"
+                            >
+                              <FileText size={14} aria-hidden="true" /> Documents
+                            </button>
+                          )}
                           {!user.setupComplete && user.active && (
                             <button
                               type="button"
@@ -130,6 +142,13 @@ export function UserManagement() {
       {allowedRoles.length > 0 && (
         <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} excludeRoleNames={["CLEANER"]} />
       )}
+
+      <UserDocumentsModal
+        open={docsUser !== null}
+        onClose={() => setDocsUser(null)}
+        userId={docsUser?.id ?? null}
+        personName={docsUser ? [docsUser.firstName, docsUser.lastName].filter(Boolean).join(" ") : undefined}
+      />
     </div>
   );
 }

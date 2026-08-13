@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserPlus, RefreshCw, Ban } from "lucide-react";
+import { UserPlus, RefreshCw, Ban, Eye } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useDeactivateUser, useResendSetup } from "@/features/users/hooks/useUserActions";
 import { CreateUserModal } from "@/features/users/components/CreateUserModal";
+import { CleanerDetailModal } from "./CleanerDetailModal";
 import type { User } from "@/features/users/schemas/user.schema";
 import { canManageCleaners } from "@/features/users/lib/permissions";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -27,6 +28,7 @@ function StatusPill({ user }: { user: User }) {
 
 export function CleanerManagement() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailUser, setDetailUser] = useState<User | null>(null);
   const me = useMe();
   const usersQuery = useUsers();
   const deactivate = useDeactivateUser();
@@ -86,6 +88,14 @@ export function CleanerManagement() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDetailUser(user)}
+                            title="View cleaner profile"
+                            className="flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-100"
+                          >
+                            <Eye size={14} aria-hidden="true" /> View
+                          </button>
                           {!user.setupComplete && user.active && (
                             <button
                               type="button"
@@ -126,6 +136,12 @@ export function CleanerManagement() {
       {canManage && (
         <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} fixedRole="CLEANER" />
       )}
+
+      <CleanerDetailModal
+        open={detailUser !== null}
+        onClose={() => setDetailUser(null)}
+        user={detailUser}
+      />
     </div>
   );
 }

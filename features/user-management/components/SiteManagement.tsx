@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Plus, Pencil, Trash2, UserCog, Users } from "lucide-react";
+import { ExternalLink, Plus, Pencil, Trash2, UserCog, Users, Clock } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { DataTable, type Column } from "./DataTable";
@@ -11,6 +11,7 @@ import { SiteFormModal } from "./SiteFormModal";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
 import { CleanerProfilesModal } from "./CleanerProfilesModal";
 import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
+import { ShiftsModal } from "./ShiftsModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -29,6 +30,7 @@ export function SiteManagement() {
   const [deleting, setDeleting] = useState<Site | null>(null);
   const [supervisorsSite, setSupervisorsSite] = useState<Site | null>(null);
   const [cleanersSite, setCleanersSite] = useState<Site | null>(null);
+  const [shiftsSite, setShiftsSite] = useState<Site | null>(null);
 
   // A supervisor only ever sees sites they're assigned to — there's no bulk "my
   // sites" endpoint, so this filters the full list against each site's roster.
@@ -144,6 +146,11 @@ export function SiteManagement() {
                       onClick: () => setCleanersSite(s),
                     },
                     {
+                      label: "Shifts",
+                      icon: Clock,
+                      onClick: () => setShiftsSite(s),
+                    },
+                    {
                       label: "Edit",
                       icon: Pencil,
                       onClick: () => {
@@ -233,6 +240,8 @@ export function SiteManagement() {
         site={cleanersSite}
         restrictToAssignOnly={isSupervisor}
       />
+
+      <ShiftsModal open={!!shiftsSite} onClose={() => setShiftsSite(null)} site={shiftsSite} />
     </div>
   );
 }

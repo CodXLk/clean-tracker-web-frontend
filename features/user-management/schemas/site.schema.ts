@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { optionalAuPhoneSchema } from "@/lib/validators/phone";
+import { CertificateTypeSchema } from "@/features/users/schemas/document.schema";
 
 // Java DayOfWeek names, ordered Monday-first to match the backend enum.
 export const DAY_OF_WEEK_VALUES = [
@@ -93,6 +94,7 @@ export const SiteSchema = z.object({
   workingDays: z.array(DayOfWeekSchema).default([]),
   generalTaskStartTime: z.string().nullable().optional(),
   generalTaskEndTime: z.string().nullable().optional(),
+  requiredCertificates: z.array(CertificateTypeSchema).default([]),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
@@ -131,6 +133,7 @@ export const SiteFormSchema = z
     workingDays: z.array(DayOfWeekSchema),
     generalTaskStartTime: z.string().optional().or(z.literal("")),
     generalTaskEndTime: z.string().optional().or(z.literal("")),
+    requiredCertificates: z.array(CertificateTypeSchema),
     cleaningTemplates: z.array(
       z.object({
         templateId: z.string().uuid("Please select a template"),

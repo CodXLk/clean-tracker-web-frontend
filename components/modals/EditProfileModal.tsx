@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useUpdateUser } from "@/features/users/hooks/useUserActions";
+import { useUploadMyPhoto } from "@/features/users/hooks/useProfilePhoto";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface EditProfileModalProps {
@@ -16,6 +18,8 @@ interface EditProfileModalProps {
 export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
   const me = useMe();
   const updateUser = useUpdateUser();
+  const uploadPhoto = useUploadMyPhoto();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
@@ -97,13 +101,38 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
           {/* Avatar */}
           <div className="mb-6 flex justify-center">
             <div className="relative">
-              <div className="h-[120px] w-[120px] rounded-full bg-grey-300" />
+              {me.data ? (
+                <UserAvatar
+                  userId={me.data.id}
+                  hasPhoto={me.data.hasPhoto}
+                  version={me.data.updatedAt}
+                  firstName={me.data.firstName}
+                  lastName={me.data.lastName}
+                  size={120}
+                />
+              ) : (
+                <div className="h-[120px] w-[120px] rounded-full bg-grey-300" />
+              )}
               <button
+                type="button"
                 aria-label="Change profile photo"
-                className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity hover:opacity-80"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadPhoto.isPending}
+                className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity hover:opacity-80 disabled:opacity-50"
               >
                 <Camera size={14} strokeWidth={2} />
               </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadPhoto.mutate(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
           </div>
         </div>
