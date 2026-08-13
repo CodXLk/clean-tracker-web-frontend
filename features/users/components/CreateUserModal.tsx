@@ -39,6 +39,7 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: 
       lastName: "",
       email: "",
       phoneNumber: "",
+      dateOfBirth: "",
       ...(fixedRole ? { role: fixedRole } : {}),
     },
   });
@@ -112,6 +113,7 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: 
             />
           )}
         />
+        <TextField label="Date of birth" type="date" error={errors.dateOfBirth?.message} {...register("dateOfBirth")} />
 
         {createUser.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

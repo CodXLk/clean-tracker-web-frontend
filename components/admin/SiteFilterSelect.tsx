@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Building2, Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 interface SiteOption {
@@ -58,9 +58,10 @@ export function SiteFilterSelect({ sites, value, onChange, loading }: SiteFilter
         aria-expanded={open}
         disabled={loading}
         onClick={() => setOpen((v) => !v)}
-        className="flex min-w-[9rem] max-w-[14rem] items-center justify-between gap-2 rounded-lg border border-grey-200 bg-surface px-2.5 py-1.5 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+        className="flex min-w-[10rem] max-w-[15rem] items-center gap-2 rounded-xl border border-grey-200 bg-surface px-3 py-2 text-xs font-medium text-on-surface outline-none transition-colors hover:border-grey-300 hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
       >
-        <span className={cn("truncate", selected ? "text-on-surface" : "text-grey-500")}>
+        <Building2 size={14} className="shrink-0 text-grey-400" aria-hidden="true" />
+        <span className={cn("flex-1 truncate text-left", selected ? "text-on-surface" : "text-grey-500")}>
           {loading ? "Loading…" : selected ? selected.name : sites.length === 0 ? "No sites" : "Select site"}
         </span>
         <ChevronDown size={14} className="shrink-0 text-grey-500" aria-hidden="true" />

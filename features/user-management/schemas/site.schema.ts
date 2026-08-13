@@ -95,6 +95,7 @@ export const SiteSchema = z.object({
   generalTaskStartTime: z.string().nullable().optional(),
   generalTaskEndTime: z.string().nullable().optional(),
   requiredCertificates: z.array(CertificateTypeSchema).default([]),
+  clientSiteManagementEnabled: z.boolean().optional().default(false),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
@@ -134,6 +135,7 @@ export const SiteFormSchema = z
     generalTaskStartTime: z.string().optional().or(z.literal("")),
     generalTaskEndTime: z.string().optional().or(z.literal("")),
     requiredCertificates: z.array(CertificateTypeSchema),
+    clientSiteManagementEnabled: z.boolean().optional(),
     cleaningTemplates: z.array(
       z.object({
         templateId: z.string().uuid("Please select a template"),

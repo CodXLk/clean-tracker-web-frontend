@@ -256,23 +256,23 @@ export function WeekScheduleGrid({
             <div
               key={dateStr}
               className={cn(
-                "flex flex-col items-center border-l border-grey-200 py-2",
+                "flex flex-col items-center border-l border-grey-200 py-2.5",
                 isToday && "bg-primary/5",
                 !working && "bg-grey-100/70",
               )}
             >
               <span
                 className={cn(
-                  "text-xs font-bold uppercase tracking-wide",
-                  isToday ? "text-primary" : working ? "text-grey-700" : "text-grey-400",
+                  "text-[11px] font-bold uppercase tracking-wide",
+                  isToday ? "text-primary" : working ? "text-grey-600" : "text-grey-400",
                 )}
               >
                 {day}
               </span>
               <span
                 className={cn(
-                  "mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                  isToday ? "bg-primary text-white" : working ? "text-on-surface" : "text-grey-400",
+                  "mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                  isToday ? "bg-primary text-white shadow-sm" : working ? "text-on-surface" : "text-grey-400",
                 )}
               >
                 {dt.getDate()}

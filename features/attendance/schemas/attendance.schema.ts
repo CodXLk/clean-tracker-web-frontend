@@ -6,6 +6,16 @@ export type CheckInMethod = z.infer<typeof CheckInMethodSchema>;
 export const AttendanceStatusSchema = z.enum(["CHECKED_IN", "PAUSED", "CHECKED_OUT"]);
 export type AttendanceStatus = z.infer<typeof AttendanceStatusSchema>;
 
+// A site's work shift window — used to gate/label check-in by shift.
+export const ShiftWindowSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  crossesMidnight: z.boolean(),
+});
+export type ShiftWindow = z.infer<typeof ShiftWindowSchema>;
+
 // Mirrors backend CleanerSiteResponse — a site the cleaner is assigned to plus
 // today's check-in status. Never includes the raw NFC tag id.
 export const CleanerSiteSchema = z.object({
@@ -25,6 +35,8 @@ export const CleanerSiteSchema = z.object({
   awayDistanceMeters: z.number().nullable().optional(),
   lastPingAt: z.string().nullable().optional(),
   lastPingDistanceMeters: z.number().nullable().optional(),
+  shifts: z.array(ShiftWindowSchema).default([]),
+  checkInAllowed: z.boolean().default(true),
 });
 export const CleanerSiteListSchema = z.array(CleanerSiteSchema);
 export type CleanerSite = z.infer<typeof CleanerSiteSchema>;

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, X, CalendarCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, CalendarCheck, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { useSites } from "@/features/user-management/hooks/useSites";
+import { useSites, useClientPortalSites } from "@/features/user-management/hooks/useSites";
+import { useMe } from "@/features/auth/hooks/useMe";
 import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
 import { useOccurrences, useDeleteAssignment } from "@/features/workforce/hooks/useAssignments";
@@ -37,6 +38,14 @@ function addDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+/** e.g. "3 Mar – 9 Mar 2026". */
+function weekRangeLabel(start: Date, end: Date): string {
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  const s = start.toLocaleDateString(undefined, opts);
+  const e = end.toLocaleDateString(undefined, { ...opts, year: "numeric" });
+  return `${s} – ${e}`;
 }
 
 // ── Colours (match the scope view) ──────────────────────────────────────────────
@@ -99,8 +108,12 @@ const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // ── Page ────────────────────────────────────────────────────────────────────────
 
 export default function ClientSiteManagementPage() {
-  const sitesQuery = useSites();
-  const sites = sitesQuery.data ?? [];
+  const me = useMe();
+  const isClient = me.data?.role === "CLIENT";
+  // Clients see only their own flag-enabled sites; management sees all sites.
+  const allSitesQuery = useSites({ enabled: !isClient });
+  const portalQuery = useClientPortalSites(isClient);
+  const sites = (isClient ? portalQuery.data : allSitesQuery.data) ?? [];
 
   const [siteId, setSiteId] = useState<string>("");
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
@@ -191,7 +204,7 @@ export default function ClientSiteManagementPage() {
     }
   }
 
-  const monthLabel = weekDays[0].toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const weekRange = weekRangeLabel(weekDays[0], weekDays[6]);
   const taskCount = occurrencesQuery.data?.length ?? 0;
 
   // Empty day-cell strip to complete a floor band row.
@@ -200,69 +213,76 @@ export default function ClientSiteManagementPage() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-on-surface">
-          <CalendarCheck className="h-6 w-6 text-[#ED5F25]" />
-          Client Site Management
-        </h1>
-        <p className="text-sm text-grey-500">
-          View a site&apos;s cleaning schedule by floor and area. For hotels, hover an area and pick a
-          saved template on any day to schedule its tasks and notify the responsible cleaners. Click a
-          template to remove it if it was added by mistake.
-        </p>
-      </header>
+      <p className="text-sm text-grey-500">
+        View a site&apos;s cleaning schedule by floor and area. For hotels, hover an area and pick a
+        saved template on any day to schedule its tasks and notify the responsible cleaners. Click a
+        template to remove it if it was added by mistake.
+      </p>
 
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-grey-200 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-grey-200 bg-surface p-4 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+        {/* Site filter */}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="site" className="text-xs font-medium text-grey-500">
+          <label htmlFor="site" className="text-xs font-semibold uppercase tracking-wide text-grey-500">
             Site
           </label>
-          <select
-            id="site"
-            value={siteId}
-            onChange={(e) => {
-              setSiteId(e.target.value);
-              setOpenCell(null);
-              setBanner(null);
-            }}
-            className="h-10 min-w-64 rounded-lg border border-grey-300 bg-surface px-3 text-sm text-on-surface focus:border-teal-500 focus:outline-none"
-          >
-            <option value="">Select a site…</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.siteType === "HOTEL" ? " (Hotel)" : ""}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grey-400" aria-hidden="true" />
+            <select
+              id="site"
+              value={siteId}
+              onChange={(e) => {
+                setSiteId(e.target.value);
+                setOpenCell(null);
+                setBanner(null);
+              }}
+              className="h-11 w-full min-w-[16rem] appearance-none rounded-xl border border-grey-300 bg-surface pl-9 pr-9 text-sm font-medium text-on-surface transition-colors hover:border-grey-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              <option value="">Select a site…</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.siteType === "HOTEL" ? " (Hotel)" : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grey-400" aria-hidden="true" />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="mr-2 text-sm font-medium text-on-surface">{monthLabel}</span>
-          <button
-            type="button"
-            aria-label="Previous week"
-            onClick={() => setWeekStart((w) => addDays(w, -7))}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-grey-300 text-on-surface hover:bg-grey-100"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setWeekStart(startOfWeek(new Date()))}
-            className="h-9 rounded-lg border border-grey-300 px-3 text-sm font-semibold text-on-surface hover:bg-grey-100"
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            aria-label="Next week"
-            onClick={() => setWeekStart((w) => addDays(w, 7))}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-grey-300 text-on-surface hover:bg-grey-100"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        {/* Week navigator */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-grey-500">Week</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-xl border border-grey-300 bg-surface p-1">
+              <button
+                type="button"
+                aria-label="Previous week"
+                onClick={() => setWeekStart((w) => addDays(w, -7))}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-on-surface transition-colors hover:bg-grey-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[10rem] px-2 text-center text-sm font-semibold text-on-surface">
+                {weekRange}
+              </span>
+              <button
+                type="button"
+                aria-label="Next week"
+                onClick={() => setWeekStart((w) => addDays(w, 7))}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-on-surface transition-colors hover:bg-grey-100"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+              className="h-10 rounded-xl border border-grey-300 px-4 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+            >
+              This week
+            </button>
+          </div>
         </div>
       </div>
 
@@ -279,8 +299,14 @@ export default function ClientSiteManagementPage() {
       )}
 
       {!siteId ? (
-        <div className="rounded-2xl border border-dashed border-grey-300 p-10 text-center text-sm text-grey-500">
-          Select a site to view its cleaning schedule.
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-grey-300 bg-grey-50 p-12 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <Building2 className="h-6 w-6 text-primary" aria-hidden="true" />
+          </div>
+          <p className="text-sm font-semibold text-on-surface">Select a site to begin</p>
+          <p className="max-w-sm text-xs text-grey-500">
+            Choose a site above to view its weekly cleaning schedule by floor and area.
+          </p>
         </div>
       ) : (
         <>
@@ -298,12 +324,13 @@ export default function ClientSiteManagementPage() {
           )}
 
           {/* Scope-style grid: floors/areas as rows, days as columns */}
-          <div className="rounded-2xl border border-grey-200 bg-surface">
-            <div className="flex items-center gap-2 border-b border-grey-200 px-4 py-2.5">
-              <span className="text-xs text-grey-500">
+          <div className="rounded-2xl border border-grey-200 bg-surface shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 border-b border-grey-200 px-4 py-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-grey-100 px-2.5 py-1 text-xs font-medium text-grey-600">
+                <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 {occurrencesQuery.isLoading
                   ? "Loading…"
-                  : `${taskCount} task${taskCount === 1 ? "" : "s"} scheduled this week`}
+                  : `${taskCount} task${taskCount === 1 ? "" : "s"} this week`}
               </span>
               <div className="ml-auto flex flex-wrap items-center gap-3">
                 {(Object.keys(WORK_TYPE_LABELS) as Array<keyof typeof WORK_TYPE_LABELS>).map(
@@ -334,26 +361,27 @@ export default function ClientSiteManagementPage() {
                   {weekDays.map((day, i) => {
                     const iso = weekISO[i];
                     const isToday = iso === todayISO;
+                    const isWeekend = i >= 5;
                     return (
                       <div
                         key={iso}
                         className={cn(
-                          "flex flex-col items-center gap-1 border-l border-grey-200 py-2",
-                          isToday && "bg-primary/5",
+                          "flex flex-col items-center gap-1 border-l border-grey-200 py-2.5",
+                          isToday ? "bg-primary/5" : isWeekend && "bg-grey-50",
                         )}
                       >
                         <span
                           className={cn(
-                            "text-xs font-bold uppercase tracking-wide",
-                            isToday ? "text-primary" : "text-grey-700",
+                            "text-[11px] font-bold uppercase tracking-wide",
+                            isToday ? "text-primary" : isWeekend ? "text-grey-400" : "text-grey-600",
                           )}
                         >
                           {DAY_LABELS[i]}
                         </span>
                         <span
                           className={cn(
-                            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                            isToday ? "bg-primary text-white" : "text-on-surface",
+                            "flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                            isToday ? "bg-primary text-white shadow-sm" : "text-on-surface",
                           )}
                         >
                           {day.getDate()}

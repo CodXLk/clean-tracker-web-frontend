@@ -32,6 +32,8 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   payload.workingDays = input.workingDays ?? [];
   if (input.generalTaskStartTime) payload.generalTaskStartTime = input.generalTaskStartTime;
   if (input.generalTaskEndTime) payload.generalTaskEndTime = input.generalTaskEndTime;
+  payload.requiredCertificates = input.requiredCertificates ?? [];
+  payload.clientSiteManagementEnabled = input.clientSiteManagementEnabled ?? false;
   payload.cleaningTemplates = (input.cleaningTemplates ?? [])
     .filter((t) => t.templateId)
     .map((t) => ({ templateId: t.templateId, profileIndexes: t.profileIndexes ?? [] }));
@@ -43,10 +45,23 @@ async function fetchSites(): Promise<Site[]> {
   return SiteListSchema.parse(data);
 }
 
-export function useSites() {
+export function useSites(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: siteKeys.lists(),
     queryFn: fetchSites,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Sites the logged-in CLIENT may view in the Client Site Management portal (flag-enabled). */
+export function useClientPortalSites(enabled = true) {
+  return useQuery({
+    queryKey: [...siteKeys.lists(), "client-portal"],
+    enabled,
+    queryFn: async (): Promise<Site[]> => {
+      const { data } = await clientApi.get(ENDPOINTS.sites.clientPortal);
+      return SiteListSchema.parse(data);
+    },
   });
 }
 

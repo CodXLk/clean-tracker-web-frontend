@@ -13,22 +13,22 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
     <main className="flex min-h-screen bg-[#F8FAFB]">
       {/* Brand panel — hidden below lg, this is the "professional SaaS" storytelling side */}
       <div className="relative hidden w-1/2 flex-col overflow-hidden bg-primary p-12 text-white lg:flex">
-        <Image
-          src="/images/marketing/industries/architectural-bg.jpg"
-          alt=""
-          fill
-          sizes="50vw"
-          className="object-cover opacity-80"
-          priority
+        {/* Decorative depth — no external image dependency */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_100%_0%,rgba(255,255,255,0.14),transparent_60%)]"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/75 to-primary/20" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-[#ED5F25]/20 blur-3xl"
+        />
 
         <div className="relative z-10">
           <Image
-            src="/images/marketing/brand/logo-navbar.png"
+            src="/images/marketing/brand/logo.png"
             alt="Primeway Property Services"
-            width={140}
-            height={63}
+            width={492}
+            height={220}
             priority
             className="h-11 w-auto brightness-0 invert"
           />
@@ -56,14 +56,14 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
       {/* Form panel */}
       <div className="flex w-full flex-col items-center justify-center px-4 py-10 sm:py-16 lg:w-1/2 lg:px-16">
         <div className="w-full max-w-md">
-          <div className="mb-10 flex justify-center">
+          <div className="mb-8 flex justify-center">
             <Image
-              src="/images/marketing/brand/logo-full.png"
+              src="/images/marketing/brand/logo.png"
               alt="Primeway Property Services"
-              width={340}
-              height={152}
+              width={492}
+              height={220}
               priority
-              className="h-24 w-auto sm:h-28"
+              className="h-12 w-auto sm:h-14"
             />
           </div>
 

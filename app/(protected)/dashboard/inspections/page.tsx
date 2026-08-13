@@ -12,10 +12,11 @@ import { FilterTabs } from "@/components/shared/FilterTabs";
 import { TaskSummaryCard } from "@/components/shared/TaskSummaryCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SiteSelector } from "@/components/shared/SiteSelector";
+import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
-import { useActiveSite } from "@/features/attendance/hooks/useActiveSite";
+import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import {
   assignmentTypeLabel,
   formatTaskTime,
@@ -36,7 +37,7 @@ export default function InspectionsPage() {
   const useDrawerNav = useIsDrawerNav();
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
-  const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useActiveSite(today);
+  const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today);
 
   // Only show tasks for the active (checked-in or selected) site.
   const occurrences = useMemo(
@@ -117,14 +118,18 @@ export default function InspectionsPage() {
       <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-grey-500">Your tasks for today</p>
-            {sites.length > 1 && (
-              <SiteSelector
-                sites={sites}
-                selectedSiteId={selectedSiteId}
-                onChange={setSelectedSiteId}
-                checkedInSiteId={checkedInSiteId}
-              />
+            <p className="text-sm text-grey-500">{isAdmin ? "All sites — inspections" : "Your tasks for today"}</p>
+            {isAdmin ? (
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
+            ) : (
+              sites.length > 1 && (
+                <SiteSelector
+                  sites={sites}
+                  selectedSiteId={selectedSiteId}
+                  onChange={setSelectedSiteId}
+                  checkedInSiteId={checkedInSiteId}
+                />
+              )
             )}
           </div>
 
@@ -205,15 +210,21 @@ export default function InspectionsPage() {
         {!useDrawerNav && <PageHeader title="Inspections" showCalendar onCalendarClick={() => setCalendarOpen(true)} />}
 
         <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "-mt-5" : "pt-5")}>
-          {sites.length > 1 && (
+          {isAdmin ? (
             <div className="pt-3">
-              <SiteSelector
-                sites={sites}
-                selectedSiteId={selectedSiteId}
-                onChange={setSelectedSiteId}
-                checkedInSiteId={checkedInSiteId}
-              />
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             </div>
+          ) : (
+            sites.length > 1 && (
+              <div className="pt-3">
+                <SiteSelector
+                  sites={sites}
+                  selectedSiteId={selectedSiteId}
+                  onChange={setSelectedSiteId}
+                  checkedInSiteId={checkedInSiteId}
+                />
+              </div>
+            )
           )}
           {/* KPI row */}
           <div className="mb-6 grid grid-cols-3 gap-3 pt-5 sm:grid-cols-4">

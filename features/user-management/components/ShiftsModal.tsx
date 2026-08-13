@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Clock, Plus, Star, Trash2, Loader2, Moon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Clock, Plus, Pencil, Star, Trash2, Loader2, Moon, Check } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Modal } from "@/components/shared/Modal";
@@ -10,11 +10,13 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import {
   useSiteShifts,
   useCreateShift,
+  useUpdateShift,
   useSetDefaultShift,
   useDeleteShift,
 } from "@/features/user-management/hooks/useSiteShifts";
 import {
   ShiftFormSchema,
+  type Shift,
   type ShiftFormInput,
 } from "@/features/user-management/schemas/shift.schema";
 import type { Site } from "@/features/user-management/schemas/site.schema";
@@ -25,6 +27,8 @@ interface ShiftsModalProps {
   site: Site | null;
 }
 
+const EMPTY_SHIFT: ShiftFormInput = { name: "", startTime: "", endTime: "", isDefault: false };
+
 function hhmm(value: string): string {
   return value.slice(0, 5);
 }
@@ -32,6 +36,7 @@ function hhmm(value: string): string {
 export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
   const shiftsQuery = useSiteShifts(open ? site?.id : undefined);
   const createShift = useCreateShift();
+  const updateShift = useUpdateShift();
   const setDefault = useSetDefaultShift();
   const deleteShift = useDeleteShift();
 
@@ -42,24 +47,50 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
     formState: { errors },
   } = useForm<ShiftFormInput>({
     resolver: zodResolver(ShiftFormSchema),
-    defaultValues: { name: "", startTime: "", endTime: "", isDefault: false },
+    defaultValues: EMPTY_SHIFT,
   });
 
   const [localError, setLocalError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Reset the editor whenever the modal closes or the site changes.
+  useEffect(() => {
+    setEditingId(null);
+    setLocalError(null);
+    reset(EMPTY_SHIFT);
+  }, [open, site?.id, reset]);
 
   const shifts = shiftsQuery.data ?? [];
-  const busy = createShift.isPending || setDefault.isPending || deleteShift.isPending;
+  const submitting = createShift.isPending || updateShift.isPending;
+  const busy = submitting || setDefault.isPending || deleteShift.isPending;
+
+  function startEdit(shift: Shift) {
+    setLocalError(null);
+    setEditingId(shift.id);
+    reset({ name: shift.name, startTime: hhmm(shift.startTime), endTime: hhmm(shift.endTime), isDefault: false });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setLocalError(null);
+    reset(EMPTY_SHIFT);
+  }
 
   function onSubmit(values: ShiftFormInput) {
     if (!site) return;
     setLocalError(null);
-    createShift.mutate(
-      { siteId: site.id, input: values },
-      {
-        onSuccess: () => reset({ name: "", startTime: "", endTime: "", isDefault: false }),
-        onError: (e) => setLocalError(getErrorMessage(e)),
+    const handlers = {
+      onSuccess: () => {
+        setEditingId(null);
+        reset(EMPTY_SHIFT);
       },
-    );
+      onError: (e: unknown) => setLocalError(getErrorMessage(e)),
+    };
+    if (editingId) {
+      updateShift.mutate({ siteId: site.id, shiftId: editingId, input: values }, handlers);
+    } else {
+      createShift.mutate({ siteId: site.id, input: values }, handlers);
+    }
   }
 
   return (
@@ -106,6 +137,18 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startEdit(shift)}
+                    className={
+                      editingId === shift.id
+                        ? "inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary disabled:opacity-50"
+                        : "inline-flex items-center gap-1 rounded-full border border-grey-200 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50 disabled:opacity-50"
+                    }
+                  >
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
                   {!shift.isDefault && site && (
                     <button
                       type="button"
@@ -131,8 +174,8 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
           </ul>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3 rounded-xl border border-grey-200 p-3">
-          <p className="text-sm font-medium text-on-surface">Add a shift</p>
+        <form onSubmit={handleSubmit(onSubmit)} className={`flex flex-col gap-3 rounded-xl border p-3 ${editingId ? "border-primary/40 bg-primary/[0.03]" : "border-grey-200"}`}>
+          <p className="text-sm font-medium text-on-surface">{editingId ? "Edit shift" : "Add a shift"}</p>
           <TextField label="Shift name" placeholder="e.g. Night shift" error={errors.name?.message} {...register("name")} />
           <div className="grid grid-cols-2 gap-3">
             <TextField label="Start time" type="time" error={errors.startTime?.message} {...register("startTime")} />
@@ -150,14 +193,30 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
               {localError}
             </p>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {editingId && (
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={submitting}
+                className="rounded-full border border-grey-300 px-4 py-2 text-sm font-semibold text-on-surface hover:bg-grey-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="submit"
-              disabled={createShift.isPending}
+              disabled={submitting}
               className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90 disabled:opacity-50"
             >
-              {createShift.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Add shift
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : editingId ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {editingId ? "Save changes" : "Add shift"}
             </button>
           </div>
         </form>

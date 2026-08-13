@@ -13,6 +13,7 @@ import {
 import {
   CERTIFICATE_TYPES,
   CERTIFICATE_TYPE_LABELS,
+  certificateNumberLabel,
   type CertificateType,
   type UserDocument,
 } from "@/features/users/schemas/document.schema";
@@ -57,6 +58,9 @@ function DocumentRow({
           <p className="truncate text-xs text-grey-500">
             {doc.originalFilename ?? "Document"} · Uploaded {formatDate(doc.uploadedAt)}
           </p>
+          {doc.documentNumber && (
+            <p className="truncate text-xs text-grey-600">No: {doc.documentNumber}</p>
+          )}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
             {doc.verified ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
@@ -128,6 +132,7 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
   const [file, setFile] = useState<File | null>(null);
   const [certificateType, setCertificateType] = useState<CertificateType>("VEVO_CHECK");
   const [otherLabel, setOtherLabel] = useState("");
+  const [documentNumber, setDocumentNumber] = useState("");
   const [issueDate, setIssueDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -145,6 +150,7 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
     setFile(null);
     setCertificateType("VEVO_CHECK");
     setOtherLabel("");
+    setDocumentNumber("");
     setIssueDate("");
     setExpiryDate("");
     setLocalError(null);
@@ -172,6 +178,7 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
         file,
         certificateType,
         otherLabel: certificateType === "OTHER" ? otherLabel.trim() : undefined,
+        documentNumber: documentNumber.trim() || undefined,
         issueDate: issueDate || undefined,
         expiryDate: expiryDate || undefined,
       },
@@ -238,6 +245,17 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
                   value={otherLabel}
                   onChange={(e) => setOtherLabel(e.target.value)}
                   placeholder="e.g. Asbestos awareness"
+                />
+              </label>
+            )}
+            {certificateNumberLabel(certificateType) && (
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-grey-600">{certificateNumberLabel(certificateType)}</span>
+                <input
+                  className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
+                  placeholder={`Enter ${certificateNumberLabel(certificateType)}`}
                 />
               </label>
             )}

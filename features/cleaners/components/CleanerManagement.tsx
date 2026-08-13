@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserPlus, RefreshCw, Ban, Eye } from "lucide-react";
+import { UserPlus, Eye, Pencil, RefreshCw, Ban } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useDeactivateUser, useResendSetup } from "@/features/users/hooks/useUserActions";
 import { CreateUserModal } from "@/features/users/components/CreateUserModal";
-import { CleanerDetailModal } from "./CleanerDetailModal";
+import { UserDetailModal } from "@/features/users/components/UserDetailModal";
+import { EditUserModal } from "@/features/users/components/EditUserModal";
+import { RowMenu } from "@/features/user-management/components/RowMenu";
 import type { User } from "@/features/users/schemas/user.schema";
 import { canManageCleaners } from "@/features/users/lib/permissions";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -29,6 +31,7 @@ function StatusPill({ user }: { user: User }) {
 export function CleanerManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<User | null>(null);
+  const [editUser, setEditUser] = useState<User | null>(null);
   const me = useMe();
   const usersQuery = useUsers();
   const deactivate = useDeactivateUser();
@@ -87,39 +90,27 @@ export function CleanerManagement() {
                         <StatusPill user={user} />
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDetailUser(user)}
-                            title="View cleaner profile"
-                            className="flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-100"
-                          >
-                            <Eye size={14} aria-hidden="true" /> View
-                          </button>
-                          {!user.setupComplete && user.active && (
-                            <button
-                              type="button"
-                              onClick={() => resend.mutate(user.id)}
-                              disabled={resend.isPending}
-                              title="Resend setup email"
-                              className="flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-100 disabled:opacity-50"
-                            >
-                              <RefreshCw size={14} aria-hidden="true" /> Resend
-                            </button>
-                          )}
-                          {user.active && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Deactivate ${user.email}?`)) deactivate.mutate(user.id);
-                              }}
-                              disabled={deactivate.isPending}
-                              title="Deactivate cleaner"
-                              className="flex items-center gap-1 rounded-lg border border-error/30 px-2.5 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
-                            >
-                              <Ban size={14} aria-hidden="true" /> Deactivate
-                            </button>
-                          )}
+                        <div className="flex justify-end">
+                          <RowMenu
+                            label={`Actions for ${user.email}`}
+                            items={[
+                              { label: "View profile", icon: Eye, onClick: () => setDetailUser(user) },
+                              { label: "Edit details", icon: Pencil, onClick: () => setEditUser(user) },
+                              ...(!user.setupComplete && user.active
+                                ? [{ label: "Resend setup", icon: RefreshCw, onClick: () => resend.mutate(user.id) }]
+                                : []),
+                              ...(user.active
+                                ? [{
+                                    label: "Deactivate",
+                                    icon: Ban,
+                                    destructive: true,
+                                    onClick: () => {
+                                      if (confirm(`Deactivate ${user.email}?`)) deactivate.mutate(user.id);
+                                    },
+                                  }]
+                                : []),
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -137,11 +128,8 @@ export function CleanerManagement() {
         <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} fixedRole="CLEANER" />
       )}
 
-      <CleanerDetailModal
-        open={detailUser !== null}
-        onClose={() => setDetailUser(null)}
-        user={detailUser}
-      />
+      <UserDetailModal open={detailUser !== null} onClose={() => setDetailUser(null)} user={detailUser} />
+      <EditUserModal open={editUser !== null} onClose={() => setEditUser(null)} user={editUser} />
     </div>
   );
 }
