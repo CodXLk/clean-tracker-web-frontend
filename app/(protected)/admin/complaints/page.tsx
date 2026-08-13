@@ -12,11 +12,12 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SiteSelector } from "@/components/shared/SiteSelector";
+import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { ComplaintRow } from "@/features/complaints/components/ComplaintRow";
 import { AdminComplaintDetailModal } from "@/features/complaints/components/AdminComplaintDetailModal";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useResolveComplaint } from "@/features/complaints/hooks/useResolveComplaint";
-import { useActiveSite } from "@/features/attendance/hooks/useActiveSite";
+import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import type { Complaint } from "@/features/complaints/types";
 import { cn } from "@/lib/utils/cn";
 
@@ -64,7 +65,7 @@ export default function ComplaintsPage() {
   const useDrawerNav = useIsDrawerNav();
   const { data, isLoading, isError } = useComplaints();
   const resolveComplaintMutation = useResolveComplaint();
-  const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useActiveSite();
+  const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId, isAdmin } = useSiteScope();
 
   const [filter, setFilter] = useState<FilterOption>("All");
   const [search, setSearch] = useState("");
@@ -138,13 +139,17 @@ export default function ComplaintsPage() {
             <div>
               <p className="text-sm text-grey-500">View and manage complaints</p>
             </div>
-            {sites.length > 1 && (
-              <SiteSelector
-                sites={sites}
-                selectedSiteId={selectedSiteId}
-                onChange={setSelectedSiteId}
-                checkedInSiteId={checkedInSiteId}
-              />
+            {isAdmin ? (
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
+            ) : (
+              sites.length > 1 && (
+                <SiteSelector
+                  sites={sites}
+                  selectedSiteId={selectedSiteId}
+                  onChange={setSelectedSiteId}
+                  checkedInSiteId={checkedInSiteId}
+                />
+              )
             )}
           </div>
 
@@ -219,15 +224,21 @@ export default function ComplaintsPage() {
             !useDrawerNav ? "-mt-5" : "pt-5",
           )}
         >
-          {sites.length > 1 && (
+          {isAdmin ? (
             <div className="pt-5">
-              <SiteSelector
-                sites={sites}
-                selectedSiteId={selectedSiteId}
-                onChange={setSelectedSiteId}
-                checkedInSiteId={checkedInSiteId}
-              />
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             </div>
+          ) : (
+            sites.length > 1 && (
+              <div className="pt-5">
+                <SiteSelector
+                  sites={sites}
+                  selectedSiteId={selectedSiteId}
+                  onChange={setSelectedSiteId}
+                  checkedInSiteId={checkedInSiteId}
+                />
+              </div>
+            )
           )}
 
           <div className="mb-5 grid grid-cols-3 gap-3 pt-5">

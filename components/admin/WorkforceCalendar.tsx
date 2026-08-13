@@ -1695,7 +1695,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
         </h3>
 
         {/* Navigation */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center rounded-xl border border-grey-200 bg-surface p-1">
           <button
             type="button"
             aria-label="Previous"
@@ -1707,7 +1707,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           <button
             type="button"
             onClick={goToToday}
-            className="rounded-lg border border-grey-200 px-3 py-1 text-xs font-medium text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="rounded-lg px-3 py-1 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             Today
           </button>
@@ -1729,7 +1729,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           onChange={(e) => {
             if (e.target.value) setCurrentDate(new Date(e.target.value + "T00:00:00"));
           }}
-          className="rounded-lg border border-grey-200 bg-surface px-2.5 py-1 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
+          className="h-9 rounded-xl border border-grey-200 bg-surface px-2.5 text-xs font-medium text-on-surface outline-none transition-colors hover:border-grey-300 focus-visible:ring-2 focus-visible:ring-primary"
         />
 
         {/* Site selector — exactly one site is always in view */}

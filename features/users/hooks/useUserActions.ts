@@ -22,6 +22,7 @@ export function useUpdateUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userKeys.lists() });
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["user-detail"] });
       // Supervisor-facing views (Cleaner Logs, Workforce Calendar, site cleaner
       // pickers) read a cleaner's name from separate endpoints/caches — refresh
       // those too so an already-open supervisor session picks up the change.

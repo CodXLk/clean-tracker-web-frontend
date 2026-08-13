@@ -14,6 +14,7 @@ export const ENDPOINTS = {
     list:        "/users",
     create:      "/users",
     byId:        (id: string) => `/users/${id}`,
+    detail:      (id: string) => `/users/${id}/detail`,
     resendSetup: (id: string) => `/users/${id}/resend-setup`,
     photo:       (id: string) => `/users/${id}/photo`,
     myPhoto:     "/users/me/photo",
@@ -42,6 +43,7 @@ export const ENDPOINTS = {
   sites: {
     list:   "/sites",
     create: "/sites",
+    clientPortal: "/sites/client-portal",
     byId:   (id: string) => `/sites/${id}`,
     supervisors: (id: string) => `/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/sites/${id}/cleaners`,
@@ -162,6 +164,9 @@ export const ENDPOINTS = {
   roles: {
     list: "/roles",
   },
+  dashboard: {
+    overview: "/dashboard/overview",
+  },
   // These have no Spring Boot backend to mirror — the Next.js route handler *is*
   // the backend. Consumed by client components via clientApi ("/api" baseURL).
   inspections: {
@@ -195,6 +200,7 @@ export const BACKEND = {
     list:        "/api/v1/users",
     create:      "/api/v1/users",
     byId:        (id: string) => `/api/v1/users/${id}`,
+    detail:      (id: string) => `/api/v1/users/${id}/detail`,
     resendSetup: (id: string) => `/api/v1/users/${id}/resend-setup`,
     photo:       (id: string) => `/api/v1/users/${id}/photo`,
     myPhoto:     "/api/v1/users/me/photo",
@@ -224,6 +230,7 @@ export const BACKEND = {
   sites: {
     list:   "/api/v1/sites",
     create: "/api/v1/sites",
+    clientPortal: "/api/v1/sites/client-portal",
     byId:   (id: string) => `/api/v1/sites/${id}`,
     supervisors: (id: string) => `/api/v1/sites/${id}/supervisors`,
     cleaners:    (id: string) => `/api/v1/sites/${id}/cleaners`,
@@ -343,6 +350,9 @@ export const BACKEND = {
   },
   roles: {
     list: "/api/v1/roles",
+  },
+  dashboard: {
+    overview: "/api/v1/dashboard/overview",
   },
   complaints: {
     list:    "/api/v1/complaints",

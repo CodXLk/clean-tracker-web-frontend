@@ -57,6 +57,7 @@ const EMPTY: SiteFormInput = {
   generalTaskStartTime: "",
   generalTaskEndTime: "",
   requiredCertificates: [],
+  clientSiteManagementEnabled: false,
   cleaningTemplates: [],
 };
 
@@ -131,6 +132,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             generalTaskStartTime: (site.generalTaskStartTime ?? "").slice(0, 5),
             generalTaskEndTime: (site.generalTaskEndTime ?? "").slice(0, 5),
             requiredCertificates: site.requiredCertificates ?? [],
+            clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
               profileIndexes: t.profileIndexes ?? [],
@@ -453,6 +455,20 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             }}
           />
         </div>
+
+        <label className="flex items-start gap-3 rounded-lg border border-grey-200 p-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-grey-300"
+            {...register("clientSiteManagementEnabled")}
+          />
+          <span>
+            <span className="block text-sm font-medium text-on-surface">Enable Client Site Management view</span>
+            <span className="block text-xs text-grey-500">
+              When on, this client can see this site's weekly schedule in their Client Site Management tab.
+            </span>
+          </span>
+        </label>
 
         <div className="flex flex-col gap-3">
           <span className="text-sm font-medium text-on-surface">General task service time</span>

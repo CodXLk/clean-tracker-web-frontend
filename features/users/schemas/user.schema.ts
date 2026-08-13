@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { optionalAuPhoneSchema } from "@/lib/validators/phone";
+import {
+  UserDocumentSchema,
+} from "@/features/users/schemas/document.schema";
 
 // Roles mirror the Spring Boot `Role` enum.
 export const ROLES = [
@@ -32,6 +35,7 @@ export const UserSchema = z.object({
   phoneNumber: z.string().nullable().optional(),
   role: RoleSchema,
   companyId: z.string().uuid().nullable().optional(),
+  dateOfBirth: z.string().nullable().optional(),
   active: z.boolean(),
   setupComplete: z.boolean(),
   hasPhoto: z.boolean().optional().default(false),
@@ -58,6 +62,7 @@ export const CreateUserSchema = z.object({
   lastName: z.string().max(50).optional().or(z.literal("")),
   email: z.string().email("A valid email is required"),
   phoneNumber: optionalAuPhoneSchema,
+  dateOfBirth: z.string().optional().or(z.literal("")),
   role: RoleSchema,
 });
 
@@ -65,8 +70,39 @@ export const UpdateUserSchema = z.object({
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().max(50).optional(),
   phoneNumber: z.string().max(30).optional(),
+  dateOfBirth: z.string().optional().or(z.literal("")),
 });
 
 export type User = z.infer<typeof UserSchema>;
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+
+// Mirrors backend CleanerSiteSummaryResponse (used for cleaner/supervisor assigned sites).
+export const AssignedSiteSummarySchema = z.object({
+  siteId: z.string().uuid(),
+  siteName: z.string(),
+  clientName: z.string().nullable().optional(),
+  clientCompanyName: z.string().nullable().optional(),
+  siteType: z.string().nullable().optional(),
+  slotLabel: z.string().nullable().optional(),
+});
+export type AssignedSiteSummary = z.infer<typeof AssignedSiteSummarySchema>;
+
+// Mirrors backend UserDetailResponse.
+export const UserDetailSchema = z.object({
+  id: z.string().uuid(),
+  firstName: z.string().nullable().optional(),
+  lastName: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  phoneNumber: z.string().nullable().optional(),
+  role: RoleSchema,
+  dateOfBirth: z.string().nullable().optional(),
+  hasPhoto: z.boolean().optional().default(false),
+  active: z.boolean().optional().default(true),
+  setupComplete: z.boolean().optional().default(false),
+  createdAt: z.string().nullable().optional(),
+  updatedAt: z.string().nullable().optional(),
+  documents: z.array(UserDocumentSchema).default([]),
+  sites: z.array(AssignedSiteSummarySchema).default([]),
+});
+export type UserDetail = z.infer<typeof UserDetailSchema>;

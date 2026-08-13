@@ -13,6 +13,8 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, userId: stri
   queryClient.invalidateQueries({ queryKey: ["user-documents", userId] });
   // Eligibility for site assignment depends on verified documents.
   queryClient.invalidateQueries({ queryKey: ["site-eligible"] });
+  // The detail modal embeds the document list.
+  queryClient.invalidateQueries({ queryKey: ["user-detail", userId] });
 }
 
 /** List a user's compliance documents. */
@@ -32,6 +34,7 @@ export interface UploadDocumentInput {
   file: File;
   certificateType: CertificateType;
   otherLabel?: string;
+  documentNumber?: string;
   issueDate?: string;
   expiryDate?: string;
 }
@@ -45,6 +48,7 @@ export function useUploadDocument() {
       formData.append("file", input.file);
       formData.append("certificateType", input.certificateType);
       if (input.otherLabel) formData.append("otherLabel", input.otherLabel);
+      if (input.documentNumber) formData.append("documentNumber", input.documentNumber);
       if (input.issueDate) formData.append("issueDate", input.issueDate);
       if (input.expiryDate) formData.append("expiryDate", input.expiryDate);
       await clientApi.post(ENDPOINTS.users.documents(input.userId), formData, {

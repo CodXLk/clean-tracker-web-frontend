@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X } from "lucide-react";
+import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X, Clock } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
 import { SiteSelector } from "@/components/shared/SiteSelector";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -16,6 +16,11 @@ import type { CheckInPayload, CleanerSite } from "@/features/attendance/schemas/
 function formatTime(iso?: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// Backend shift times arrive as "HH:mm:ss" — trim to "HH:mm" for display.
+function formatShiftTime(t: string): string {
+  return t.slice(0, 5);
 }
 
 function getMessage(error: unknown, fallback: string): string {
@@ -229,6 +234,8 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const checkedIn = site.status === "CHECKED_IN";
   const checkedOut = site.status === "CHECKED_OUT";
   const paused = site.status === "PAUSED";
+  // Fresh check-in is only offered during the site's shift window(s); paused resume is exempt.
+  const checkInBlocked = !checkedIn && !checkedOut && !paused && site.checkInAllowed === false;
   const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
 
   return (
@@ -327,14 +334,45 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
           />
         ) : (
           <div className="flex flex-col gap-2">
+            {site.shifts.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {site.shifts.map((sh) => (
+                  <span
+                    key={sh.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-grey-100 px-2 py-0.5 text-[11px] font-medium text-grey-700"
+                  >
+                    <Clock size={12} aria-hidden="true" />
+                    {sh.name} · {formatShiftTime(sh.startTime)}–{formatShiftTime(sh.endTime)}
+                  </span>
+                ))}
+              </div>
+            )}
             <SlideButton
               key={`in-${resetKey}`}
-              label={paused ? "Slide to Check In again" : "Slide to Check In"}
+              label={
+                checkInBlocked
+                  ? "Check-in opens at shift time"
+                  : paused
+                    ? "Slide to Check In again"
+                    : "Slide to Check In"
+              }
               variant="teal"
               completedLabel="Checking in…"
+              disabled={checkInBlocked}
               onComplete={() => run(site, "in")}
             />
-            {site.nfcRegistered && nfcSupported && (
+            {checkInBlocked && (
+              <p className="text-center text-[11px] text-grey-500">
+                You can check in during your scheduled shift hours
+                {site.shifts.length > 0
+                  ? ` (${site.shifts
+                      .map((sh) => `${formatShiftTime(sh.startTime)}–${formatShiftTime(sh.endTime)}`)
+                      .join(", ")})`
+                  : ""}
+                .
+              </p>
+            )}
+            {site.nfcRegistered && nfcSupported && !checkInBlocked && (
               <button
                 type="button"
                 onClick={scanAndCheckIn}

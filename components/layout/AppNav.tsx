@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils/cn";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
+import { useClientPortalSites } from "@/features/user-management/hooks/useSites";
 import { useUIStore } from "@/store/ui.store";
 import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 import { SUPERVISOR_ALLOWED_HREFS } from "@/lib/auth/roles";
@@ -96,7 +98,8 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
 
 /** Super admins don't need the cleaner-facing Home page, but do need Tasks and
  *  Inspections since those are surfaced in the Admin Panel. */
-const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard"]);
+// Client Site Management is a client-only portal, so admins never see it either.
+const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/admin/client-site-management"]);
 const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
 );
@@ -108,25 +111,39 @@ const SUPERVISOR_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && SUPERVISOR_HREFS.has(item.href),
 );
 
-/** Clients see a minimal 4-item nav: Dashboard, Complaints, Workforce, Profile. */
-const CLIENT_HREFS = new Set([
+/** Clients see a minimal nav: Dashboard, Complaints, Workforce, Profile — plus the
+ *  Client Site Management tab only when they have a site with that view enabled. */
+const CLIENT_BASE_HREFS = [
   "/admin/dashboard",
   "/admin/complaints",
   "/admin/workforce",
   "/dashboard/profile",
-]);
+];
+const CLIENT_PORTAL_HREF = "/admin/client-site-management";
 const CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href && CLIENT_HREFS.has(item.href),
+  (item) => item.href && CLIENT_BASE_HREFS.includes(item.href),
+);
+const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => item.href && (CLIENT_BASE_HREFS.includes(item.href) || item.href === CLIENT_PORTAL_HREF),
+);
+
+/** Everyone who isn't a client (e.g. company admin) sees the full nav minus the client-only portal. */
+const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => item.href !== CLIENT_PORTAL_HREF,
 );
 
 /** The nav items visible to the current user, based on role. */
 function useVisibleNavItems(): NavItemConfig[] {
   const { data: me } = useMe();
+  const isClient = me?.role === "CLIENT";
+  const portalSites = useClientPortalSites(isClient);
+  const hasClientPortal = (portalSites.data?.length ?? 0) > 0;
+
   if (me?.role === "CLEANER") return CLEANER_NAV_ITEMS;
   if (me?.role === "SUPER_ADMIN") return SUPER_ADMIN_NAV_ITEMS;
-  if (me?.role === "CLIENT") return CLIENT_NAV_ITEMS;
+  if (me?.role === "CLIENT") return hasClientPortal ? CLIENT_NAV_ITEMS_WITH_PORTAL : CLIENT_NAV_ITEMS;
   if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
-  return NAV_ITEMS;
+  return NON_CLIENT_NAV_ITEMS;
 }
 
 /** Whether the mobile experience shows the cleaner-style bottom bar (≤5 items)
@@ -146,7 +163,7 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/users", "Users"],
   ["/admin/cleaner-management", "Cleaner Management"],
   ["/admin/companies", "Client Companies"],
-  ["/admin/workforce", "Workforce & Management"],
+  ["/admin/workforce", "Workforce Management"],
   ["/admin/inspections", "Inspections Dashboard"],
   ["/admin/complaints", "Complaints"],
   ["/admin/inventory", "Inventory"],
@@ -331,12 +348,29 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-primary">
-      <div className="px-4 py-6">
-        <p className="text-lg font-bold text-white">Primeway</p>
-        <p className="text-xs text-white/50">Cleaning Management</p>
+      <div className="flex items-center gap-3 px-4 pb-4 pt-6">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+          <Image
+            src="/images/marketing/brand/logomark.png"
+            alt="Primeway"
+            width={40}
+            height={40}
+            className="h-8 w-8 object-contain"
+            priority
+          />
+        </div>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-base font-bold text-white">Primeway</p>
+          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-white/60">
+            Cleaning Management
+          </p>
+        </div>
       </div>
 
-      <nav aria-label="Main navigation" className="mt-2 flex flex-col gap-1 overflow-y-auto px-3">
+      <nav
+        aria-label="Main navigation"
+        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2"
+      >
         {items.map((item) =>
           item.children ? (
             <SidebarNavGroup key={item.label} item={item} pathname={pathname} onLinkClick={onLinkClick} />
@@ -392,7 +426,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
 function DesktopSidebar() {
   return (
-    <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 lg:block">
+    <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 shadow-lg ring-1 ring-black/5 lg:block">
       <SidebarContent />
     </aside>
   );

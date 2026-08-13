@@ -478,6 +478,14 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                             {task.isComplaint ? "Complaint Redo" : "Redo"}
                           </span>
                         )}
+                        {task.shiftName && (
+                          <span className="rounded-full bg-grey-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-grey-600">
+                            {task.shiftName}
+                            {task.shiftStartTime && task.shiftEndTime
+                              ? ` · ${task.shiftStartTime.slice(0, 5)}–${task.shiftEndTime.slice(0, 5)}`
+                              : ""}
+                          </span>
+                        )}
                       </div>
                       {task.floorName && (
                         <span className="text-xs text-grey-500">{task.floorName}</span>
