@@ -82,6 +82,22 @@ export const TaskOccurrenceSchema = z.object({
   colorHex: z.string().nullable().optional(),
   cleaners: z.array(AssignmentCleanerSchema),
   supervisors: z.array(AssignmentCleanerSchema).default([]),
+  cleanerProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
+  supervisorProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        name: z.string(),
+        quantity: z.number(),
+        unit: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
   recurring: z.boolean(),
   overridden: z.boolean(),
 });

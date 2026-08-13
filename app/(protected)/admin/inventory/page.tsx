@@ -54,7 +54,7 @@ export default function InventoryPage() {
   return (
     <>
       <DesktopInventoryConsole />
-      <MobileInventory />
+      <CleanerInventory />
     </>
   );
 }
@@ -73,7 +73,7 @@ function DesktopInventoryConsole() {
   const [tab, setTab] = useState<AdminTab>("Warehouse");
 
   return (
-    <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
+    <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden")}>
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <p className="text-sm text-grey-500">Warehouse stock, site deliveries and consumption.</p>
@@ -155,9 +155,9 @@ function DesktopInventoryConsole() {
   );
 }
 
-/* ---------- Mobile (cleaner-style request flow) ---------- */
+/* ---------- Cleaner request flow (desktop console + mobile) ---------- */
 
-function MobileInventory() {
+function CleanerInventory() {
   const useDrawerNav = useIsDrawerNav();
   const [activeFilter, setActiveFilter] = useState<MobileStatusTab>("All");
   const [requestModalOpen, setRequestModalOpen] = useState(false);
@@ -166,70 +166,90 @@ function MobileInventory() {
   const { data: requests = [], isLoading } = useRequests({ status: TAB_TO_STATUS[activeFilter] });
 
   return (
-    <div
-      className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
-      style={{
-        background:
-          "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
-      }}
-    >
-      {!useDrawerNav && <PageHeader title="Inventory" />}
+    <>
+      {/* ---------- Desktop (cleaner request console) ---------- */}
+      <div className={cn("p-6 lg:p-8", useDrawerNav ? "hidden" : "hidden lg:block")}>
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-grey-500">Request supplies and track your recent requests.</p>
+            <PillButton
+              variant="orange"
+              onClick={() => setRequestModalOpen(true)}
+              className="sm:h-11 sm:w-auto sm:px-6"
+            >
+              <Package size={18} className="mr-2" />
+              Request Items
+            </PillButton>
+          </div>
 
-      <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "" : "pt-5")}>
-        <div className="flex flex-col gap-4">
-          <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
+          <div className="mb-6 overflow-x-auto">
+            <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
+          </div>
 
-          <PillButton variant="orange" onClick={() => setRequestModalOpen(true)}>
-            <Package size={18} className="mr-2" />
-            Request Items
-          </PillButton>
-
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-on-surface">Recent Requests</h2>
-
+          <section aria-labelledby="requests-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
+            <h2 id="requests-heading" className="mb-4 text-sm font-semibold text-on-surface">
+              Recent Requests
+            </h2>
             {isLoading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-16">
                 <LoadingSpinner />
               </div>
             ) : requests.length === 0 ? (
-              <p className="py-12 text-center text-sm text-grey-500">
-                No requests yet. Tap “Request Items” to raise one.
+              <p className="py-16 text-center text-sm text-grey-500">
+                No requests yet. Click “Request Items” to raise one.
               </p>
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {requests.map((req) => (
-                  <button
-                    key={req.id}
-                    onClick={() => setSelectedRequest(req)}
-                    className="flex w-full items-start gap-3 rounded-2xl bg-white p-4 shadow-sm text-left transition-shadow hover:shadow-md"
-                  >
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary">
-                      <RotateCcw size={16} className="text-primary" />
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium text-on-surface leading-snug">
-                          Supply Request
-                        </span>
-                        <StatusBadge status={req.status} />
-                      </div>
-                      <span className="text-xs text-grey-500">{req.siteName}</span>
-                      <span className="text-xs text-grey-500">#{req.id.slice(0, 8)}</span>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="rounded-xl bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
-                          {req.lines.length} item{req.lines.length === 1 ? "" : "s"}
-                        </span>
-                        <span className="text-xs text-grey-500">{fmtDateTime(req.createdAt)}</span>
-                      </div>
-                    </div>
-                  </button>
+                  <RequestCard key={req.id} req={req} onClick={() => setSelectedRequest(req)} />
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </div>
-      </main>
+      </div>
+
+      {/* ---------- Mobile (cleaner-style request flow) ---------- */}
+      <div
+        className={cn("min-h-screen", useDrawerNav ? "hidden" : "lg:hidden")}
+        style={{
+          background:
+            "radial-gradient(ellipse at top left, rgba(71,114,115,0.18) 0%, transparent 60%), #F5F5F5",
+        }}
+      >
+        {!useDrawerNav && <PageHeader title="Inventory" />}
+
+        <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "" : "pt-5")}>
+          <div className="flex flex-col gap-4">
+            <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
+
+            <PillButton variant="orange" onClick={() => setRequestModalOpen(true)}>
+              <Package size={18} className="mr-2" />
+              Request Items
+            </PillButton>
+
+            <div>
+              <h2 className="mb-3 text-sm font-semibold text-on-surface">Recent Requests</h2>
+
+              {isLoading ? (
+                <div className="flex justify-center py-12">
+                  <LoadingSpinner />
+                </div>
+              ) : requests.length === 0 ? (
+                <p className="py-12 text-center text-sm text-grey-500">
+                  No requests yet. Tap “Request Items” to raise one.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {requests.map((req) => (
+                    <RequestCard key={req.id} req={req} onClick={() => setSelectedRequest(req)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
 
       <RequestItemsModal open={requestModalOpen} onClose={() => setRequestModalOpen(false)} />
 
@@ -243,6 +263,34 @@ function MobileInventory() {
           }))}
         />
       )}
-    </div>
+    </>
+  );
+}
+
+function RequestCard({ req, onClick }: { req: InventoryRequest; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-start gap-3 rounded-2xl bg-white p-4 shadow-sm text-left transition-shadow hover:shadow-md"
+    >
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary">
+        <RotateCcw size={16} className="text-primary" />
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-medium text-on-surface leading-snug">Supply Request</span>
+          <StatusBadge status={req.status} />
+        </div>
+        <span className="text-xs text-grey-500">{req.siteName}</span>
+        <span className="text-xs text-grey-500">#{req.id.slice(0, 8)}</span>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="rounded-xl bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+            {req.lines.length} item{req.lines.length === 1 ? "" : "s"}
+          </span>
+          <span className="text-xs text-grey-500">{fmtDateTime(req.createdAt)}</span>
+        </div>
+      </div>
+    </button>
   );
 }

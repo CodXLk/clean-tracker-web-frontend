@@ -50,6 +50,16 @@ export const SiteCleanerProfileSchema = z.object({
 });
 export type SiteCleanerProfile = z.infer<typeof SiteCleanerProfileSchema>;
 
+// One supervisor slot (profile) on a site — mirrors backend SiteSupervisorProfileResponse.
+export const SiteSupervisorProfileSchema = z.object({
+  id: z.string().uuid(),
+  profileIndex: z.number(),
+  label: z.string(),
+  supervisorId: z.string().uuid().nullable().optional(),
+  supervisorName: z.string().nullable().optional(),
+});
+export type SiteSupervisorProfile = z.infer<typeof SiteSupervisorProfileSchema>;
+
 // One cleaning-schedule template mapped to a site — mirrors backend CleaningTemplateResponse.
 export const SiteCleaningTemplateSchema = z.object({
   id: z.string().uuid(),

@@ -9,27 +9,17 @@ import { RowMenu } from "./RowMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
-import { AssignPeopleModal, type AssignOption } from "./AssignPeopleModal";
 import { CleanerProfilesModal } from "./CleanerProfilesModal";
+import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
-import {
-  useSiteSupervisors,
-  useAssignSupervisors,
-} from "@/features/user-management/hooks/useSiteAssignments";
 import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
-import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import type { Site } from "@/features/user-management/schemas/site.schema";
-
-function personName(first?: string | null, last?: string | null): string {
-  return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
-}
 
 export function SiteManagement() {
   const query = useSites();
   const deleteMutation = useDeleteSite();
 
-  const usersQuery = useUsers();
   const me = useMe();
   const isSupervisor = me.data?.role === "SUPERVISOR";
 
@@ -40,22 +30,11 @@ export function SiteManagement() {
   const [supervisorsSite, setSupervisorsSite] = useState<Site | null>(null);
   const [cleanersSite, setCleanersSite] = useState<Site | null>(null);
 
-  const siteSupervisors = useSiteSupervisors(supervisorsSite?.id);
-  const assignSupervisors = useAssignSupervisors();
-
   // A supervisor only ever sees sites they're assigned to — there's no bulk "my
   // sites" endpoint, so this filters the full list against each site's roster.
   const supervisorSites = useSupervisorSiteFilter(
     isSupervisor ? query.data ?? [] : [],
     isSupervisor ? me.data?.id : undefined,
-  );
-
-  const supervisorOptions: AssignOption[] = useMemo(
-    () =>
-      (usersQuery.data ?? [])
-        .filter((u) => u.role === "SUPERVISOR")
-        .map((u) => ({ id: u.id, label: personName(u.firstName, u.lastName), sublabel: u.email })),
-    [usersQuery.data],
   );
 
   const rows = useMemo(() => {
@@ -155,7 +134,7 @@ export function SiteManagement() {
                   ]
                 : [
                     {
-                      label: "Assign Supervisors",
+                      label: "Supervisor slots",
                       icon: UserCog,
                       onClick: () => setSupervisorsSite(s),
                     },
@@ -194,14 +173,6 @@ export function SiteManagement() {
   function confirmDelete() {
     if (!deleting) return;
     deleteMutation.mutate(deleting.id, { onSuccess: () => setDeleting(null) });
-  }
-
-  function handleSaveSupervisors(userIds: string[]) {
-    if (!supervisorsSite) return;
-    assignSupervisors.mutate(
-      { siteId: supervisorsSite.id, userIds },
-      { onSuccess: () => setSupervisorsSite(null) },
-    );
   }
 
   return (
@@ -250,21 +221,10 @@ export function SiteManagement() {
         }}
       />
 
-      <AssignPeopleModal
+      <SupervisorProfilesModal
         open={!!supervisorsSite}
-        onClose={() => {
-          setSupervisorsSite(null);
-          assignSupervisors.reset();
-        }}
-        title="Assign Supervisors"
-        description={supervisorsSite ? `Supervisors for “${supervisorsSite.name}”` : undefined}
-        options={supervisorOptions}
-        initialSelectedIds={(siteSupervisors.data ?? []).map((u) => u.id)}
-        isLoading={siteSupervisors.isLoading || usersQuery.isLoading}
-        isSaving={assignSupervisors.isPending}
-        error={assignSupervisors.isError ? getErrorMessage(assignSupervisors.error) : undefined}
-        emptyMessage="No supervisors exist yet. Invite supervisors from User Management first."
-        onSave={handleSaveSupervisors}
+        onClose={() => setSupervisorsSite(null)}
+        site={supervisorsSite}
       />
 
       <CleanerProfilesModal

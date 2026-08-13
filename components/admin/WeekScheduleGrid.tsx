@@ -71,13 +71,20 @@ function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): 
   return r;
 }
 
+/** Group scope-view rows by task name so split/isolated occurrences of the same task
+ *  (which carry different task ids) stay on one row instead of appearing as duplicates. */
+function taskRowKey(o: TaskOccurrence): string {
+  return o.name.trim().toLowerCase();
+}
+
 /** Occurrences grouped by areaId → task rows (managed mode). */
 function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
   const byArea = new Map<string, Map<string, TaskRow>>();
   for (const occurrence of occurrences) {
     const tasks = byArea.get(occurrence.areaId) ?? new Map<string, TaskRow>();
     byArea.set(occurrence.areaId, tasks);
-    tasks.set(occurrence.taskId, occurrenceToRow(tasks.get(occurrence.taskId), occurrence));
+    const key = taskRowKey(occurrence);
+    tasks.set(key, occurrenceToRow(tasks.get(key), occurrence));
   }
   const result = new Map<string, TaskRow[]>();
   for (const [areaId, tasks] of byArea) {
@@ -109,7 +116,8 @@ function buildSiteGroups(occurrences: TaskOccurrence[]): SiteGroup[] {
     floors.set(occurrence.floorName, areas);
     const tasks = areas.get(occurrence.areaName) ?? new Map();
     areas.set(occurrence.areaName, tasks);
-    tasks.set(occurrence.taskId, occurrenceToRow(tasks.get(occurrence.taskId), occurrence));
+    const key = taskRowKey(occurrence);
+    tasks.set(key, occurrenceToRow(tasks.get(key), occurrence));
   }
   return [...sites.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

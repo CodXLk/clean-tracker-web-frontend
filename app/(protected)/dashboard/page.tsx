@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, X } from "lucide-react";
+import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, MapPin, X } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
@@ -100,11 +100,13 @@ function DashboardContent() {
   const taskKpis = useMemo(() => {
     let pending = 0;
     let completed = 0;
+    const siteIds = new Set<string>();
     for (const o of todayTasks) {
       if (o.status === "COMPLETED") completed += 1;
       else pending += 1;
+      if (o.siteId) siteIds.add(o.siteId);
     }
-    return { pending, completed, total: todayTasks.length };
+    return { pending, completed, total: todayTasks.length, sites: siteIds.size };
   }, [todayTasks]);
 
   const openComplaints = useMemo(
@@ -144,6 +146,13 @@ function DashboardContent() {
 
           <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
             <AdminStatCard
+              icon={MapPin}
+              iconBg="bg-primary/10"
+              iconColor="text-primary"
+              value={taskKpis.sites}
+              label="Sites Today"
+            />
+            <AdminStatCard
               icon={ClipboardList}
               iconBg="bg-[#ED5F25]/10"
               iconColor="text-[#ED5F25]"
@@ -156,13 +165,6 @@ function DashboardContent() {
               iconColor="text-success"
               value={taskKpis.completed}
               label="Completed Tasks"
-            />
-            <AdminStatCard
-              icon={ClipboardList}
-              iconBg="bg-grey-100"
-              iconColor="text-grey-700"
-              value={taskKpis.total}
-              label="Total Tasks"
             />
             <AdminStatCard
               icon={AlertTriangle}
@@ -350,13 +352,13 @@ function DashboardContent() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
+                  <KpiCard label="Sites" value={taskKpis.sites} color="teal" />
+                </Link>
+                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
                   <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
                 </Link>
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
                   <KpiCard label="Completed" value={taskKpis.completed} color="green" />
-                </Link>
-                <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
-                  <KpiCard label="Total" value={taskKpis.total} color="grey" />
                 </Link>
               </div>
             </section>
@@ -475,7 +477,7 @@ function DashboardContent() {
 interface KpiCardProps {
   label: string;
   value: string | number;
-  color: "orange" | "green" | "grey";
+  color: "orange" | "green" | "grey" | "teal";
 }
 
 function KpiCard({ label, value, color }: KpiCardProps) {
@@ -483,6 +485,7 @@ function KpiCard({ label, value, color }: KpiCardProps) {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
     green:  "text-success bg-success/10",
     grey:   "text-grey-700 bg-grey-100",
+    teal:   "text-primary bg-primary/10",
   };
 
   return (

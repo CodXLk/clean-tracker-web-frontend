@@ -12,7 +12,7 @@ import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplai
 import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
-import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import { toLocalDateString, assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
@@ -122,17 +122,15 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     [occurrences, areaId],
   );
 
-  // A cleaner must have checked in to this area's site at some point today to complete
-  // tasks here. They don't need to be checked in right now — CHECKED_OUT still counts,
-  // since that status is only ever reached after an earlier check-in the same day; only
-  // never having checked in at all (no status) blocks them.
+  // A cleaner may only complete this area's tasks while actively checked in at its site.
+  // A paused shift (moved off-site) or a checked-out shift makes the tasks view-only until
+  // they check in again — mirrors the server-side guard.
   const areaSiteId = areaTasks[0]?.siteId ?? null;
   const areaSiteName = areaTasks[0]?.siteName ?? "this site";
-  const hasCheckedInToAreaSiteToday =
-    areaSiteId !== null &&
-    sites.some(
-      (s) => s.siteId === areaSiteId && (s.status === "CHECKED_IN" || s.status === "CHECKED_OUT"),
-    );
+  const areaSiteStatus = areaSiteId
+    ? sites.find((s) => s.siteId === areaSiteId)?.status ?? null
+    : null;
+  const isCheckedInToAreaSite = areaSiteStatus === "CHECKED_IN";
 
   // Supervisors review everything in original order. Cleaners see everything too, but
   // completed tasks are pushed to the bottom (stable partition, relative order preserved
@@ -195,9 +193,11 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   }
 
   function handleComplete() {
-    if (!hasCheckedInToAreaSiteToday) {
+    if (!isSupervisor && !isCheckedInToAreaSite) {
       setCompleteBlockedError(
-        `You need to check in to ${areaSiteName} today before you can complete tasks here.`,
+        areaSiteStatus === "PAUSED"
+          ? `Your shift at ${areaSiteName} is paused because you moved away. Check in again to complete tasks here.`
+          : `You need to check in to ${areaSiteName} before you can complete tasks here.`,
       );
       return;
     }
@@ -327,15 +327,16 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               const isSelectable = isSupervisor || !isCompleted;
 
               const cardClassName = cn(
-                "flex w-full items-start gap-3 rounded-2xl p-4 text-left shadow-sm transition-shadow",
+                "flex w-full items-start gap-3 rounded-2xl border-l-4 p-4 text-left shadow-sm transition-shadow",
                 isSelectable && "hover:shadow-md",
-                isCompleted ? "border border-success/20 bg-success/10" : "bg-white",
+                isCompleted ? "border-y border-r border-success/20 bg-success/10" : "bg-white",
                 selected && "ring-2 ring-primary",
-                isRedo && "border-l-4",
               );
-              const cardStyle = isRedo
-                ? { borderLeftColor: task.colorHex ?? "#7C3AED" }
-                : undefined;
+              // Left accent: category colour for normal tasks, the redo colour for redos.
+              const accentColor = isRedo
+                ? task.colorHex ?? "#7C3AED"
+                : assignmentTypeColor(task.assignmentType);
+              const cardStyle = { borderLeftColor: accentColor };
 
               const cardContent = (
                 <>
@@ -357,6 +358,14 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
                         <span className="text-sm font-semibold leading-snug text-[#1A1A1A]">
                           {task.name}
                         </span>
+                        {!isRedo && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: accentColor, backgroundColor: `${accentColor}1A` }}
+                          >
+                            {assignmentTypeLabel(task.assignmentType ?? "OTHER")}
+                          </span>
+                        )}
                         {isRedo && (
                           <span
                             className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
@@ -555,7 +564,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               </div>
             ) : (
               <>
-                {completeBlockedError && !hasCheckedInToAreaSiteToday && (
+                {completeBlockedError && !isCheckedInToAreaSite && (
                   <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                     {completeBlockedError}

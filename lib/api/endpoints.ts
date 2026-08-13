@@ -40,6 +40,9 @@ export const ENDPOINTS = {
     cleanerProfiles: (id: string) => `/sites/${id}/cleaner-profiles`,
     addCleanerProfile: (id: string) => `/sites/${id}/cleaner-profiles/add`,
     removeCleanerProfile: (id: string, profileId: string) => `/sites/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/sites/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/sites/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) => `/sites/${id}/supervisor-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/sites/${id}/cleaning-schedule/check-in`,
   },
@@ -66,6 +69,7 @@ export const ENDPOINTS = {
     mySites:  "/attendance/my-sites",
     checkIn:  "/attendance/check-in",
     checkOut: "/attendance/check-out",
+    heartbeat: "/attendance/heartbeat",
     logs:     "/attendance",
     me:       "/attendance/me",
   },
@@ -84,6 +88,8 @@ export const ENDPOINTS = {
     taskNames:   "/assignments/task-names",
     byId:        (id: string) => `/assignments/${id}`,
     occurrence:  (taskId: string, date: string) => `/assignments/tasks/${taskId}/occurrences/${date}`,
+    occurrenceContent: (taskId: string, date: string) =>
+      `/assignments/tasks/${taskId}/occurrences/${date}/content`,
   },
   assignmentDrafts: {
     list:   "/assignment-drafts",
@@ -199,6 +205,9 @@ export const BACKEND = {
     cleanerProfiles: (id: string) => `/api/v1/sites/${id}/cleaner-profiles`,
     addCleanerProfile: (id: string) => `/api/v1/sites/${id}/cleaner-profiles/add`,
     removeCleanerProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/api/v1/sites/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/api/v1/sites/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/supervisor-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/api/v1/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/api/v1/sites/${id}/cleaning-schedule/check-in`,
   },
@@ -225,6 +234,7 @@ export const BACKEND = {
     mySites:  "/api/v1/attendance/my-sites",
     checkIn:  "/api/v1/attendance/check-in",
     checkOut: "/api/v1/attendance/check-out",
+    heartbeat: "/api/v1/attendance/heartbeat",
     logs:     "/api/v1/attendance",
     me:       "/api/v1/attendance/me",
   },
@@ -243,6 +253,8 @@ export const BACKEND = {
     taskNames:   "/api/v1/assignments/task-names",
     byId:        (id: string) => `/api/v1/assignments/${id}`,
     occurrence:  (taskId: string, date: string) => `/api/v1/assignments/tasks/${taskId}/occurrences/${date}`,
+    occurrenceContent: (taskId: string, date: string) =>
+      `/api/v1/assignments/tasks/${taskId}/occurrences/${date}/content`,
   },
   assignmentDrafts: {
     list:   "/api/v1/assignment-drafts",

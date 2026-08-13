@@ -34,6 +34,18 @@ export function assignmentTypeLabel(type: AssignmentType): string {
   return ASSIGNMENT_TYPE_LABEL[type] ?? "Task";
 }
 
+/** Category accent colours shared with the admin schedule views. */
+const ASSIGNMENT_TYPE_COLOR: Record<AssignmentType, string> = {
+  GENERAL_TASK: "#0B585A",
+  PERIODICAL_TASK: "#A855F7",
+  WORK_ORDER: "#F97316",
+  OTHER: "#3B82F6",
+};
+
+export function assignmentTypeColor(type?: AssignmentType | null): string {
+  return ASSIGNMENT_TYPE_COLOR[type ?? "OTHER"] ?? ASSIGNMENT_TYPE_COLOR.OTHER;
+}
+
 /** Format a "HH:mm[:ss]" wall-clock time into a friendly "h:mm AM/PM" label. */
 export function formatTaskTime(time?: string | null): string | null {
   if (!time) return null;
