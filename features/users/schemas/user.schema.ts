@@ -34,7 +34,9 @@ export const UserSchema = z.object({
   companyId: z.string().uuid().nullable().optional(),
   active: z.boolean(),
   setupComplete: z.boolean(),
+  hasPhoto: z.boolean().optional().default(false),
   createdAt: z.string().nullable().optional(),
+  updatedAt: z.string().nullable().optional(),
 });
 
 export const UserListSchema = z.array(UserSchema);

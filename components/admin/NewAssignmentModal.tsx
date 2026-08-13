@@ -19,6 +19,7 @@ import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useF
 import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
 import { useCreateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
@@ -100,6 +101,7 @@ function buildDefaults({
   return {
     workType: "GENERAL_TASK",
     siteId: defaultSiteId,
+    shiftId: "",
     date: defaultDate ? formatDateForInput(defaultDate) : "",
     startTime: defaultTime,
     poId: "",
@@ -873,6 +875,19 @@ export function NewAssignmentModal({
   const profilesQuery = useSiteCleanerProfiles(siteId || undefined);
   // Only supervisors assigned to the selected site can be picked.
   const supervisorsQuery = useSiteSupervisors(siteId || undefined);
+  // Optional work shifts for the selected site.
+  const shiftsQuery = useSiteShifts(siteId || undefined);
+  const shiftOptions: SelectOption[] = useMemo(
+    () => [
+      { value: "", label: "Full day (no shift)" },
+      ...(shiftsQuery.data ?? []).map((s) => ({
+        value: s.id,
+        label: s.name,
+        sublabel: `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}${s.crossesMidnight ? " (next day)" : ""}${s.isDefault ? " · default" : ""}`,
+      })),
+    ],
+    [shiftsQuery.data],
+  );
 
   const selectedSite = useMemo(
     () => (sitesQuery.data ?? []).find((s) => s.id === siteId),
@@ -1144,6 +1159,7 @@ export function NewAssignmentModal({
                         setValue("cleanerIds", []);
                         setValue("profileIds", []);
                         setValue("supervisorIds", []);
+                        setValue("shiftId", "");
                         didDefaultSupervisors.current = undefined;
                         didDefaultProfiles.current = undefined;
                         setValue("groups", [emptyGroup()], { shouldValidate: false });
@@ -1155,6 +1171,25 @@ export function NewAssignmentModal({
                   )}
                 />
               </div>
+
+              {/* Optional shift — only when the selected site defines shifts. */}
+              {siteId && (shiftsQuery.data?.length ?? 0) > 0 && (
+                <div className="grid grid-cols-1 gap-4">
+                  <Controller
+                    name="shiftId"
+                    control={control}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Shift"
+                        options={shiftOptions}
+                        value={field.value ?? ""}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        placeholder="Full day (no shift)"
+                      />
+                    )}
+                  />
+                </div>
+              )}
 
               {/* Row 2: Date + Expected Start Time */}
               <div className="mt-4 grid grid-cols-2 gap-4">

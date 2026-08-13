@@ -74,6 +74,10 @@ export const TaskOccurrenceSchema = z.object({
   assignmentType: WorkTypeSchema,
   poId: z.string().nullable().optional(),
   templateName: z.string().nullable().optional(),
+  shiftId: z.string().uuid().nullable().optional(),
+  shiftName: z.string().nullable().optional(),
+  shiftStartTime: z.string().nullable().optional(),
+  shiftEndTime: z.string().nullable().optional(),
   startTime: z.string(), // HH:mm[:ss]
   endTime: z.string(),
   durationMinutes: z.number(),
@@ -109,6 +113,10 @@ export const AssignmentSchema = z.object({
   id: z.string().uuid(),
   siteId: z.string().uuid(),
   siteName: z.string(),
+  shiftId: z.string().uuid().nullable().optional(),
+  shiftName: z.string().nullable().optional(),
+  shiftStartTime: z.string().nullable().optional(),
+  shiftEndTime: z.string().nullable().optional(),
   assignmentType: WorkTypeSchema,
   poId: z.string().nullable().optional(),
   startDate: z.string(),
@@ -210,6 +218,8 @@ export const AssignmentFormSchema = z
   .object({
     workType: WorkTypeSchema,
     siteId: z.string().uuid("Please select a site"),
+    /** Optional work shift; empty means a full-day window. */
+    shiftId: z.string().uuid().optional().or(z.literal("")),
     date: z.string().min(1, "Date is required"),
     startTime: z.string().min(1, "Expected start time is required"),
     /** Purchase-order reference — required for Work Order assignments. */
@@ -362,6 +372,7 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
 
   const payload: Record<string, unknown> = {
     siteId: input.siteId,
+    ...(input.shiftId ? { shiftId: input.shiftId } : {}),
     assignmentType: input.workType,
     ...(input.workType === "WORK_ORDER" && input.poId?.trim()
       ? { poId: input.poId.trim() }

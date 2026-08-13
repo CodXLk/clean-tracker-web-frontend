@@ -24,6 +24,7 @@ import { NotificationsModal } from "@/components/modals/NotificationsModal";
 import { SignOutConfirmModal } from "@/components/modals/SignOutConfirmModal";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useMe } from "@/features/auth/hooks/useMe";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMyAttendanceHistory } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
@@ -140,7 +141,18 @@ export default function ProfilePage() {
                   Id · {me.data ? me.data.id.slice(0, 8).toUpperCase() : "…"}
                 </span>
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                  {me.data ? (
+                    <UserAvatar
+                      userId={me.data.id}
+                      hasPhoto={me.data.hasPhoto}
+                      version={me.data.updatedAt}
+                      firstName={me.data.firstName}
+                      lastName={me.data.lastName}
+                      size={64}
+                    />
+                  ) : (
+                    <div className="h-16 w-16 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                  )}
                   <div>
                     <p className="text-xl font-bold text-on-surface">
                       {me.data ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ") : "…"}
@@ -226,7 +238,18 @@ export default function ProfilePage() {
               </span>
 
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                {me.data ? (
+                  <UserAvatar
+                    userId={me.data.id}
+                    hasPhoto={me.data.hasPhoto}
+                    version={me.data.updatedAt}
+                    firstName={me.data.firstName}
+                    lastName={me.data.lastName}
+                    size={64}
+                  />
+                ) : (
+                  <div className="h-16 w-16 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                )}
                 <div>
                   <p className="text-xl font-bold text-on-surface">
                     {me.data ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ") : "…"}

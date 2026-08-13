@@ -275,6 +275,14 @@ function CalendarTaskRow({ task }: { task: TaskOccurrence }) {
           >
             {assignmentTypeLabel(task.assignmentType ?? "OTHER")}
           </span>
+          {task.shiftName && (
+            <span className="rounded-full bg-grey-100 px-2 py-0.5 text-[10px] font-medium text-grey-600">
+              {task.shiftName}
+              {task.shiftStartTime && task.shiftEndTime
+                ? ` · ${task.shiftStartTime.slice(0, 5)}–${task.shiftEndTime.slice(0, 5)}`
+                : ""}
+            </span>
+          )}
         </div>
         <span className="text-xs text-grey-500">{timeLabel}</span>
         {task.description && <span className="text-xs text-grey-600">{task.description}</span>}

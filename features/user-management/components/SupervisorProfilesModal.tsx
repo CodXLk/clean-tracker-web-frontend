@@ -11,6 +11,7 @@ import {
   useAssignSupervisorProfiles,
   useAddSupervisorProfile,
   useRemoveSupervisorProfile,
+  useEligibleSiteSupervisors,
   type SupervisorProfileAssignmentInput,
 } from "@/features/user-management/hooks/useSiteAssignments";
 import { useUsers } from "@/features/users/hooks/useUsers";
@@ -37,7 +38,12 @@ interface SupervisorProfilesModalProps {
 
 export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfilesModalProps) {
   const profilesQuery = useSiteSupervisorProfiles(open ? site?.id : undefined);
+  const requiresCerts = (site?.requiredCertificates?.length ?? 0) > 0;
   const usersQuery = useUsers();
+  const eligibleQuery = useEligibleSiteSupervisors(
+    open && requiresCerts ? site?.id : undefined,
+    requiresCerts,
+  );
   const assign = useAssignSupervisorProfiles();
   const addProfile = useAddSupervisorProfile();
   const removeProfile = useRemoveSupervisorProfile();
@@ -72,19 +78,19 @@ export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfi
     removeProfile.reset();
   }
 
-  const supervisorOptions: SelectOption[] = useMemo(
-    () => [
+  const supervisorOptions: SelectOption[] = useMemo(() => {
+    const people = requiresCerts
+      ? (eligibleQuery.data ?? [])
+      : (usersQuery.data ?? []).filter((u) => u.role === "SUPERVISOR");
+    return [
       { value: UNASSIGNED, label: "— Unassigned —" },
-      ...(usersQuery.data ?? [])
-        .filter((u) => u.role === "SUPERVISOR")
-        .map((u) => ({
-          value: u.id,
-          label: personName(u.firstName, u.lastName),
-          sublabel: u.email ?? undefined,
-        })),
-    ],
-    [usersQuery.data],
-  );
+      ...people.map((u) => ({
+        value: u.id,
+        label: personName(u.firstName, u.lastName),
+        sublabel: u.email ?? undefined,
+      })),
+    ];
+  }, [requiresCerts, eligibleQuery.data, usersQuery.data]);
 
   const duplicateSupervisor = useMemo(() => {
     const counts = new Map<string, number>();

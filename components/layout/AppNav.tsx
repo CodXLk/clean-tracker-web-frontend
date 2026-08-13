@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useUIStore } from "@/store/ui.store";
@@ -352,12 +353,23 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
       <div className="mt-auto border-t border-white/10 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25] text-sm font-semibold text-white"
-            aria-hidden="true"
-          >
-            {initial}
-          </div>
+          {me.data ? (
+            <UserAvatar
+              userId={me.data.id}
+              hasPhoto={me.data.hasPhoto}
+              version={me.data.updatedAt}
+              firstName={me.data.firstName}
+              lastName={me.data.lastName}
+              size={32}
+            />
+          ) : (
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25] text-sm font-semibold text-white"
+              aria-hidden="true"
+            >
+              {initial}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-white">{fullName}</p>
             <p className="text-xs text-white/50">{me.data ? ROLE_LABELS[me.data.role] : ""}</p>

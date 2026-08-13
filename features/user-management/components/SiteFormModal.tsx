@@ -25,6 +25,10 @@ import {
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { useCreateSite, useUpdateSite } from "@/features/user-management/hooks/useSites";
+import {
+  CERTIFICATE_TYPES,
+  CERTIFICATE_TYPE_LABELS,
+} from "@/features/users/schemas/document.schema";
 import { isNfcSupported, readNfcTag, NfcError } from "@/lib/nfc";
 
 interface SiteFormModalProps {
@@ -52,6 +56,7 @@ const EMPTY: SiteFormInput = {
   workingDays: [],
   generalTaskStartTime: "",
   generalTaskEndTime: "",
+  requiredCertificates: [],
   cleaningTemplates: [],
 };
 
@@ -125,6 +130,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             workingDays: site.workingDays ?? [],
             generalTaskStartTime: (site.generalTaskStartTime ?? "").slice(0, 5),
             generalTaskEndTime: (site.generalTaskEndTime ?? "").slice(0, 5),
+            requiredCertificates: site.requiredCertificates ?? [],
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
               profileIndexes: t.profileIndexes ?? [],
@@ -405,6 +411,47 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           <p className="text-xs text-grey-500">
             General assignments are scheduled only on these days, until the site end date.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-on-surface">Required certificates</span>
+          <p className="text-xs text-grey-500">
+            Only cleaners and supervisors holding a verified, non-expired copy of every selected
+            certificate can be assigned to this site.
+          </p>
+          <Controller
+            control={control}
+            name="requiredCertificates"
+            render={({ field }) => {
+              const selected = new Set(field.value ?? []);
+              return (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {CERTIFICATE_TYPES.map((type) => {
+                    const checked = selected.has(type);
+                    return (
+                      <label
+                        key={type}
+                        className="flex items-center gap-2 rounded-lg border border-grey-200 px-3 py-2 text-sm text-on-surface hover:bg-grey-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-grey-300"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(selected);
+                            if (e.target.checked) next.add(type);
+                            else next.delete(type);
+                            field.onChange([...next]);
+                          }}
+                        />
+                        <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              );
+            }}
+          />
         </div>
 
         <div className="flex flex-col gap-3">

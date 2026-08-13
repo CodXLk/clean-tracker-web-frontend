@@ -15,6 +15,14 @@ export const ENDPOINTS = {
     create:      "/users",
     byId:        (id: string) => `/users/${id}`,
     resendSetup: (id: string) => `/users/${id}/resend-setup`,
+    photo:       (id: string) => `/users/${id}/photo`,
+    myPhoto:     "/users/me/photo",
+    documents:   (id: string) => `/users/${id}/documents`,
+  },
+  documents: {
+    byId:   (id: string) => `/documents/${id}`,
+    verify: (id: string) => `/documents/${id}/verify`,
+    file:   (id: string) => `/documents/${id}/file`,
   },
   companies: {
     list:   "/companies",
@@ -45,6 +53,13 @@ export const ENDPOINTS = {
     removeSupervisorProfile: (id: string, profileId: string) => `/sites/${id}/supervisor-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/sites/${id}/cleaning-schedule/check-in`,
+    eligibleCleaners: (id: string) => `/sites/${id}/eligible-cleaners`,
+    eligibleSupervisors: (id: string) => `/sites/${id}/eligible-supervisors`,
+    shifts: (id: string) => `/sites/${id}/shifts`,
+  },
+  shifts: {
+    byId:    (id: string) => `/shifts/${id}`,
+    default: (id: string) => `/shifts/${id}/default`,
   },
   outsourceProjects: {
     list:   "/outsource-projects",
@@ -64,6 +79,8 @@ export const ENDPOINTS = {
   cleaners: {
     list: "/cleaners",
     byId: (id: string) => `/cleaners/${id}`,
+    detail: (id: string) => `/cleaners/${id}/detail`,
+    detailByUser: (userId: string) => `/cleaners/by-user/${userId}/detail`,
   },
   attendance: {
     mySites:  "/attendance/my-sites",
@@ -179,6 +196,14 @@ export const BACKEND = {
     create:      "/api/v1/users",
     byId:        (id: string) => `/api/v1/users/${id}`,
     resendSetup: (id: string) => `/api/v1/users/${id}/resend-setup`,
+    photo:       (id: string) => `/api/v1/users/${id}/photo`,
+    myPhoto:     "/api/v1/users/me/photo",
+    documents:   (id: string) => `/api/v1/users/${id}/documents`,
+  },
+  documents: {
+    byId:   (id: string) => `/api/v1/documents/${id}`,
+    verify: (id: string) => `/api/v1/documents/${id}/verify`,
+    file:   (id: string) => `/api/v1/documents/${id}/file`,
   },
   companies: {
     list:   "/api/v1/companies",
@@ -210,6 +235,13 @@ export const BACKEND = {
     removeSupervisorProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/supervisor-profiles/${profileId}`,
     cleaningTemplates: (id: string) => `/api/v1/sites/${id}/cleaning-templates`,
     cleaningCheckIn: (id: string) => `/api/v1/sites/${id}/cleaning-schedule/check-in`,
+    eligibleCleaners: (id: string) => `/api/v1/sites/${id}/eligible-cleaners`,
+    eligibleSupervisors: (id: string) => `/api/v1/sites/${id}/eligible-supervisors`,
+    shifts: (id: string) => `/api/v1/sites/${id}/shifts`,
+  },
+  shifts: {
+    byId:    (id: string) => `/api/v1/shifts/${id}`,
+    default: (id: string) => `/api/v1/shifts/${id}/default`,
   },
   outsourceProjects: {
     list:   "/api/v1/outsource-projects",
@@ -229,6 +261,8 @@ export const BACKEND = {
   cleaners: {
     list: "/api/v1/cleaners",
     byId: (id: string) => `/api/v1/cleaners/${id}`,
+    detail: (id: string) => `/api/v1/cleaners/${id}/detail`,
+    detailByUser: (userId: string) => `/api/v1/cleaners/by-user/${userId}/detail`,
   },
   attendance: {
     mySites:  "/api/v1/attendance/my-sites",
