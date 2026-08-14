@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bell, Calendar, Clock, ClipboardList, AlertTriangle, MapPin, X } from "lucide-react";
+import { Bell, Calendar, Clock, AlertTriangle, MapPin, CheckCircle2, X } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
@@ -28,16 +28,22 @@ interface UpcomingShift {
   date: string;
   site: string;
   timeRange: string;
+  locations: string[];
 }
 
 // Group future task occurrences into one "shift" per site per day.
 function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
-  const byKey = new Map<string, { date: string; site: string; start?: string; end?: string }>();
+  const byKey = new Map<
+    string,
+    { date: string; site: string; start?: string; end?: string; locations: Set<string> }
+  >();
   for (const o of occurrences) {
     const key = `${o.date}__${o.siteId}`;
-    const group = byKey.get(key) ?? { date: o.date, site: o.siteName };
+    const group = byKey.get(key) ?? { date: o.date, site: o.siteName, locations: new Set<string>() };
     if (o.startTime && (!group.start || o.startTime < group.start)) group.start = o.startTime;
     if (o.endTime && (!group.end || o.endTime > group.end)) group.end = o.endTime;
+    const loc = [o.floorName, o.areaName].filter(Boolean).join(" · ");
+    if (loc) group.locations.add(loc);
     byKey.set(key, group);
   }
 
@@ -53,7 +59,7 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
       const start = formatTaskTime(g.start);
       const end = formatTaskTime(g.end);
       const timeRange = start && end ? `${start} – ${end}` : start ?? "All day";
-      return { id: key, date: label, site: g.site, timeRange };
+      return { id: key, date: label, site: g.site, timeRange, locations: Array.from(g.locations) };
     });
 }
 
@@ -97,23 +103,24 @@ function DashboardContent() {
   const greeting = greetingFor(new Date().getHours());
   const firstName = me?.firstName?.trim() || "there";
 
-  const taskKpis = useMemo(() => {
-    let pending = 0;
-    let completed = 0;
-    const siteIds = new Set<string>();
+  const siteKpis = useMemo(() => {
+    // Roll today's tasks up per site: a site is "completed" only when all its tasks are done.
+    const map = new Map<string, { total: number; done: number }>();
     for (const o of todayTasks) {
-      if (o.status === "COMPLETED") completed += 1;
-      else pending += 1;
-      if (o.siteId) siteIds.add(o.siteId);
+      if (!o.siteId) continue;
+      const g = map.get(o.siteId) ?? { total: 0, done: 0 };
+      g.total += 1;
+      if (o.status === "COMPLETED" || o.status === "CANCELLED") g.done += 1;
+      map.set(o.siteId, g);
     }
-    return { pending, completed, total: todayTasks.length, sites: siteIds.size };
+    let completed = 0;
+    for (const g of map.values()) if (g.total > 0 && g.done === g.total) completed += 1;
+    const total = map.size;
+    return { total, completed, pending: total - completed };
   }, [todayTasks]);
 
   const openComplaints = useMemo(
-    () =>
-      (complaintsData?.complaints ?? []).filter(
-        (c) => c.status === "open" || c.status === "in_progress",
-      ),
+    () => (complaintsData?.complaints ?? []).filter((c) => c.status === "open"),
     [complaintsData],
   );
 
@@ -149,22 +156,22 @@ function DashboardContent() {
               icon={MapPin}
               iconBg="bg-primary/10"
               iconColor="text-primary"
-              value={taskKpis.sites}
-              label="Sites Today"
+              value={siteKpis.total}
+              label="Total Sites"
             />
             <AdminStatCard
-              icon={ClipboardList}
+              icon={Clock}
               iconBg="bg-[#ED5F25]/10"
               iconColor="text-[#ED5F25]"
-              value={taskKpis.pending}
-              label="Pending Tasks"
+              value={siteKpis.pending}
+              label="Pending Sites"
             />
             <AdminStatCard
-              icon={ClipboardList}
+              icon={CheckCircle2}
               iconBg="bg-success/10"
               iconColor="text-success"
-              value={taskKpis.completed}
-              label="Completed Tasks"
+              value={siteKpis.completed}
+              label="Completed Sites"
             />
             <AdminStatCard
               icon={AlertTriangle}
@@ -236,12 +243,18 @@ function DashboardContent() {
                   </p>
                 ) : (
                   upcomingShifts.map((shift) => (
-                    <div key={shift.id} className="flex items-center justify-between rounded-xl bg-grey-50 px-4 py-3">
-                      <div>
+                    <div key={shift.id} className="flex items-start justify-between gap-3 rounded-xl bg-grey-50 px-4 py-3">
+                      <div className="min-w-0">
                         <p className="text-xs font-semibold text-on-surface">{shift.date}</p>
                         <p className="text-xs text-grey-500">{shift.site}</p>
+                        {shift.locations.length > 0 && (
+                          <p className="mt-0.5 truncate text-[11px] text-grey-500">
+                            {shift.locations.slice(0, 3).join(", ")}
+                            {shift.locations.length > 3 ? ` +${shift.locations.length - 3}` : ""}
+                          </p>
+                        )}
                       </div>
-                      <span className="text-xs font-semibold text-primary">{shift.timeRange}</span>
+                      <span className="shrink-0 text-xs font-semibold text-primary">{shift.timeRange}</span>
                     </div>
                   ))
                 )}
@@ -331,34 +344,34 @@ function DashboardContent() {
               <CheckInPanel sites={sites} isLoading={isLoading} />
             </section>
 
-            {/* Today's Tasks KPI */}
+            {/* Today's Sites KPI */}
             <section
               aria-labelledby="tasks-heading-mobile"
               className="rounded-3xl bg-white p-5 shadow-sm"
             >
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <ClipboardList size={18} className="text-primary" />
+                  <MapPin size={18} className="text-primary" />
                   <h2
                     id="tasks-heading-mobile"
                     className="text-sm font-semibold text-on-surface"
                   >
-                    Today&apos;s Tasks
+                    Today&apos;s Sites
                   </h2>
                 </div>
                 <span className="rounded-full bg-[#ED5F25]/20 px-3 py-0.5 text-xs font-semibold text-[#ED5F25]">
-                  {taskKpis.total} {taskKpis.total === 1 ? "Task" : "Tasks"}
+                  {siteKpis.total} {siteKpis.total === 1 ? "Site" : "Sites"}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
-                  <KpiCard label="Sites" value={taskKpis.sites} color="teal" />
+                  <KpiCard label="Total" value={siteKpis.total} color="teal" />
                 </Link>
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
-                  <KpiCard label="Pending" value={taskKpis.pending} color="orange" />
+                  <KpiCard label="Pending" value={siteKpis.pending} color="orange" />
                 </Link>
                 <Link href="/dashboard/tasks" className="block transition-opacity hover:opacity-80">
-                  <KpiCard label="Completed" value={taskKpis.completed} color="green" />
+                  <KpiCard label="Completed" value={siteKpis.completed} color="green" />
                 </Link>
               </div>
             </section>
@@ -453,13 +466,19 @@ function DashboardContent() {
                   upcomingShifts.map((shift) => (
                     <div
                       key={shift.id}
-                      className="flex items-center justify-between rounded-2xl bg-white/40 px-4 py-3"
+                      className="flex items-start justify-between gap-3 rounded-2xl bg-white/40 px-4 py-3"
                     >
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs font-semibold text-on-surface">{shift.date}</p>
                         <p className="text-xs text-grey-500">{shift.site}</p>
+                        {shift.locations.length > 0 && (
+                          <p className="mt-0.5 truncate text-[11px] text-grey-500">
+                            {shift.locations.slice(0, 3).join(", ")}
+                            {shift.locations.length > 3 ? ` +${shift.locations.length - 3}` : ""}
+                          </p>
+                        )}
                       </div>
-                      <span className="text-xs font-semibold text-primary">{shift.timeRange}</span>
+                      <span className="shrink-0 text-xs font-semibold text-primary">{shift.timeRange}</span>
                     </div>
                   ))
                 )}

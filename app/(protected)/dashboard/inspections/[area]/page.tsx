@@ -7,6 +7,7 @@ import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
 import {
   useMyTasks,
   useCompleteTasks,
@@ -14,7 +15,6 @@ import {
   useSubmitInspection,
 } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
-import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
@@ -69,7 +69,6 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const completeForInspection = useCompleteForInspection();
   const submitInspection = useSubmitInspection();
   const createComplaint = useCreateComplaint();
-  const complaintWithRedo = useComplaintWithRedo();
 
   const role = useMe().data?.role;
   // Management (SUPER_ADMIN/COMPANY_ADMIN/CLIENT_SERVICE_MANAGER) gets the same
@@ -148,6 +147,12 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     sites.some(
       (s) => s.siteId === areaSiteId && (s.status === "CHECKED_IN" || s.status === "CHECKED_OUT"),
     );
+
+  // Display gate: hide all tasks unless the supervisor is currently checked in (a checkout
+  // hides them again). Management/admins are exempt since they don't check in.
+  const isCheckedInToAreaSiteNow =
+    areaSiteId !== null && sites.some((s) => s.siteId === areaSiteId && s.status === "CHECKED_IN");
+  const mustCheckIn = !isAdminRole(role) && !isCheckedInToAreaSiteNow;
 
   // Three-tier ordering (stable within each group): not-yet-completed first, then
   // completed-but-not-yet-checked, then checked (inspected) last.
@@ -316,30 +321,9 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     );
   }
 
-  function handleComplaintWithRedo() {
-    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
-    if (selected.length === 0) return;
-    complaintWithRedo.mutate(
-      {
-        input: {
-          occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
-          description: note.trim() || undefined,
-        },
-        photos,
-      },
-      {
-        onSuccess: (complaint) => {
-          closeInspectionForComplaint(selected, complaint.id);
-          resetActionState();
-        },
-      },
-    );
-  }
-
   const supervisorPending =
     submitInspection.isPending ||
     createComplaint.isPending ||
-    complaintWithRedo.isPending ||
     completeForInspection.isPending;
   const hasSelection = selectedIds.size > 0;
 
@@ -394,7 +378,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
           >
             <CalendarDays size={18} strokeWidth={2} />
           </button>
-          {selectableIds.length > 0 && (
+          {selectableIds.length > 0 && !mustCheckIn && (
             <button
               onClick={toggleSelectAll}
               aria-pressed={allSelected}
@@ -414,6 +398,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
           <div className="flex justify-center py-16">
             <LoadingSpinner />
           </div>
+        ) : mustCheckIn ? (
+          <CheckInRequiredBanner action="inspect" />
         ) : tasks.length === 0 ? (
           <p className="py-16 text-center text-sm text-grey-500">
             No tasks in this area.
@@ -647,8 +633,15 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               <div className="mb-3 flex flex-wrap gap-2">
                 {previews.map((url, index) => (
                   <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFullscreenPhotoUrl(url)}
+                      aria-label="View photo full screen"
+                      className="block h-full w-full"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </button>
                     <button
                       onClick={() => removePhoto(index)}
                       aria-label="Remove photo"
@@ -700,15 +693,6 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
 
                   {rating === null ? (
                     <>
-                      <button
-                        onClick={handleComplaintWithRedo}
-                        disabled={supervisorPending}
-                        className="w-full rounded-xl bg-[#7C3AED] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                      >
-                        {complaintWithRedo.isPending
-                          ? "Scheduling…"
-                          : "Complaint + Redo (next shift)"}
-                      </button>
                       <div className="flex gap-2">
                         <button
                           onClick={handleComplaint}

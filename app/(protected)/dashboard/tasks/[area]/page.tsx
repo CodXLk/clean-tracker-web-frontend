@@ -7,13 +7,15 @@ import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
+import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
-import { useComplaintWithRedo } from "@/features/complaints/hooks/useComplaintWithRedo";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { toLocalDateString, assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
+import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
 
 const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
@@ -59,15 +61,16 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const completeTasks = useCompleteTasks();
   const reviewComplete = useReviewComplete();
   const createComplaint = useCreateComplaint();
-  const complaintWithRedo = useComplaintWithRedo();
 
   const role = useMe().data?.role;
   const isSupervisor = role === "SUPERVISOR";
+  const isAdmin = isAdminRole(role);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -131,6 +134,9 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     ? sites.find((s) => s.siteId === areaSiteId)?.status ?? null
     : null;
   const isCheckedInToAreaSite = areaSiteStatus === "CHECKED_IN";
+
+  // Until the cleaner/supervisor is checked in to this area's site, no tasks are shown.
+  const mustCheckIn = !isAdmin && !isCheckedInToAreaSite;
 
   // Supervisors review everything in original order. Cleaners see everything too, but
   // completed tasks are pushed to the bottom (stable partition, relative order preserved
@@ -242,23 +248,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     );
   }
 
-  function handleComplaintWithRedo() {
-    const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
-    if (selected.length === 0) return;
-    complaintWithRedo.mutate(
-      {
-        input: {
-          occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
-          description: note.trim() || undefined,
-        },
-        photos,
-      },
-      { onSuccess: resetActionState },
-    );
-  }
-
   const supervisorPending =
-    reviewComplete.isPending || createComplaint.isPending || complaintWithRedo.isPending;
+    reviewComplete.isPending || createComplaint.isPending;
   const hasSelection = selectedIds.size > 0;
 
   return (
@@ -291,7 +282,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           >
             <CalendarDays size={18} strokeWidth={2} />
           </button>
-          {selectableIds.length > 0 && (
+          {selectableIds.length > 0 && !mustCheckIn && (
             <button
               onClick={toggleSelectAll}
               aria-pressed={allSelected}
@@ -311,6 +302,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           <div className="flex justify-center py-16">
             <LoadingSpinner />
           </div>
+        ) : mustCheckIn ? (
+          <CheckInRequiredBanner />
         ) : tasks.length === 0 ? (
           <p className="py-16 text-center text-sm text-grey-500">
             No tasks in this area.
@@ -518,8 +511,15 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               <div className="mb-3 flex flex-wrap gap-2">
                 {previews.map((url, index) => (
                   <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setLightboxUrl(url)}
+                      aria-label="View photo full screen"
+                      className="block h-full w-full"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </button>
                     <button
                       onClick={() => removePhoto(index)}
                       aria-label="Remove photo"
@@ -543,32 +543,21 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
             />
 
             {isSupervisor ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
                 <button
-                  onClick={handleComplaintWithRedo}
+                  onClick={handleComplaint}
                   disabled={supervisorPending}
-                  className="w-full rounded-xl bg-[#7C3AED] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
-                  {complaintWithRedo.isPending
-                    ? "Scheduling…"
-                    : "Complaint + Redo (next shift)"}
+                  {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleComplaint}
-                    disabled={supervisorPending}
-                    className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                  >
-                    {createComplaint.isPending ? "Submitting…" : "Mark as Complaint"}
-                  </button>
-                  <button
-                    onClick={handleReviewComplete}
-                    disabled={supervisorPending}
-                    className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                  >
-                    {reviewComplete.isPending ? "Saving…" : "Mark as Completed"}
-                  </button>
-                </div>
+                <button
+                  onClick={handleReviewComplete}
+                  disabled={supervisorPending}
+                  className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {reviewComplete.isPending ? "Saving…" : "Mark as Completed"}
+                </button>
               </div>
             ) : (
               <>
@@ -593,6 +582,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
 
       {/* Calendar Modal */}
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
+
+      <ImageLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   );
 }

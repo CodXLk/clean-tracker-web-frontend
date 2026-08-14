@@ -44,7 +44,24 @@ export async function resolveComplaint(id: string): Promise<Complaint> {
   return ComplaintSchema.parse(data);
 }
 
-/** Schedule redo task(s) for a complaint into the site's next working shift. */
-export async function addComplaintRedo(id: string): Promise<void> {
-  await clientApi.post(ENDPOINTS.complaints.redo(id));
+/** Cleaner completes a complaint (redo) with an optional note and photos → status CLOSED. */
+export async function completeComplaint(
+  id: string,
+  note: string | undefined,
+  photos: File[] = [],
+): Promise<Complaint> {
+  const formData = new FormData();
+  if (note?.trim()) {
+    formData.append(
+      "data",
+      new Blob([JSON.stringify({ note: note.trim() })], { type: "application/json" }),
+    );
+  }
+  for (const photo of photos) {
+    formData.append("photos", photo);
+  }
+  const { data } = await clientApi.post(ENDPOINTS.complaints.complete(id), formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return ComplaintSchema.parse(data);
 }

@@ -7,14 +7,14 @@ const STATUS_LABEL: Record<Complaint["status"], string> = {
   open:        "Open",
   in_progress: "In Progress",
   resolved:    "Resolved",
-  closed:      "Closed",
+  closed:      "Awaiting review",
 };
 
 const STATUS_CLASSES: Record<Complaint["status"], string> = {
   open:        "bg-[#ED5F25]/10 text-[#ED5F25]",
   in_progress: "bg-primary/10 text-primary",
   resolved:    "bg-success/10 text-success",
-  closed:      "bg-grey-100 text-grey-700",
+  closed:      "bg-primary/10 text-primary",
 };
 
 interface ComplaintRowProps {
@@ -23,13 +23,13 @@ interface ComplaintRowProps {
 }
 
 export function ComplaintRow({ complaint, onClick }: ComplaintRowProps) {
-  const isClosed = complaint.status === "closed";
+  const isResolved = complaint.status === "resolved";
 
   return (
     <div
       className={cn(
         "flex w-full flex-col gap-3 rounded-2xl bg-surface p-5 shadow-sm sm:w-[calc(50%-0.5rem)]",
-        isClosed && "opacity-60",
+        isResolved && "opacity-60",
       )}
     >
       <div className="flex items-start justify-between gap-3">

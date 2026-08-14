@@ -176,8 +176,8 @@ export const ENDPOINTS = {
   complaints: {
     list:    "/complaints",
     create:  "/complaints",
+    complete: (id: string) => `/complaints/${id}/complete`,
     resolve: (id: string) => `/complaints/${id}/resolve`,
-    redo:    (id: string) => `/complaints/${id}/redo`,
     photo:   (id: string) => `/complaints/photos/${id}`,
   },
   contact: {
@@ -357,8 +357,8 @@ export const BACKEND = {
   complaints: {
     list:    "/api/v1/complaints",
     create:  "/api/v1/complaints",
+    complete: (id: string) => `/api/v1/complaints/${id}/complete`,
     resolve: (id: string) => `/api/v1/complaints/${id}/resolve`,
-    redo:    (id: string) => `/api/v1/complaints/${id}/redo`,
     photo:   (id: string) => `/api/v1/complaints/photos/${id}`,
   },
 } as const;
