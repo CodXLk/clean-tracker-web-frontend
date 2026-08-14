@@ -17,17 +17,19 @@ import { ComplaintRow } from "@/features/complaints/components/ComplaintRow";
 import { AdminComplaintDetailModal } from "@/features/complaints/components/AdminComplaintDetailModal";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useResolveComplaint } from "@/features/complaints/hooks/useResolveComplaint";
+import { useCompleteComplaint } from "@/features/complaints/hooks/useCompleteComplaint";
+import { useMe } from "@/features/auth/hooks/useMe";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import type { Complaint } from "@/features/complaints/types";
 import { cn } from "@/lib/utils/cn";
 
-type FilterOption = "All" | "Open" | "In progress" | "Resolved";
+type FilterOption = "All" | "Open" | "Awaiting review" | "Resolved";
 
-const FILTER_OPTIONS: FilterOption[] = ["All", "Open", "In progress", "Resolved"];
+const FILTER_OPTIONS: FilterOption[] = ["All", "Open", "Awaiting review", "Resolved"];
 
 const FILTER_STATUS_MAP: Record<Exclude<FilterOption, "All">, Complaint["status"]> = {
   Open: "open",
-  "In progress": "in_progress",
+  "Awaiting review": "closed",
   Resolved: "resolved",
 };
 
@@ -35,25 +37,25 @@ const STATUS_LABEL_MAP: Record<Complaint["status"], string> = {
   open: "Open",
   in_progress: "In Progress",
   resolved: "Resolved",
-  closed: "Closed",
+  closed: "Awaiting review",
 };
 
 const STATUS_COLOR_MAP: Record<Complaint["status"], string> = {
   open: "bg-[#ED5F25]/20 text-[#ED5F25]",
   in_progress: "bg-primary/20 text-primary",
   resolved: "bg-success/20 text-success",
-  closed: "bg-grey-300 text-grey-700",
+  closed: "bg-primary/20 text-primary",
 };
 
 function getStatusIcon(status: Complaint["status"]) {
   if (status === "resolved") return <CheckCircle size={18} className="text-success" />;
-  if (status === "in_progress") return <Clock size={18} className="text-primary" />;
+  if (status === "closed") return <Clock size={18} className="text-primary" />;
   return <AlertCircle size={18} className="text-[#ED5F25]" />;
 }
 
 function getIconBg(status: Complaint["status"]): string {
   if (status === "resolved") return "bg-success/10";
-  if (status === "in_progress") return "bg-primary/10";
+  if (status === "closed") return "bg-primary/10";
   return "bg-[#ED5F25]/10";
 }
 
@@ -65,6 +67,8 @@ export default function ComplaintsPage() {
   const useDrawerNav = useIsDrawerNav();
   const { data, isLoading, isError } = useComplaints();
   const resolveComplaintMutation = useResolveComplaint();
+  const completeComplaintMutation = useCompleteComplaint();
+  const role = useMe().data?.role;
   const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId, isAdmin } = useSiteScope();
 
   const [filter, setFilter] = useState<FilterOption>("All");
@@ -94,24 +98,28 @@ export default function ComplaintsPage() {
 
   const kpis = useMemo(() => {
     let open = 0;
-    let inProgress = 0;
+    let awaitingReview = 0;
     let resolved = 0;
     for (const c of siteScoped) {
       if (c.status === "open") open += 1;
-      else if (c.status === "in_progress") inProgress += 1;
+      else if (c.status === "closed") awaitingReview += 1;
       else if (c.status === "resolved") resolved += 1;
     }
-    return { open, inProgress, resolved, total: siteScoped.length };
+    return { open, awaitingReview, resolved, total: siteScoped.length };
   }, [siteScoped]);
 
   const mobileKpiCards = [
     { label: "Total", value: pad(kpis.total), color: "grey" as const },
-    { label: "Pending", value: pad(kpis.open + kpis.inProgress), color: "orange" as const },
+    { label: "To do", value: pad(kpis.open + kpis.awaitingReview), color: "orange" as const },
     { label: "Resolved", value: pad(kpis.resolved), color: "green" as const },
   ];
 
   function handleResolve(id: string) {
-    resolveComplaintMutation.mutate(id);
+    resolveComplaintMutation.mutate(id, { onSuccess: () => setSelected(null) });
+  }
+
+  function handleComplete(id: string, note: string, photos: File[]) {
+    completeComplaintMutation.mutate({ id, note, photos }, { onSuccess: () => setSelected(null) });
   }
 
   if (isLoading) {
@@ -165,9 +173,9 @@ export default function ComplaintsPage() {
               icon={Clock}
               iconBg="bg-primary/10"
               iconColor="text-primary"
-              value={kpis.inProgress}
-              label="In Progress"
-              badge="Active"
+              value={kpis.awaitingReview}
+              label="Awaiting Review"
+              badge="Review"
               badgeColor="text-primary"
             />
             <AdminStatCard
@@ -306,7 +314,11 @@ export default function ComplaintsPage() {
         open={selected !== null}
         onClose={() => setSelected(null)}
         complaint={selected}
+        role={role}
         onResolve={handleResolve}
+        onComplete={handleComplete}
+        resolving={resolveComplaintMutation.isPending}
+        completing={completeComplaintMutation.isPending}
       />
     </>
   );

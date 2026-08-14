@@ -11,8 +11,8 @@ import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { TaskSummaryCard } from "@/components/shared/TaskSummaryCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { SiteSelector } from "@/components/shared/SiteSelector";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
+import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
@@ -39,11 +39,14 @@ export default function TasksPage() {
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
   const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today);
 
-  // Only show tasks for the active (checked-in or selected) site.
-  const occurrences = useMemo(
-    () => (selectedSiteId ? allOccurrences.filter((o) => o.siteId === selectedSiteId) : allOccurrences),
-    [allOccurrences, selectedSiteId],
-  );
+  // Cleaners/supervisors only see the site they are currently checked in to; admins see
+  // the selected (or all) site. Until check-in there are no tasks, areas or floors.
+  const gatedSiteId = isAdmin ? selectedSiteId : checkedInSiteId;
+  const mustCheckIn = !isAdmin && !checkedInSiteId;
+  const occurrences = useMemo(() => {
+    if (mustCheckIn) return [];
+    return gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences;
+  }, [allOccurrences, gatedSiteId, mustCheckIn]);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const setHeaderAction = useUIStore((s) => s.setHeaderAction);
@@ -119,17 +122,8 @@ export default function TasksPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-grey-500">{isAdmin ? "All sites — today's tasks" : "Your tasks for today"}</p>
-            {isAdmin ? (
+            {isAdmin && (
               <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
-            ) : (
-              sites.length > 1 && (
-                <SiteSelector
-                  sites={sites}
-                  selectedSiteId={selectedSiteId}
-                  onChange={setSelectedSiteId}
-                  checkedInSiteId={checkedInSiteId}
-                />
-              )
             )}
           </div>
 
@@ -144,6 +138,8 @@ export default function TasksPage() {
             <div className="flex justify-center py-16">
               <LoadingSpinner />
             </div>
+          ) : mustCheckIn ? (
+            <CheckInRequiredBanner />
           ) : occurrences.length === 0 ? (
             <p className="py-16 text-center text-sm text-grey-500">No tasks scheduled for you today.</p>
           ) : (
@@ -210,21 +206,10 @@ export default function TasksPage() {
         {!useDrawerNav && <PageHeader title="Tasks" showCalendar onCalendarClick={() => setCalendarOpen(true)} />}
 
         <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "-mt-5" : "pt-5")}>
-          {isAdmin ? (
+          {isAdmin && (
             <div className="pt-3">
               <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             </div>
-          ) : (
-            sites.length > 1 && (
-              <div className="pt-3">
-                <SiteSelector
-                  sites={sites}
-                  selectedSiteId={selectedSiteId}
-                  onChange={setSelectedSiteId}
-                  checkedInSiteId={checkedInSiteId}
-                />
-              </div>
-            )
           )}
           {/* KPI row */}
           <div className="mb-6 grid grid-cols-3 gap-3 pt-5 sm:grid-cols-4">
@@ -237,6 +222,8 @@ export default function TasksPage() {
             <div className="flex justify-center py-16">
               <LoadingSpinner />
             </div>
+          ) : mustCheckIn ? (
+            <CheckInRequiredBanner />
           ) : occurrences.length === 0 ? (
             <p className="py-16 text-center text-sm text-grey-500">
               No tasks scheduled for you today.

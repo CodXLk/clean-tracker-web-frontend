@@ -32,9 +32,13 @@ export const ComplaintSchema = z.object({
   reportedAt:   z.string(),
   resolvedAt:   z.string().nullish(),
   resolvedBy:   z.string().nullish(),
+  completedAt:  z.string().nullish(),
+  completedBy:  z.string().nullish(),
+  completionNote: z.string().nullish(),
   assignedTo:   z.string().optional(),
   tasks:        z.array(ComplaintTaskSchema).default([]),
   photos:       z.array(ComplaintPhotoSchema).default([]),
+  completionPhotos: z.array(ComplaintPhotoSchema).default([]),
   cleaners:     z
     .array(
       z.object({

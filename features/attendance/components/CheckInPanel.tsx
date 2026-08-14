@@ -9,6 +9,7 @@ import { getCurrentPosition } from "@/lib/geolocation";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
 import { useCheckIn, useCheckOut, useAttendanceHeartbeat } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CheckInPayload, CleanerSite } from "@/features/attendance/schemas/attendance.schema";
@@ -69,6 +70,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   useAttendanceHeartbeat(sites);
   const today = toLocalDateString(new Date());
   const { data: todayTasks = [] } = useMyTasks(today);
+  const { data: complaintsData } = useComplaints();
 
   // Per-site error message and a remount key to reset the slider after a failure.
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -116,6 +118,13 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   // Redo/complaint tasks the cleaner must clear this shift at the given site.
   function redoTasksFor(siteId: string): TaskOccurrence[] {
     return pendingTasksFor(siteId).filter((t) => t.isRedo);
+  }
+
+  // Open complaints the cleaner must complete (in the Complaints tab) before checking out.
+  function openComplaintsFor(siteId: string) {
+    return (complaintsData?.complaints ?? []).filter(
+      (c) => c.siteId === siteId && c.status === "open",
+    );
   }
 
   async function executeCheckout(site: CleanerSite, acknowledgeIncomplete: boolean) {
@@ -237,6 +246,8 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   // Fresh check-in is only offered during the site's shift window(s); paused resume is exempt.
   const checkInBlocked = !checkedIn && !checkedOut && !paused && site.checkInAllowed === false;
   const redoTasks = checkedOut ? [] : redoTasksFor(site.siteId);
+  // Open complaints hard-block checkout (the server enforces this too).
+  const openComplaints = checkedOut ? [] : openComplaintsFor(site.siteId);
 
   return (
     <div className="flex flex-col gap-3">
@@ -305,6 +316,18 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
           </div>
         )}
 
+        {openComplaints.length > 0 && (
+          <div className="rounded-xl border border-[#ED5F25]/30 bg-[#ED5F25]/10 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-[#ED5F25]">
+              <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
+              {openComplaints.length} open complaint{openComplaints.length > 1 ? "s" : ""} to complete
+            </p>
+            <p className="mt-1 text-[11px] text-grey-500">
+              Open the Complaints tab, complete each complaint with photos, then you can check out.
+            </p>
+          </div>
+        )}
+
         {paused && (
           <div className="rounded-xl border border-[#ED5F25]/40 bg-[#ED5F25]/10 px-3 py-2.5">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-[#ED5F25]">
@@ -327,9 +350,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         ) : checkedIn ? (
           <SlideButton
             key={`out-${resetKey}`}
-            label="Slide to Check Out"
+            label={openComplaints.length > 0 ? "Complete open complaints to check out" : "Slide to Check Out"}
             variant="checkout"
             completedLabel="Checking out…"
+            disabled={openComplaints.length > 0}
             onComplete={() => run(site, "out")}
           />
         ) : (
