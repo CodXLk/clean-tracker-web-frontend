@@ -6,6 +6,7 @@ export const FloorSchema = z.object({
   siteId: z.string().uuid(),
   siteName: z.string(),
   name: z.string(),
+  sortOrder: z.number().default(0),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });

@@ -5,8 +5,10 @@ import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
   TaskCompletionSchema,
+  TaskHistorySchema,
   TaskOccurrenceListSchema,
   type CompleteTasksInput,
+  type TaskHistory,
   type TaskOccurrence,
 } from "@/features/tasks/schemas/task.schema";
 
@@ -14,6 +16,7 @@ export const taskKeys = {
   all: ["tasks"] as const,
   myOccurrences: (from: string, to: string, siteId?: string) =>
     [...taskKeys.all, "my-occurrences", from, to, siteId ?? "all"] as const,
+  history: (taskId: string, date: string) => [...taskKeys.all, "history", taskId, date] as const,
 };
 
 async function fetchMyOccurrences(from: string, to: string, siteId?: string): Promise<TaskOccurrence[]> {
@@ -29,6 +32,18 @@ export function useMyTasks(from: string, to?: string, siteId?: string) {
   return useQuery({
     queryKey: taskKeys.myOccurrences(from, toDate, siteId),
     queryFn: () => fetchMyOccurrences(from, toDate, siteId),
+  });
+}
+
+/** A task's completion history since the site's last inspection (supervisor review). */
+export function useTaskHistory(taskId: string | null, date: string, enabled = true) {
+  return useQuery({
+    queryKey: taskKeys.history(taskId ?? "none", date),
+    enabled: enabled && !!taskId,
+    queryFn: async (): Promise<TaskHistory> => {
+      const { data } = await clientApi.get(ENDPOINTS.tasks.history(taskId as string), { params: { date } });
+      return TaskHistorySchema.parse(data);
+    },
   });
 }
 

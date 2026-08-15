@@ -64,3 +64,15 @@ export function useDeleteFloor() {
     },
   });
 }
+
+/** Persist a new floor display order for a site (super admin / company admin). */
+export function useReorderFloors() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ siteId, floorIds }: { siteId: string; floorIds: string[] }) => {
+      const { data } = await clientApi.put(ENDPOINTS.floors.reorder, { siteId, floorIds });
+      return FloorListSchema.parse(data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: floorKeys.lists() }),
+  });
+}

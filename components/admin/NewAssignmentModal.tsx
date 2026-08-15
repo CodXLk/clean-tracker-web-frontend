@@ -80,7 +80,11 @@ function cleanerInitials(c: { firstName?: string | null; lastName?: string | nul
 }
 
 function emptyGroup(floorId = "", areaId = "") {
-  return { floorId, areaId, tasks: [] as AssignmentFormInput["groups"][number]["tasks"] };
+  return {
+    floorId,
+    areaIds: areaId ? [areaId] : [],
+    tasks: [] as AssignmentFormInput["groups"][number]["tasks"],
+  };
 }
 
 interface Prefill {
@@ -451,8 +455,8 @@ function LocationGroupCard({
         )}
       </div>
 
-      {/* Floor + Area */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Floor + Areas (a task is created in each selected area) */}
+      <div className="flex flex-col gap-4">
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
             <Controller
@@ -465,7 +469,7 @@ function LocationGroupCard({
                   value={field.value || null}
                   onChange={(v) => {
                     field.onChange(v);
-                    setValue(`groups.${groupIndex}.areaId`, "");
+                    setValue(`groups.${groupIndex}.areaIds`, []);
                   }}
                   disabled={!siteId}
                   loading={floorsLoading && !!siteId}
@@ -488,36 +492,67 @@ function LocationGroupCard({
           </button>
         </div>
 
-        <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <Controller
-              name={`groups.${groupIndex}.areaId`}
-              control={control}
-              render={({ field }) => (
-                <SearchableSelect
-                  label="Area"
-                  options={areaOptions}
-                  value={field.value || null}
-                  onChange={(v) => field.onChange(v)}
-                  disabled={!floorId}
-                  loading={areasQuery.isLoading && !!floorId}
-                  error={groupErrors?.areaId?.message}
-                  placeholder={floorId ? "Select area" : "Select a floor first"}
-                  emptyMessage="No areas for this floor"
-                />
-              )}
-            />
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium text-on-surface">
+              Areas <span className="text-grey-500">(pick one or more)</span>
+            </label>
+            <button
+              type="button"
+              aria-label="Add a new area"
+              title="Add a new area"
+              disabled={!floorId}
+              onClick={() => setAreaPromptOpen(true)}
+              className="flex h-8 items-center gap-1 rounded-lg border border-dashed border-primary px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Plus size={14} aria-hidden="true" /> Area
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Add a new area"
-            title="Add a new area"
-            disabled={!floorId}
-            onClick={() => setAreaPromptOpen(true)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus size={18} aria-hidden="true" />
-          </button>
+          <Controller
+            name={`groups.${groupIndex}.areaIds`}
+            control={control}
+            render={({ field }) => {
+              const selected: string[] = field.value ?? [];
+              if (!floorId) {
+                return <p className="text-sm text-grey-500">Select a floor first.</p>;
+              }
+              if (areasQuery.isLoading) {
+                return <p className="text-sm text-grey-400">Loading areas…</p>;
+              }
+              if (areaOptions.length === 0) {
+                return <p className="text-sm text-grey-500">No areas yet — add one with the + button.</p>;
+              }
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {areaOptions.map((o) => {
+                    const on = selected.includes(o.value);
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() =>
+                          field.onChange(
+                            on ? selected.filter((id) => id !== o.value) : [...selected, o.value],
+                          )
+                        }
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          on
+                            ? "border-primary bg-primary text-white"
+                            : "border-grey-300 text-on-surface hover:bg-grey-100",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            }}
+          />
+          {groupErrors?.areaIds?.message && (
+            <p className="mt-1 text-xs text-danger">{groupErrors.areaIds.message as string}</p>
+          )}
         </div>
       </div>
 
@@ -537,7 +572,7 @@ function LocationGroupCard({
             {
               onSuccess: (floor) => {
                 setValue(`groups.${groupIndex}.floorId`, floor.id, { shouldValidate: true });
-                setValue(`groups.${groupIndex}.areaId`, "");
+                setValue(`groups.${groupIndex}.areaIds`, []);
                 setFloorPromptOpen(false);
                 createFloor.reset();
               },
@@ -563,7 +598,10 @@ function LocationGroupCard({
             { floorId, input: { name } },
             {
               onSuccess: (area) => {
-                setValue(`groups.${groupIndex}.areaId`, area.id, { shouldValidate: true });
+                const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
+                setValue(`groups.${groupIndex}.areaIds`, [...current, area.id], {
+                  shouldValidate: true,
+                });
                 setAreaPromptOpen(false);
                 createArea.reset();
               },

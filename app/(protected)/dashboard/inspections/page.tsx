@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ClipboardList } from "lucide-react";
+import { CalendarDays, ClipboardList, CalendarClock } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { useUIStore } from "@/store/ui.store";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -15,6 +15,9 @@ import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useMyInspectionSchedules } from "@/features/user-management/hooks/useSupervisorSchedules";
+import type { SupervisorSchedule } from "@/features/user-management/schemas/supervisorSchedule.schema";
+import { useMe } from "@/features/auth/hooks/useMe";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import {
@@ -38,6 +41,9 @@ export default function InspectionsPage() {
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
   const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today);
+
+  const isSupervisor = useMe().data?.role === "SUPERVISOR";
+  const { data: mySchedules = [] } = useMyInspectionSchedules(isSupervisor);
 
   // Cleaners/supervisors only see the site they are currently checked in to; admins see
   // the selected (or all) site. Until check-in there are no tasks, areas or floors.
@@ -127,6 +133,8 @@ export default function InspectionsPage() {
             )}
           </div>
 
+          <InspectionScheduleBanner schedules={mySchedules} />
+
           <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
             <AdminStatCard icon={ClipboardList} iconBg="bg-grey-100" iconColor="text-grey-700" value={kpis.total} label="Total Tasks" />
             <AdminStatCard icon={ClipboardList} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={kpis.pending} label="Pending" />
@@ -211,6 +219,9 @@ export default function InspectionsPage() {
               <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             </div>
           )}
+          <div className="pt-5">
+            <InspectionScheduleBanner schedules={mySchedules} />
+          </div>
           {/* KPI row */}
           <div className="mb-6 grid grid-cols-3 gap-3 pt-5 sm:grid-cols-4">
             <KpiCard label="Total" value={kpis.total} color="grey" />
@@ -313,6 +324,38 @@ function PeriodicalCard({ task }: { task: TaskOccurrence }) {
     );
   }
   return card;
+}
+
+function scheduleDateLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Supervisor's own inspection cadence per site, with the next planned date. */
+function InspectionScheduleBanner({ schedules }: { schedules: SupervisorSchedule[] }) {
+  if (schedules.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/[0.05] p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <CalendarClock size={16} className="text-primary" aria-hidden="true" />
+        <p className="text-sm font-semibold text-on-surface">Your inspection schedule</p>
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {schedules.map((s) => (
+          <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-on-surface">{s.siteName}</span>
+            <span className="text-grey-600">{s.summary}</span>
+            {s.upcomingDates.length > 0 && (
+              <span className="font-medium text-primary">Next: {scheduleDateLabel(s.upcomingDates[0])}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 interface KpiCardProps {
