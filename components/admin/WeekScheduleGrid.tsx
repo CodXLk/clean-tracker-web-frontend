@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { Building2, Check, Plus, Pencil, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Building2, Check, GripVertical, Plus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import type { TaskOccurrence, WorkType } from "@/features/workforce/schemas/assignment.schema";
+import type { SiteTaskSummary, TaskOccurrence, WorkType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
@@ -16,6 +16,25 @@ const TYPE_HEX: Record<string, string> = {
   WORK_ORDER: "#F97316",
   OTHER: "#3B82F6",
 };
+
+// Category display priority within an area: work orders first, then periodical, then general.
+const CATEGORY_RANK: Record<string, number> = {
+  WORK_ORDER: 0,
+  PERIODICAL_TASK: 1,
+  GENERAL_TASK: 2,
+  OTHER: 3,
+};
+function categoryRank(type: WorkType): number {
+  return CATEGORY_RANK[type] ?? 99;
+}
+
+function formatDateShort(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 const JS_DAY_TO_JAVA: DayOfWeek[] = [
   "SUNDAY",
@@ -53,6 +72,8 @@ interface TaskRow {
   hex: string;
   /** date → occurrences of this task on that date. */
   byDate: Map<string, TaskOccurrence[]>;
+  /** Next occurrence date after the visible week (managed all-tasks mode). */
+  nextDate?: string | null;
 }
 
 function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): TaskRow {
@@ -91,6 +112,42 @@ function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
     result.set(areaId, [...tasks.values()].sort((a, b) => a.name.localeCompare(b.name)));
   }
   return result;
+}
+
+/**
+ * Managed mode: build one row for EVERY task at the site (from siteTasks), filling the
+ * week cells from occurrences and carrying each task's next date. Rows are grouped by area
+ * and ordered by category (work order → periodical → general → other), then by name.
+ */
+function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
+  const occByTask = new Map<string, Map<string, TaskOccurrence[]>>();
+  for (const o of occurrences) {
+    const m = occByTask.get(o.taskId) ?? new Map<string, TaskOccurrence[]>();
+    occByTask.set(o.taskId, m);
+    const list = m.get(o.date) ?? [];
+    list.push(o);
+    m.set(o.date, list);
+  }
+  const byArea = new Map<string, TaskRow[]>();
+  for (const t of siteTasks) {
+    const areaId = t.areaId ?? "";
+    const rows = byArea.get(areaId) ?? [];
+    byArea.set(areaId, rows);
+    rows.push({
+      taskId: t.taskId,
+      name: t.name,
+      assignmentType: t.assignmentType,
+      hex: TYPE_HEX[t.assignmentType] ?? "#0B585A",
+      byDate: occByTask.get(t.taskId) ?? new Map<string, TaskOccurrence[]>(),
+      nextDate: t.nextDate ?? null,
+    });
+  }
+  for (const rows of byArea.values()) {
+    rows.sort(
+      (a, b) => categoryRank(a.assignmentType) - categoryRank(b.assignmentType) || a.name.localeCompare(b.name),
+    );
+  }
+  return byArea;
 }
 
 // Read-only grouping (all-sites mode): Site → Floor → Area → tasks, from occurrences.
@@ -157,11 +214,16 @@ interface WeekScheduleGridProps {
   // ── Managed mode (a single site is selected) ────────────────────────────────
   siteId?: string;
   floors?: Floor[];
+  /** All tasks at the site (managed mode) so rows include tasks with no occurrence this week. */
+  siteTasks?: SiteTaskSummary[];
   /** floorId → its areas. */
   areasByFloor?: Map<string, Area[]>;
   /** Date used by the task-column "+" (Monday of the visible week). */
   mondayDate?: string;
   structureLoading?: boolean;
+  /** When true, floors can be drag-reordered (super admin / company admin). */
+  canReorderFloors?: boolean;
+  onReorderFloors?: (orderedFloorIds: string[]) => void;
   onAddAssignment?: (target: AddAssignmentTarget) => void;
   onAddFloor?: () => void;
   onEditFloor?: (floor: Floor) => void;
@@ -187,9 +249,12 @@ export function WeekScheduleGrid({
   onOccurrenceClick,
   siteId,
   floors,
+  siteTasks,
   areasByFloor,
   mondayDate,
   structureLoading = false,
+  canReorderFloors = false,
+  onReorderFloors,
   onAddAssignment,
   onAddFloor,
   onEditFloor,
@@ -200,13 +265,38 @@ export function WeekScheduleGrid({
 }: WeekScheduleGridProps) {
   const managed = !!siteId && !!floors;
 
+  const [draggingFloorId, setDraggingFloorId] = useState<string | null>(null);
+  const [dragOverFloorId, setDragOverFloorId] = useState<string | null>(null);
+
+  function handleFloorDrop(targetFloorId: string) {
+    if (!draggingFloorId || draggingFloorId === targetFloorId || !onReorderFloors || !floors) {
+      setDraggingFloorId(null);
+      setDragOverFloorId(null);
+      return;
+    }
+    const ids = floors.map((f) => f.id);
+    const from = ids.indexOf(draggingFloorId);
+    const to = ids.indexOf(targetFloorId);
+    if (from >= 0 && to >= 0) {
+      ids.splice(from, 1);
+      ids.splice(to, 0, draggingFloorId);
+      onReorderFloors(ids);
+    }
+    setDraggingFloorId(null);
+    setDragOverFloorId(null);
+  }
+
   const readOnlyGroups = useMemo(
     () => (managed ? [] : buildSiteGroups(occurrences)),
     [managed, occurrences],
   );
   const managedRowsByArea = useMemo(
-    () => (managed ? rowsByArea(occurrences) : new Map<string, TaskRow[]>()),
-    [managed, occurrences],
+    () => {
+      if (!managed) return new Map<string, TaskRow[]>();
+      if (siteTasks) return managedRows(siteTasks, occurrences);
+      return rowsByArea(occurrences);
+    },
+    [managed, siteTasks, occurrences],
   );
 
   /** date → work-order occurrences on that date (for the summary band). */
@@ -333,6 +423,46 @@ export function WeekScheduleGrid({
 
   /** One task row of check marks — shared by both modes. */
   function TaskRowView({ row, striped }: { row: TaskRow; striped: boolean }) {
+    // A task with no occurrence in the visible week: highlight the whole row and show its
+    // next available date + work type instead of the day cells.
+    if (managed && row.byDate.size === 0) {
+      const label = row.nextDate
+        ? `Next available · ${formatDateShort(row.nextDate)}`
+        : "No upcoming date";
+      return (
+        <div
+          className="grid border-b border-grey-200"
+          style={{ gridTemplateColumns: gridTemplate, backgroundColor: `${row.hex}12` }}
+        >
+          <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5 pl-6">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: row.hex }}
+              aria-hidden="true"
+            />
+            <span className="truncate text-sm text-on-surface" title={row.name}>
+              {row.name}
+            </span>
+          </div>
+          <div className="col-span-7 flex items-center gap-2 border-l border-grey-200 px-4 py-2.5">
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+              style={{ backgroundColor: row.hex }}
+            >
+              {WORK_TYPE_LABELS[row.assignmentType]}
+            </span>
+            <span
+              className={cn(
+                "text-xs font-medium",
+                row.nextDate ? "text-on-surface" : "text-grey-500",
+              )}
+            >
+              {label}
+            </span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         className={cn(
@@ -451,14 +581,51 @@ export function WeekScheduleGrid({
               <>
                 {floors!.map((floor) => {
                   const floorAreas = areasByFloor?.get(floor.id) ?? [];
+                  const isDragTarget =
+                    canReorderFloors &&
+                    dragOverFloorId === floor.id &&
+                    draggingFloorId != null &&
+                    draggingFloorId !== floor.id;
                   return (
-                    <div key={floor.id}>
+                    <div
+                      key={floor.id}
+                      onDragOver={
+                        canReorderFloors
+                          ? (e) => {
+                              e.preventDefault();
+                              if (dragOverFloorId !== floor.id) setDragOverFloorId(floor.id);
+                            }
+                          : undefined
+                      }
+                      onDrop={canReorderFloors ? () => handleFloorDrop(floor.id) : undefined}
+                      className={cn(
+                        isDragTarget && "ring-2 ring-inset ring-primary/60",
+                        draggingFloorId === floor.id && "opacity-60",
+                      )}
+                    >
                       {/* Floor band */}
                       <div
                         className="group/floor grid bg-primary"
+                        draggable={canReorderFloors}
+                        onDragStart={canReorderFloors ? () => setDraggingFloorId(floor.id) : undefined}
+                        onDragEnd={
+                          canReorderFloors
+                            ? () => {
+                                setDraggingFloorId(null);
+                                setDragOverFloorId(null);
+                              }
+                            : undefined
+                        }
                         style={{ gridTemplateColumns: gridTemplate }}
                       >
                         <div className="flex items-center gap-2 px-4 py-2">
+                          {canReorderFloors && (
+                            <GripVertical
+                              size={14}
+                              className="cursor-grab text-white/70"
+                              aria-label="Drag to reorder floor"
+                            />
+                          )}
                           <span className="text-sm font-bold uppercase tracking-wide text-white">
                             {floor.name}
                           </span>

@@ -13,6 +13,7 @@ import {
   useCompleteTasks,
   useCompleteForInspection,
   useSubmitInspection,
+  useTaskHistory,
 } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -52,6 +53,18 @@ function occKey(task: TaskOccurrence): string {
 
 interface AreaInspectionPageProps {
   params: Promise<PageParams>;
+}
+
+function historyDateLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function historyTimeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export default function AreaInspectionPage({ params }: AreaInspectionPageProps) {
@@ -335,8 +348,15 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     const [key] = selectedIds;
     return tasks.find((t) => occKey(t) === key) ?? null;
   }, [isSupervisor, selectedIds, tasks]);
-  const completionPhotoIds =
-    singleSelectedTask?.status === "COMPLETED" ? singleSelectedTask.completionPhotoIds : [];
+
+  // Past-days history for the clicked task, so the supervisor can review the days they
+  // missed since the site's last inspection (notes, photos with dates, completion log).
+  const historyTaskId = singleSelectedTask?.taskId ?? null;
+  const { data: taskHistory } = useTaskHistory(
+    historyTaskId ?? null,
+    date,
+    isSupervisor && !!historyTaskId,
+  );
 
   // A supervisor can only inspect (rate/complain) tasks that are already completed —
   // otherwise the panel walks them through completing it first.
@@ -585,28 +605,77 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               </button>
             </div>
 
-            {/* Cleaner's completion photos — read-only, shown when reviewing a single
-                already-completed task. */}
-            {completionPhotoIds.length > 0 && (
+            {/* Task history since the site's last inspection — the days this supervisor
+                missed: whether it was completed, the cleaner's note, and any photos. */}
+            {isSupervisor && singleSelectedTask && taskHistory && (
               <div className="mb-3">
-                <p className="mb-1.5 text-sm font-medium text-on-surface">Completion Photos</p>
-                <div className="flex flex-wrap gap-2">
-                  {completionPhotoIds.map((photoId) => {
-                    const url = `/api${ENDPOINTS.tasks.photo(photoId)}`;
-                    return (
-                      <button
-                        key={photoId}
-                        type="button"
-                        onClick={() => setFullscreenPhotoUrl(url)}
-                        aria-label="View photo full screen"
-                        className="relative h-16 w-16 overflow-hidden rounded-lg bg-grey-100"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="Task completion" className="h-full w-full object-cover" />
-                      </button>
-                    );
-                  })}
-                </div>
+                <p className="mb-1.5 text-sm font-medium text-on-surface">
+                  History since last inspection
+                  <span className="font-normal text-grey-500">
+                    {" "}
+                    · {historyDateLabel(taskHistory.sinceDate)} – {historyDateLabel(taskHistory.toDate)}
+                  </span>
+                </p>
+                {taskHistory.days.length === 0 ? (
+                  <p className="rounded-lg bg-grey-100 px-3 py-2 text-xs text-grey-500">
+                    No scheduled days or activity in this period.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {taskHistory.days.map((d) => (
+                      <div key={d.date} className="rounded-xl border border-grey-200 p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-on-surface">
+                            {historyDateLabel(d.date)}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                d.completed
+                                  ? "bg-success/15 text-success"
+                                  : "bg-[#ED5F25]/15 text-[#ED5F25]",
+                              )}
+                            >
+                              {d.completed ? "Completed" : "Not completed"}
+                            </span>
+                            {d.inspected && (
+                              <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
+                                Inspected
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {(d.completedByName || d.completedAt) && (
+                          <p className="mt-0.5 text-[11px] text-grey-500">
+                            {d.completedByName ? `by ${d.completedByName}` : ""}
+                            {d.completedAt ? ` · ${historyTimeLabel(d.completedAt)}` : ""}
+                          </p>
+                        )}
+                        {d.note && <p className="mt-1 text-xs text-grey-700">{d.note}</p>}
+                        {d.photos.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {d.photos.map((p) => {
+                              const url = `/api${ENDPOINTS.tasks.photo(p.id)}`;
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => setFullscreenPhotoUrl(url)}
+                                  aria-label="View photo full screen"
+                                  className="relative h-16 w-16 overflow-hidden rounded-lg bg-grey-100"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={url} alt="Task completion" className="h-full w-full object-cover" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

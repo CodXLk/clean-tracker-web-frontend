@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bell, Calendar, Clock, AlertTriangle, MapPin, CheckCircle2, X } from "lucide-react";
+import { Bell, Calendar, Clock, AlertTriangle, MapPin, CheckCircle2, CalendarClock, X } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
@@ -12,6 +12,7 @@ import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
+import { useMyInspectionSchedules } from "@/features/user-management/hooks/useSupervisorSchedules";
 import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 import { formatTaskTime, toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
@@ -63,6 +64,14 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
     });
 }
 
+function inspectionDateLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function DashboardPage() {
   return (
     <Suspense fallback={null}>
@@ -93,6 +102,9 @@ function DashboardContent() {
   const { data: upcomingTasks = [] } = useMyTasks(range.from, range.to);
   const { data: complaintsData } = useComplaints();
   const { data: unreadCount = 0 } = useUnreadCount();
+
+  const isSupervisor = me?.role === "SUPERVISOR";
+  const { data: inspectionSchedules = [] } = useMyInspectionSchedules(isSupervisor);
 
   const activeSite = sites.find((s) => s.status === "CHECKED_IN");
   const checkedIn = !!activeSite;
@@ -125,6 +137,20 @@ function DashboardContent() {
   );
 
   const upcomingShifts = useMemo(() => buildUpcomingShifts(upcomingTasks), [upcomingTasks]);
+
+  // Flatten each schedule's upcoming dates into a single sorted list of the next inspections.
+  const upcomingInspections = useMemo(() => {
+    const entries = inspectionSchedules.flatMap((s) =>
+      (s.upcomingDates ?? []).map((date) => ({
+        id: `${s.id}-${date}`,
+        site: s.siteName ?? "Site",
+        summary: s.summary ?? "",
+        date,
+      })),
+    );
+    entries.sort((a, b) => (a.date < b.date ? -1 : 1));
+    return entries.slice(0, 4);
+  }, [inspectionSchedules]);
 
   return (
     <>
@@ -260,6 +286,31 @@ function DashboardContent() {
                 )}
               </div>
             </section>
+
+            {isSupervisor && upcomingInspections.length > 0 && (
+              <section
+                aria-labelledby="inspections-heading"
+                className="rounded-2xl bg-surface p-5 shadow-sm lg:col-span-2"
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <CalendarClock size={18} className="text-primary" aria-hidden="true" />
+                  <h2 id="inspections-heading" className="text-sm font-semibold text-on-surface">
+                    Upcoming Inspections
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {upcomingInspections.map((ins) => (
+                    <div key={ins.id} className="flex items-start justify-between gap-3 rounded-xl bg-grey-50 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-on-surface">{inspectionDateLabel(ins.date)}</p>
+                        <p className="text-xs text-grey-500">{ins.site}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-medium text-primary">{ins.summary}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -484,6 +535,34 @@ function DashboardContent() {
                 )}
               </div>
             </section>
+
+            {isSupervisor && upcomingInspections.length > 0 && (
+              <section
+                aria-labelledby="inspections-heading-mobile"
+                className="rounded-3xl border border-white/20 bg-white/40 p-5 shadow-sm backdrop-blur-sm"
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <CalendarClock size={18} className="text-primary" />
+                  <h2 id="inspections-heading-mobile" className="text-sm font-semibold text-on-surface">
+                    Upcoming Inspections
+                  </h2>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {upcomingInspections.map((ins) => (
+                    <div
+                      key={ins.id}
+                      className="flex items-start justify-between gap-3 rounded-2xl bg-white/40 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-on-surface">{inspectionDateLabel(ins.date)}</p>
+                        <p className="text-xs text-grey-500">{ins.site}</p>
+                      </div>
+                      <span className="shrink-0 text-[11px] font-medium text-primary">{ins.summary}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </main>
       </div>

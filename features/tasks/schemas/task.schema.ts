@@ -91,6 +91,35 @@ export const TaskCompletionSchema = z.object({
 });
 export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;
 
+// Mirrors backend TaskHistoryResponse — a task's day-by-day completion history since the
+// site's last inspection, shown to a supervisor reviewing days they missed.
+export const TaskHistoryPhotoSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  uploadedAt: z.string().nullish(),
+});
+export const TaskHistoryDaySchema = z.object({
+  date: z.string(),
+  scheduled: z.boolean(),
+  completed: z.boolean(),
+  inspected: z.boolean(),
+  note: z.string().nullish(),
+  completedByName: z.string().nullish(),
+  completedAt: z.string().nullish(),
+  photos: z.array(TaskHistoryPhotoSchema).default([]),
+});
+export const TaskHistorySchema = z.object({
+  taskId: z.string(),
+  taskName: z.string(),
+  floor: z.string().nullish(),
+  area: z.string().nullish(),
+  sinceDate: z.string(),
+  toDate: z.string(),
+  days: z.array(TaskHistoryDaySchema).default([]),
+});
+export type TaskHistory = z.infer<typeof TaskHistorySchema>;
+export type TaskHistoryDay = z.infer<typeof TaskHistoryDaySchema>;
+
 export interface OccurrenceRef {
   taskId: string;
   date: string;

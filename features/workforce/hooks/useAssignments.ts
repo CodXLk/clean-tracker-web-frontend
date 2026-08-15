@@ -6,10 +6,12 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
   AssignmentSchema,
   TaskOccurrenceListSchema,
+  SiteTaskSummaryListSchema,
   WorkforceStatsSchema,
   toCreateAssignmentPayload,
   type AssignmentFormInput,
   type OccurrenceScope,
+  type SiteTaskSummary,
   type TaskOccurrence,
   type TaskStatus,
   type WorkforceStats,
@@ -50,6 +52,20 @@ export function useOccurrences(query: OccurrenceQuery | undefined) {
     ),
     queryFn: () => fetchOccurrences(query!),
     enabled: !!query,
+  });
+}
+
+/** All tasks for one site (with each task's next date after the visible week). */
+export function useSiteTasks(query: OccurrenceQuery | undefined) {
+  return useQuery({
+    queryKey: ["site-tasks", query ? `${query.from}_${query.to}` : "none", query?.siteId ?? "all"],
+    enabled: !!query && !!query.siteId,
+    queryFn: async (): Promise<SiteTaskSummary[]> => {
+      const { data } = await clientApi.get(ENDPOINTS.assignments.siteTasks, {
+        params: { from: query!.from, to: query!.to, ...(query!.siteId ? { siteId: query!.siteId } : {}) },
+      });
+      return SiteTaskSummaryListSchema.parse(data);
+    },
   });
 }
 

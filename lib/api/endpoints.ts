@@ -58,6 +58,12 @@ export const ENDPOINTS = {
     eligibleCleaners: (id: string) => `/sites/${id}/eligible-cleaners`,
     eligibleSupervisors: (id: string) => `/sites/${id}/eligible-supervisors`,
     shifts: (id: string) => `/sites/${id}/shifts`,
+    supervisorSchedules: (id: string) => `/sites/${id}/supervisor-schedules`,
+    supervisorSchedule: (id: string, scheduleId: string) =>
+      `/sites/${id}/supervisor-schedules/${scheduleId}`,
+  },
+  inspectionSchedules: {
+    mine: "/inspection-schedules/mine",
   },
   shifts: {
     byId:    (id: string) => `/shifts/${id}`,
@@ -71,6 +77,7 @@ export const ENDPOINTS = {
   floors: {
     list:   "/floors",
     create: "/floors",
+    reorder: "/floors/reorder",
     byId:   (id: string) => `/floors/${id}`,
   },
   areas: {
@@ -98,11 +105,13 @@ export const ENDPOINTS = {
     reviewComplete:  "/tasks/review-complete",
     inspect:         "/tasks/inspect",
     inspectComplete: "/tasks/inspect/complete",
+    history:         (id: string) => `/tasks/${id}/history`,
     photo:           (id: string) => `/tasks/completions/photos/${id}`,
   },
   assignments: {
     create:      "/assignments",
     occurrences: "/assignments/occurrences",
+    siteTasks:   "/assignments/site-tasks",
     stats:       "/assignments/stats",
     taskNames:   "/assignments/task-names",
     byId:        (id: string) => `/assignments/${id}`,
@@ -245,6 +254,12 @@ export const BACKEND = {
     eligibleCleaners: (id: string) => `/api/v1/sites/${id}/eligible-cleaners`,
     eligibleSupervisors: (id: string) => `/api/v1/sites/${id}/eligible-supervisors`,
     shifts: (id: string) => `/api/v1/sites/${id}/shifts`,
+    supervisorSchedules: (id: string) => `/api/v1/sites/${id}/supervisor-schedules`,
+    supervisorSchedule: (id: string, scheduleId: string) =>
+      `/api/v1/sites/${id}/supervisor-schedules/${scheduleId}`,
+  },
+  inspectionSchedules: {
+    mine: "/api/v1/inspection-schedules/mine",
   },
   shifts: {
     byId:    (id: string) => `/api/v1/shifts/${id}`,
@@ -258,6 +273,7 @@ export const BACKEND = {
   floors: {
     list:   "/api/v1/floors",
     create: "/api/v1/floors",
+    reorder: "/api/v1/floors/reorder",
     byId:   (id: string) => `/api/v1/floors/${id}`,
   },
   areas: {
@@ -285,11 +301,13 @@ export const BACKEND = {
     reviewComplete:  "/api/v1/tasks/review-complete",
     inspect:         "/api/v1/tasks/inspect",
     inspectComplete: "/api/v1/tasks/inspect/complete",
+    history:         (id: string) => `/api/v1/tasks/${id}/history`,
     photo:           (id: string) => `/api/v1/tasks/completions/photos/${id}`,
   },
   assignments: {
     create:      "/api/v1/assignments",
     occurrences: "/api/v1/assignments/occurrences",
+    siteTasks:   "/api/v1/assignments/site-tasks",
     stats:       "/api/v1/assignments/stats",
     taskNames:   "/api/v1/assignments/task-names",
     byId:        (id: string) => `/api/v1/assignments/${id}`,

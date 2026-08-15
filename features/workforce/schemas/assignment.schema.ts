@@ -108,6 +108,23 @@ export const TaskOccurrenceSchema = z.object({
 export const TaskOccurrenceListSchema = z.array(TaskOccurrenceSchema);
 export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;
 
+// Mirrors backend SiteTaskSummaryResponse — every task at a site plus the next date it
+// occurs after the visible week (null = no upcoming occurrence within the lookahead).
+export const SiteTaskSummarySchema = z.object({
+  taskId: z.string().uuid(),
+  assignmentId: z.string().uuid(),
+  name: z.string(),
+  floorId: z.string().uuid().nullish(),
+  floorName: z.string().nullish(),
+  areaId: z.string().uuid().nullish(),
+  areaName: z.string().nullish(),
+  assignmentType: WorkTypeSchema,
+  orderIndex: z.number().default(0),
+  nextDate: z.string().nullish(),
+});
+export const SiteTaskSummaryListSchema = z.array(SiteTaskSummarySchema);
+export type SiteTaskSummary = z.infer<typeof SiteTaskSummarySchema>;
+
 /** Backend AssignmentResponse (returned by create/update/detail). */
 export const AssignmentSchema = z.object({
   id: z.string().uuid(),
@@ -206,10 +223,10 @@ export const GroupTaskFormSchema = z.object({
 });
 export type GroupTaskFormInput = z.infer<typeof GroupTaskFormSchema>;
 
-/** A floor+area with its own list of tasks. */
+/** A floor with one or more areas; every task in the group is created in each selected area. */
 export const LocationGroupFormSchema = z.object({
   floorId: z.string().uuid("Please select a floor"),
-  areaId: z.string().uuid("Please select an area"),
+  areaIds: z.array(z.string().uuid()).min(1, "Please select at least one area"),
   tasks: z.array(GroupTaskFormSchema),
 });
 export type LocationGroupFormInput = z.infer<typeof LocationGroupFormSchema>;
@@ -381,21 +398,23 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
     startDate: input.date,
     startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
     tasks: input.groups.flatMap((group) =>
-      group.tasks.map((task) => ({
-        name: task.name.trim(),
-        ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
-        floorId: group.floorId,
-        areaId: group.areaId,
-        ...(task.description?.trim() ? { description: task.description.trim() } : {}),
-        cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
-        ...((input.assignPerTask ? task.profileIds : input.profileIds).length > 0
-          ? { profileIds: input.assignPerTask ? task.profileIds : input.profileIds }
-          : {}),
-        ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
-        ...((task.items ?? []).length > 0
-          ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
-          : {}),
-      })),
+      group.tasks.flatMap((task) =>
+        group.areaIds.map((areaId) => ({
+          name: task.name.trim(),
+          ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
+          floorId: group.floorId,
+          areaId,
+          ...(task.description?.trim() ? { description: task.description.trim() } : {}),
+          cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+          ...((input.assignPerTask ? task.profileIds : input.profileIds).length > 0
+            ? { profileIds: input.assignPerTask ? task.profileIds : input.profileIds }
+            : {}),
+          ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
+          ...((task.items ?? []).length > 0
+            ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
+            : {}),
+        })),
+      ),
     ),
   };
 
