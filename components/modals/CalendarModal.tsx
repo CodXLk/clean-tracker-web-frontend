@@ -83,6 +83,10 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
 
   const { data: sites = [] } = useMySites();
 
+  // A single site is always in scope (no "All sites") so floors don't mix across sites.
+  // Until the user picks one, fall back to the first site (latest-created for admins).
+  const effectiveSiteId = activeSiteId || sites[0]?.siteId || "";
+
   // The Sunday→Saturday week that contains the selected date.
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
   const weekDays = useMemo(() => {
@@ -103,7 +107,7 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
   const { data: occurrences = [], isLoading } = useMyTasks(
     weekFrom,
     weekTo,
-    activeSiteId || undefined,
+    effectiveSiteId || undefined,
   );
 
   // Dates in this week that have at least one task (for the day-pill dot).
@@ -167,12 +171,11 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
           <label className="flex flex-1 items-center gap-2 rounded-xl border border-grey-300 px-3 py-2 text-sm">
             <MapPin size={16} className="text-grey-500" aria-hidden="true" />
             <select
-              value={activeSiteId}
+              value={effectiveSiteId}
               onChange={(e) => setActiveSiteId(e.target.value)}
               className="w-full bg-transparent text-on-surface outline-none"
               aria-label="Filter by site"
             >
-              <option value="">All sites</option>
               {sites.map((s) => (
                 <option key={s.siteId} value={s.siteId}>
                   {s.siteName}

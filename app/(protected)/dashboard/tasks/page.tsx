@@ -37,7 +37,9 @@ export default function TasksPage() {
   const useDrawerNav = useIsDrawerNav();
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
-  const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today);
+  const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today, {
+    defaultToLatestSite: true,
+  });
 
   // Cleaners/supervisors only see the site they are currently checked in to; admins see
   // the selected (or all) site. Until check-in there are no tasks, areas or floors.
@@ -121,9 +123,9 @@ export default function TasksPage() {
       <div className={cn("p-6 lg:p-8", useDrawerNav ? "block" : "hidden lg:block")}>
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-grey-500">{isAdmin ? "All sites — today's tasks" : "Your tasks for today"}</p>
+            <p className="text-sm text-grey-500">{isAdmin ? "Today's tasks" : "Your tasks for today"}</p>
             {isAdmin && (
-              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} allowAllSites={false} />
             )}
           </div>
 
@@ -208,7 +210,7 @@ export default function TasksPage() {
         <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "-mt-5" : "pt-5")}>
           {isAdmin && (
             <div className="pt-3">
-              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
+              <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} allowAllSites={false} />
             </div>
           )}
           {/* KPI row */}
