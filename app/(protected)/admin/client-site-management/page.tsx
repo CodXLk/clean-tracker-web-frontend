@@ -118,6 +118,11 @@ export default function ClientSiteManagementPage() {
   const [siteId, setSiteId] = useState<string>("");
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
 
+  // Default to the most recently created site (sites are returned newest-first); never "all sites".
+  if (sites.length > 0 && !sites.some((s) => s.id === siteId)) {
+    setSiteId(sites[0]!.id);
+  }
+
   const selectedSite = useMemo(() => sites.find((s) => s.id === siteId), [sites, siteId]);
   const isHotel = selectedSite?.siteType === "HOTEL";
 
@@ -238,7 +243,6 @@ export default function ClientSiteManagementPage() {
               }}
               className="h-11 w-full min-w-[16rem] appearance-none rounded-xl border border-grey-300 bg-surface pl-9 pr-9 text-sm font-medium text-on-surface transition-colors hover:border-grey-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
-              <option value="">Select a site…</option>
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
