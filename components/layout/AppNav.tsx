@@ -100,8 +100,7 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
 
 /** Super admins don't need the cleaner-facing Home page, but do need Tasks and
  *  Inspections since those are surfaced in the Admin Panel. */
-// Client Site Management is a client-only portal, so admins never see it either.
-const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/admin/client-site-management"]);
+const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard"]);
 const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
 );
@@ -130,10 +129,9 @@ const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && (CLIENT_BASE_HREFS.includes(item.href) || item.href === CLIENT_PORTAL_HREF),
 );
 
-/** Everyone who isn't a client (e.g. company admin) sees the full nav minus the client-only portal. */
-const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href !== CLIENT_PORTAL_HREF,
-);
+/** Everyone who isn't a client (e.g. company admin) sees the full admin nav, including the
+ *  Client Site Management view (management sees every site there). */
+const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS;
 
 /** The nav items visible to the current user, based on role. */
 function useVisibleNavItems(): NavItemConfig[] {
