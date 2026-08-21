@@ -60,3 +60,37 @@ export function useCancelPurchaseOrder() {
     onSuccess: () => qc.invalidateQueries({ queryKey: purchaseOrderKeys.all }),
   });
 }
+
+export type ClientDispatchLineInput = {
+  itemId: string;
+  quantity: number;
+  minStock?: number;
+};
+
+export type ClientDispatchInput = {
+  note?: string;
+  lines: ClientDispatchLineInput[];
+};
+
+/** Hotel-client item requests (POs against a client-self-supplying supplier). */
+export function useClientItemRequests() {
+  return useQuery({
+    queryKey: [...purchaseOrderKeys.all, "client-requests"],
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.purchaseOrders.clientRequests);
+      return PurchaseOrderListSchema.parse(data);
+    },
+  });
+}
+
+/** Client confirms a request and dispatches items (possibly adjusted) to its site. */
+export function useClientDispatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: ClientDispatchInput }) => {
+      const { data } = await clientApi.post(ENDPOINTS.purchaseOrders.clientDispatch(id), input);
+      return PurchaseOrderSchema.parse(data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: purchaseOrderKeys.all }),
+  });
+}

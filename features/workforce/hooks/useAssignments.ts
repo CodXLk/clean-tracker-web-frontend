@@ -97,6 +97,7 @@ export function useTaskNameSuggestions() {
 
 function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
+  queryClient.invalidateQueries({ queryKey: ["site-tasks"] });
 }
 
 export function useCreateAssignment() {
@@ -108,6 +109,17 @@ export function useCreateAssignment() {
         toCreateAssignmentPayload(input),
       );
       return AssignmentSchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
+/** Persist a new task display order within an area (super admin / company admin). */
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ areaId, taskIds }: { areaId: string; taskIds: string[] }) => {
+      await clientApi.put(ENDPOINTS.assignments.tasksReorder, { areaId, taskIds });
     },
     onSuccess: () => invalidateAll(queryClient),
   });

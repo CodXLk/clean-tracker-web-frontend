@@ -15,10 +15,12 @@ import { StatusBadge } from "./StatusBadge";
 import { fmtQty, fmtMoney, fmtDate, fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/features/inventory/schemas/inventory.schema";
 
-const FILTERS = ["All", "Sent", "Partially received", "Received", "Cancelled"] as const;
+const FILTERS = ["All", "Sent", "Awaiting client", "Client dispatched", "Partially received", "Received", "Cancelled"] as const;
 type Filter = (typeof FILTERS)[number];
 const STATUS_MAP: Record<Exclude<Filter, "All">, PurchaseOrderStatus> = {
   Sent: "SENT",
+  "Awaiting client": "AWAITING_CLIENT",
+  "Client dispatched": "CLIENT_DISPATCHED",
   "Partially received": "PARTIALLY_RECEIVED",
   Received: "RECEIVED",
   Cancelled: "CANCELLED",

@@ -9,6 +9,8 @@ const STYLES: Record<string, string> = {
   DISPATCHED: "bg-primary/10 text-primary",
   CONFIRMED: "bg-success/10 text-success",
   SENT: "bg-[#ED5F25]/10 text-[#ED5F25]",
+  AWAITING_CLIENT: "bg-[#ED5F25]/10 text-[#ED5F25]",
+  CLIENT_DISPATCHED: "bg-primary/10 text-primary",
   PARTIALLY_RECEIVED: "bg-primary/10 text-primary",
   RECEIVED: "bg-success/10 text-success",
 };
@@ -22,6 +24,8 @@ const LABELS: Record<string, string> = {
   DISPATCHED: "Dispatched",
   CONFIRMED: "Confirmed",
   SENT: "Sent",
+  AWAITING_CLIENT: "Awaiting client",
+  CLIENT_DISPATCHED: "Client dispatched",
   PARTIALLY_RECEIVED: "Partially received",
   RECEIVED: "Received",
 };

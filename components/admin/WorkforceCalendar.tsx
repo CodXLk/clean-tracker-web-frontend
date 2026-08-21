@@ -8,6 +8,7 @@ import {
   useSiteTasks,
   useEditOccurrence,
   useDeleteOccurrence,
+  useReorderTasks,
   type OccurrenceQuery,
   type EditOccurrenceInput,
 } from "@/features/workforce/hooks/useAssignments";
@@ -20,7 +21,7 @@ import {
   useDeleteFloor,
   useReorderFloors,
 } from "@/features/user-management/hooks/useFloors";
-import { useAreas, useCreateArea, useUpdateArea, useDeleteArea } from "@/features/user-management/hooks/useAreas";
+import { useAreas, useCreateArea, useUpdateArea, useDeleteArea, useReorderAreas } from "@/features/user-management/hooks/useAreas";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
 import { NameFormModal } from "@/components/admin/NameFormModal";
@@ -1354,8 +1355,14 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   // Optimistic floor order override so drag-reorder feels instant before the refetch lands.
   const [localFloorOrder, setLocalFloorOrder] = useState<string[] | null>(null);
   const reorderFloors = useReorderFloors();
+  // Optimistic per-floor area order override, keyed by floorId.
+  const [localAreaOrder, setLocalAreaOrder] = useState<Record<string, string[]>>({});
+  const reorderAreas = useReorderAreas();
+  const reorderTasks = useReorderTasks();
   const role = useMe().data?.role;
   const canReorderFloors = role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
+  const canReorderAreas = canReorderFloors;
+  const canReorderTasks = canReorderFloors;
 
   const floors = useMemo(() => {
     const list = (floorsQuery.data ?? [])
@@ -1373,9 +1380,16 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     for (const area of allAreasQuery.data ?? []) {
       if (map.has(area.floorId)) map.get(area.floorId)!.push(area);
     }
-    for (const list of map.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+    for (const [floorId, list] of map) {
+      list.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+      const override = localAreaOrder[floorId];
+      if (override) {
+        const rank = new Map(override.map((id, i) => [id, i]));
+        list.sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999));
+      }
+    }
     return map;
-  }, [floors, allAreasQuery.data]);
+  }, [floors, allAreasQuery.data, localAreaOrder]);
 
   const createFloor = useCreateFloor();
   const updateFloor = useUpdateFloor();
@@ -1404,6 +1418,15 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
     if (!siteFilter) return;
     setLocalFloorOrder(orderedFloorIds);
     reorderFloors.mutate({ siteId: siteFilter, floorIds: orderedFloorIds });
+  }
+
+  function handleReorderAreas(floorId: string, orderedAreaIds: string[]) {
+    setLocalAreaOrder((prev) => ({ ...prev, [floorId]: orderedAreaIds }));
+    reorderAreas.mutate({ floorId, areaIds: orderedAreaIds });
+  }
+
+  function handleReorderTasks(areaId: string, orderedTaskIds: string[]) {
+    reorderTasks.mutate({ areaId, taskIds: orderedTaskIds });
   }
   const editMutation = useEditOccurrence();
   const deleteMutation = useDeleteOccurrence();
@@ -1851,6 +1874,10 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           structureLoading={managing && (floorsQuery.isLoading || allAreasQuery.isLoading)}
           canReorderFloors={canReorderFloors}
           onReorderFloors={handleReorderFloors}
+          canReorderAreas={canReorderAreas}
+          onReorderAreas={handleReorderAreas}
+          canReorderTasks={canReorderTasks}
+          onReorderTasks={handleReorderTasks}
           onAddAssignment={handleScopeAddAssignment}
           onAddFloor={() => setFloorModal({ mode: "add" })}
           onEditFloor={(floor) => setFloorModal({ mode: "edit", floor })}

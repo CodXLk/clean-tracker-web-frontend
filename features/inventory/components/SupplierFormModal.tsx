@@ -8,6 +8,7 @@ import { TextField } from "@/components/shared/TextField";
 import { PillButton } from "@/components/shared/PillButton";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useCreateSupplier, useUpdateSupplier } from "@/features/inventory/hooks/useSuppliers";
+import { useSites } from "@/features/user-management/hooks/useSites";
 import {
   SupplierFormSchema,
   type SupplierFormInput,
@@ -20,20 +21,31 @@ interface SupplierFormModalProps {
   supplier?: Supplier | null;
 }
 
-const EMPTY: SupplierFormInput = { name: "", email: "", phone: "", address: "" };
+const EMPTY: SupplierFormInput = {
+  name: "",
+  email: "",
+  phone: "",
+  address: "",
+  clientSelfSupplying: false,
+  siteId: "",
+};
 
 export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModalProps) {
   const isEdit = !!supplier;
   const createMutation = useCreateSupplier();
   const updateMutation = useUpdateSupplier();
   const active = isEdit ? updateMutation : createMutation;
+  const sitesQuery = useSites();
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<SupplierFormInput>({ resolver: zodResolver(SupplierFormSchema), defaultValues: EMPTY });
+
+  const clientSelfSupplying = watch("clientSelfSupplying");
 
   useEffect(() => {
     if (!open) return;
@@ -44,6 +56,8 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
             email: supplier.email ?? "",
             phone: supplier.phone ?? "",
             address: supplier.address ?? "",
+            clientSelfSupplying: supplier.clientSelfSupplying ?? false,
+            siteId: supplier.siteId ?? "",
           }
         : EMPTY,
     );
@@ -58,7 +72,12 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
       email: values.email?.trim() || undefined,
       phone: values.phone?.trim() || undefined,
       address: values.address?.trim() || undefined,
+      clientSelfSupplying: values.clientSelfSupplying,
+      siteId: values.clientSelfSupplying ? values.siteId || undefined : undefined,
     };
+    if (values.clientSelfSupplying && !payload.siteId) {
+      return;
+    }
     if (isEdit && supplier) {
       updateMutation.mutate({ id: supplier.id, input: payload }, { onSuccess: onClose });
     } else {
@@ -75,6 +94,37 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
           <TextField label="Phone" placeholder="Optional" error={errors.phone?.message} {...register("phone")} />
         </div>
         <TextField label="Address" placeholder="Optional" error={errors.address?.message} {...register("address")} />
+
+        <label className="flex items-start gap-2 rounded-xl border border-grey-200 bg-grey-50 px-3 py-2.5 text-sm text-on-surface">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-grey-300 accent-primary" {...register("clientSelfSupplying")} />
+          <span>
+            <span className="font-medium">Client self-supplying</span>
+            <span className="block text-xs text-grey-500">
+              This is a hotel client that supplies items for its own site. Purchase orders become item
+              requests the client confirms and dispatches directly to the site.
+            </span>
+          </span>
+        </label>
+
+        {clientSelfSupplying && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="supplier-site" className="text-sm font-medium text-on-surface">
+              Hotel site <span className="text-danger">*</span>
+            </label>
+            <select
+              id="supplier-site"
+              className="rounded-xl border border-grey-300 bg-white px-3 py-2.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              {...register("siteId")}
+            >
+              <option value="">Select a site…</option>
+              {(sitesQuery.data ?? []).map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

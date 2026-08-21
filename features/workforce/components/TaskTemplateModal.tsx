@@ -6,6 +6,7 @@ import { SearchableSelect, type SelectOption } from "@/features/user-management/
 import { useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { RecurrenceEditor, emptyRecurrence, type RecurrenceValue } from "@/features/workforce/components/RecurrenceEditor";
 import type { TaskTemplate } from "@/features/workforce/schemas/taskTemplate.schema";
 
 interface EditableItem {
@@ -18,6 +19,7 @@ interface EditableTask {
   duration: string;
   description: string;
   items: EditableItem[];
+  recurrence: RecurrenceValue;
 }
 
 interface TaskTemplateModalProps {
@@ -27,7 +29,7 @@ interface TaskTemplateModalProps {
 }
 
 function blankTask(): EditableTask {
-  return { name: "", duration: "", description: "", items: [] };
+  return { name: "", duration: "", description: "", items: [], recurrence: emptyRecurrence() };
 }
 
 function toEditableTasks(template?: TaskTemplate | null): EditableTask[] {
@@ -37,6 +39,15 @@ function toEditableTasks(template?: TaskTemplate | null): EditableTask[] {
     duration: t.durationMinutes != null && t.durationMinutes > 0 ? String(t.durationMinutes) : "",
     description: t.description ?? "",
     items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+    recurrence: {
+      recurrenceType: t.recurrenceType ?? undefined,
+      recurrenceInterval: t.recurrenceInterval ?? undefined,
+      daysOfWeek: t.daysOfWeek ?? [],
+      monthlyMode: t.monthlyMode ?? "DAY_OF_MONTH",
+      dayOfMonth: t.dayOfMonth ?? undefined,
+      weekOfMonth: t.weekOfMonth ?? undefined,
+      monthlyWeekday: t.monthlyWeekday ?? undefined,
+    },
   }));
 }
 
@@ -98,11 +109,23 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
       .filter((t) => t.name.trim())
       .map((t) => {
         const duration = parseInt(t.duration, 10);
+        const r = t.recurrence;
         return {
           name: t.name.trim(),
           ...(Number.isFinite(duration) && duration > 0 ? { durationMinutes: duration } : {}),
           ...(t.description.trim() ? { description: t.description.trim() } : {}),
           items: t.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+          ...(r.recurrenceType
+            ? {
+                recurrenceType: r.recurrenceType,
+                recurrenceInterval: r.recurrenceInterval ?? 1,
+                daysOfWeek: r.daysOfWeek,
+                monthlyMode: r.monthlyMode,
+                ...(r.dayOfMonth != null ? { dayOfMonth: r.dayOfMonth } : {}),
+                ...(r.weekOfMonth != null ? { weekOfMonth: r.weekOfMonth } : {}),
+                ...(r.monthlyWeekday ? { monthlyWeekday: r.monthlyWeekday } : {}),
+              }
+            : {}),
         };
       });
     if (cleanedTasks.length === 0) {
@@ -236,6 +259,12 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
                       }}
                       onAdd={(itemId, quantity) => addItem(index, itemId, quantity)}
                       onRemove={(itemIndex) => removeItem(index, itemIndex)}
+                    />
+
+                    <RecurrenceEditor
+                      className="mt-2"
+                      value={task.recurrence}
+                      onChange={(recurrence) => updateTask(index, { recurrence })}
                     />
                   </div>
                   <button

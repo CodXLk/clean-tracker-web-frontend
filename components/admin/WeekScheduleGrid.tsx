@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Check, GripVertical, Plus, Pencil, Trash2 } from "lucide-react";
+import { Building2, Check, GripVertical, Plus, Pencil, Repeat, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { SiteTaskSummary, TaskOccurrence, WorkType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
@@ -16,17 +16,6 @@ const TYPE_HEX: Record<string, string> = {
   WORK_ORDER: "#F97316",
   OTHER: "#3B82F6",
 };
-
-// Category display priority within an area: work orders first, then periodical, then general.
-const CATEGORY_RANK: Record<string, number> = {
-  WORK_ORDER: 0,
-  PERIODICAL_TASK: 1,
-  GENERAL_TASK: 2,
-  OTHER: 3,
-};
-function categoryRank(type: WorkType): number {
-  return CATEGORY_RANK[type] ?? 99;
-}
 
 function formatDateShort(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
@@ -70,6 +59,10 @@ interface TaskRow {
   name: string;
   assignmentType: WorkType;
   hex: string;
+  /** Admin-defined order of the task within its area. */
+  orderIndex: number;
+  /** Short per-task recurrence label (managed mode, when the task overrides the assignment rule). */
+  recurrenceLabel?: string | null;
   /** date → occurrences of this task on that date. */
   byDate: Map<string, TaskOccurrence[]>;
   /** Next occurrence date after the visible week (managed all-tasks mode). */
@@ -84,6 +77,7 @@ function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): 
       name: occurrence.name,
       assignmentType: occurrence.assignmentType,
       hex: occurrenceHex(occurrence),
+      orderIndex: occurrence.orderIndex,
       byDate: new Map<string, TaskOccurrence[]>(),
     };
   const list = r.byDate.get(occurrence.date) ?? [];
@@ -109,7 +103,7 @@ function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
   }
   const result = new Map<string, TaskRow[]>();
   for (const [areaId, tasks] of byArea) {
-    result.set(areaId, [...tasks.values()].sort((a, b) => a.name.localeCompare(b.name)));
+    result.set(areaId, [...tasks.values()].sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name)));
   }
   return result;
 }
@@ -138,14 +132,14 @@ function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]
       name: t.name,
       assignmentType: t.assignmentType,
       hex: TYPE_HEX[t.assignmentType] ?? "#0B585A",
+      orderIndex: t.orderIndex,
+      recurrenceLabel: t.recurrenceLabel ?? null,
       byDate: occByTask.get(t.taskId) ?? new Map<string, TaskOccurrence[]>(),
       nextDate: t.nextDate ?? null,
     });
   }
   for (const rows of byArea.values()) {
-    rows.sort(
-      (a, b) => categoryRank(a.assignmentType) - categoryRank(b.assignmentType) || a.name.localeCompare(b.name),
-    );
+    rows.sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name));
   }
   return byArea;
 }
@@ -166,6 +160,9 @@ interface SiteGroup {
 
 function buildSiteGroups(occurrences: TaskOccurrence[]): SiteGroup[] {
   const sites = new Map<string, Map<string, Map<string, Map<string, TaskRow>>>>();
+  // Admin-defined sort orders captured from the occurrences (floor within site, area within floor).
+  const floorOrder = new Map<string, number>();
+  const areaOrder = new Map<string, number>();
   for (const occurrence of occurrences) {
     const floors = sites.get(occurrence.siteName) ?? new Map();
     sites.set(occurrence.siteName, floors);
@@ -175,20 +172,33 @@ function buildSiteGroups(occurrences: TaskOccurrence[]): SiteGroup[] {
     areas.set(occurrence.areaName, tasks);
     const key = taskRowKey(occurrence);
     tasks.set(key, occurrenceToRow(tasks.get(key), occurrence));
+    floorOrder.set(`${occurrence.siteName}\u0000${occurrence.floorName}`, occurrence.floorSortOrder);
+    areaOrder.set(
+      `${occurrence.siteName}\u0000${occurrence.floorName}\u0000${occurrence.areaName}`,
+      occurrence.areaSortOrder,
+    );
   }
   return [...sites.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([siteName, floors]) => ({
       siteName,
       floors: [...floors.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(
+          ([a], [b]) =>
+            (floorOrder.get(`${siteName}\u0000${a}`) ?? 0) - (floorOrder.get(`${siteName}\u0000${b}`) ?? 0) ||
+            a.localeCompare(b),
+        )
         .map(([floorName, areas]) => ({
           floorName,
           areas: [...areas.entries()]
-            .sort(([a], [b]) => a.localeCompare(b))
+            .sort(
+              ([a], [b]) =>
+                (areaOrder.get(`${siteName}\u0000${floorName}\u0000${a}`) ?? 0) -
+                  (areaOrder.get(`${siteName}\u0000${floorName}\u0000${b}`) ?? 0) || a.localeCompare(b),
+            )
             .map(([areaName, tasks]) => ({
               areaName,
-              rows: [...tasks.values()].sort((a, b) => a.name.localeCompare(b.name)),
+              rows: [...tasks.values()].sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name)),
             })),
         })),
     }));
@@ -224,6 +234,12 @@ interface WeekScheduleGridProps {
   /** When true, floors can be drag-reordered (super admin / company admin). */
   canReorderFloors?: boolean;
   onReorderFloors?: (orderedFloorIds: string[]) => void;
+  /** When true, areas can be drag-reordered within their floor. */
+  canReorderAreas?: boolean;
+  onReorderAreas?: (floorId: string, orderedAreaIds: string[]) => void;
+  /** When true, tasks can be drag-reordered within their area (super admin / company admin). */
+  canReorderTasks?: boolean;
+  onReorderTasks?: (areaId: string, orderedTaskIds: string[]) => void;
   onAddAssignment?: (target: AddAssignmentTarget) => void;
   onAddFloor?: () => void;
   onEditFloor?: (floor: Floor) => void;
@@ -255,6 +271,10 @@ export function WeekScheduleGrid({
   structureLoading = false,
   canReorderFloors = false,
   onReorderFloors,
+  canReorderAreas = false,
+  onReorderAreas,
+  canReorderTasks = false,
+  onReorderTasks,
   onAddAssignment,
   onAddFloor,
   onEditFloor,
@@ -284,6 +304,48 @@ export function WeekScheduleGrid({
     }
     setDraggingFloorId(null);
     setDragOverFloorId(null);
+  }
+
+  // Area drag-reorder is scoped to a single floor: the dragged area's id plus its floor.
+  const [draggingArea, setDraggingArea] = useState<{ floorId: string; areaId: string } | null>(null);
+  const [dragOverAreaId, setDragOverAreaId] = useState<string | null>(null);
+
+  function handleAreaDrop(floorId: string, targetAreaId: string) {
+    const dragging = draggingArea;
+    setDraggingArea(null);
+    setDragOverAreaId(null);
+    if (!dragging || dragging.floorId !== floorId || dragging.areaId === targetAreaId || !onReorderAreas) {
+      return;
+    }
+    const ids = (areasByFloor?.get(floorId) ?? []).map((a) => a.id);
+    const from = ids.indexOf(dragging.areaId);
+    const to = ids.indexOf(targetAreaId);
+    if (from >= 0 && to >= 0) {
+      ids.splice(from, 1);
+      ids.splice(to, 0, dragging.areaId);
+      onReorderAreas(floorId, ids);
+    }
+  }
+
+  // Task drag-reorder is scoped to a single area: the dragged task's id plus its area.
+  const [draggingTask, setDraggingTask] = useState<{ areaId: string; taskId: string } | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+
+  function handleTaskDrop(areaId: string, targetTaskId: string, orderedTaskIds: string[]) {
+    const dragging = draggingTask;
+    setDraggingTask(null);
+    setDragOverTaskId(null);
+    if (!dragging || dragging.areaId !== areaId || dragging.taskId === targetTaskId || !onReorderTasks) {
+      return;
+    }
+    const ids = [...orderedTaskIds];
+    const from = ids.indexOf(dragging.taskId);
+    const to = ids.indexOf(targetTaskId);
+    if (from >= 0 && to >= 0) {
+      ids.splice(from, 1);
+      ids.splice(to, 0, dragging.taskId);
+      onReorderTasks(areaId, ids);
+    }
   }
 
   const readOnlyGroups = useMemo(
@@ -443,6 +505,12 @@ export function WeekScheduleGrid({
             <span className="truncate text-sm text-on-surface" title={row.name}>
               {row.name}
             </span>
+            {row.recurrenceLabel && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                <Repeat size={9} aria-hidden="true" />
+                {row.recurrenceLabel}
+              </span>
+            )}
           </div>
           <div className="col-span-7 flex items-center gap-2 border-l border-grey-200 px-4 py-2.5">
             <span
@@ -480,6 +548,12 @@ export function WeekScheduleGrid({
           <span className="truncate text-sm text-on-surface" title={row.name}>
             {row.name}
           </span>
+          {row.recurrenceLabel && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <Repeat size={9} aria-hidden="true" />
+              {row.recurrenceLabel}
+            </span>
+          )}
         </div>
         {weekDates.map((dateStr) => {
           const cellOccurrences = row.byDate.get(dateStr) ?? [];
@@ -678,14 +752,67 @@ export function WeekScheduleGrid({
                       ) : (
                         floorAreas.map((area) => {
                           const rows = managedRowsByArea.get(area.id) ?? [];
+                          const isAreaDragTarget =
+                            canReorderAreas &&
+                            dragOverAreaId === area.id &&
+                            draggingArea != null &&
+                            draggingArea.areaId !== area.id &&
+                            draggingArea.floorId === floor.id;
                           return (
-                            <div key={area.id}>
+                            <div
+                              key={area.id}
+                              onDragOver={
+                                canReorderAreas && draggingArea?.floorId === floor.id
+                                  ? (e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (dragOverAreaId !== area.id) setDragOverAreaId(area.id);
+                                    }
+                                  : undefined
+                              }
+                              onDrop={
+                                canReorderAreas && draggingArea?.floorId === floor.id
+                                  ? (e) => {
+                                      e.stopPropagation();
+                                      handleAreaDrop(floor.id, area.id);
+                                    }
+                                  : undefined
+                              }
+                              className={cn(
+                                isAreaDragTarget && "ring-2 ring-inset ring-primary/60",
+                                draggingArea?.areaId === area.id && "opacity-60",
+                              )}
+                            >
                               {/* Area band — name + actions + hover-add day cells */}
                               <div
                                 className="group/area grid border-b border-grey-200 bg-primary/10"
+                                draggable={canReorderAreas}
+                                onDragStart={
+                                  canReorderAreas
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        setDraggingArea({ floorId: floor.id, areaId: area.id });
+                                      }
+                                    : undefined
+                                }
+                                onDragEnd={
+                                  canReorderAreas
+                                    ? () => {
+                                        setDraggingArea(null);
+                                        setDragOverAreaId(null);
+                                      }
+                                    : undefined
+                                }
                                 style={{ gridTemplateColumns: gridTemplate }}
                               >
                                 <div className="flex items-center gap-1.5 px-4 py-1.5">
+                                  {canReorderAreas && (
+                                    <GripVertical
+                                      size={12}
+                                      className="cursor-grab text-primary/60"
+                                      aria-label="Drag to reorder area"
+                                    />
+                                  )}
                                   <span className="text-[13px] font-semibold text-primary">
                                     {area.name}
                                   </span>
@@ -758,9 +885,63 @@ export function WeekScheduleGrid({
                               </div>
 
                               {/* Task rows */}
-                              {rows.map((row, i) => (
-                                <TaskRowView key={row.taskId} row={row} striped={i % 2 === 1} />
-                              ))}
+                              {(() => {
+                                const orderedTaskIds = rows.map((r) => r.taskId);
+                                return rows.map((row, i) => {
+                                  const isTaskDragTarget =
+                                    canReorderTasks &&
+                                    dragOverTaskId === row.taskId &&
+                                    draggingTask != null &&
+                                    draggingTask.areaId === area.id &&
+                                    draggingTask.taskId !== row.taskId;
+                                  return (
+                                    <div
+                                      key={row.taskId}
+                                      draggable={canReorderTasks}
+                                      onDragStart={
+                                        canReorderTasks
+                                          ? (e) => {
+                                              e.stopPropagation();
+                                              setDraggingTask({ areaId: area.id, taskId: row.taskId });
+                                            }
+                                          : undefined
+                                      }
+                                      onDragEnd={
+                                        canReorderTasks
+                                          ? () => {
+                                              setDraggingTask(null);
+                                              setDragOverTaskId(null);
+                                            }
+                                          : undefined
+                                      }
+                                      onDragOver={
+                                        canReorderTasks && draggingTask?.areaId === area.id
+                                          ? (e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              if (dragOverTaskId !== row.taskId) setDragOverTaskId(row.taskId);
+                                            }
+                                          : undefined
+                                      }
+                                      onDrop={
+                                        canReorderTasks && draggingTask?.areaId === area.id
+                                          ? (e) => {
+                                              e.stopPropagation();
+                                              handleTaskDrop(area.id, row.taskId, orderedTaskIds);
+                                            }
+                                          : undefined
+                                      }
+                                      className={cn(
+                                        canReorderTasks && "cursor-grab",
+                                        isTaskDragTarget && "ring-2 ring-inset ring-primary/60",
+                                        draggingTask?.taskId === row.taskId && "opacity-60",
+                                      )}
+                                    >
+                                      <TaskRowView row={row} striped={i % 2 === 1} />
+                                    </div>
+                                  );
+                                });
+                              })()}
                             </div>
                           );
                         })
