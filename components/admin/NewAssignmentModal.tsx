@@ -9,11 +9,12 @@ import {
   FormProvider,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList } from "lucide-react";
+import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList, Repeat } from "lucide-react";
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { WorkingDaysSelector } from "@/features/user-management/components/WorkingDaysSelector";
+import { RecurrenceDialog, summarizeRecurrence } from "@/features/workforce/components/RecurrenceEditor";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useFloors";
 import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
@@ -323,6 +324,8 @@ function LocationGroupCard({
   const [qDuration, setQDuration] = useState("");
   const [qDesc, setQDesc] = useState("");
   const [qError, setQError] = useState(false);
+  // Which task's recurrence popup is open (edited in a draft, committed on OK).
+  const [recurEditIndex, setRecurEditIndex] = useState<number | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Saved task-list templates (save the current group's tasks / load a set in).
@@ -354,6 +357,8 @@ function LocationGroupCard({
       cleanerIds: [],
       profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
       items: [],
+      daysOfWeek: [],
+      monthlyMode: "DAY_OF_MONTH",
     });
     setQName("");
     setQDuration("");
@@ -383,6 +388,13 @@ function LocationGroupCard({
         cleanerIds: [],
         profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
         items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+        recurrenceType: t.recurrenceType ?? undefined,
+        recurrenceInterval: t.recurrenceInterval ?? undefined,
+        daysOfWeek: t.daysOfWeek ?? [],
+        monthlyMode: t.monthlyMode ?? "DAY_OF_MONTH",
+        dayOfMonth: t.dayOfMonth ?? undefined,
+        weekOfMonth: t.weekOfMonth ?? undefined,
+        monthlyWeekday: t.monthlyWeekday ?? undefined,
       });
     }
   }
@@ -408,6 +420,17 @@ function LocationGroupCard({
             ...(t.durationMinutes != null ? { durationMinutes: t.durationMinutes } : {}),
             ...(t.description?.trim() ? { description: t.description.trim() } : {}),
             items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+            ...(t.recurrenceType
+              ? {
+                  recurrenceType: t.recurrenceType,
+                  recurrenceInterval: t.recurrenceInterval ?? 1,
+                  daysOfWeek: t.daysOfWeek ?? [],
+                  monthlyMode: t.monthlyMode ?? "DAY_OF_MONTH",
+                  ...(t.dayOfMonth != null ? { dayOfMonth: t.dayOfMonth } : {}),
+                  ...(t.weekOfMonth != null ? { weekOfMonth: t.weekOfMonth } : {}),
+                  ...(t.monthlyWeekday ? { monthlyWeekday: t.monthlyWeekday } : {}),
+                }
+              : {}),
           })),
         },
       },
@@ -763,6 +786,15 @@ function LocationGroupCard({
             const taskCleanerError =
               groupErrors?.tasks?.[taskIndex]?.cleanerIds?.message ??
               groupErrors?.tasks?.[taskIndex]?.profileIds?.message;
+            const recurrenceSummary = summarizeRecurrence({
+              recurrenceType: task?.recurrenceType,
+              recurrenceInterval: task?.recurrenceInterval,
+              daysOfWeek: task?.daysOfWeek ?? [],
+              monthlyMode: task?.monthlyMode ?? "DAY_OF_MONTH",
+              dayOfMonth: task?.dayOfMonth,
+              weekOfMonth: task?.weekOfMonth,
+              monthlyWeekday: task?.monthlyWeekday,
+            });
             return (
               <li
                 key={field.id}
@@ -775,6 +807,21 @@ function LocationGroupCard({
                   <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={task?.name}>
                     {task?.name}
                   </span>
+                  {/* Per-task schedule opens a popup with OK/Cancel; always editable. */}
+                  <button
+                    type="button"
+                    onClick={() => setRecurEditIndex(taskIndex)}
+                    title="Edit task schedule"
+                    className={cn(
+                      "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      recurrenceSummary
+                        ? "bg-primary/10 text-primary hover:bg-primary/20"
+                        : "text-grey-500 hover:bg-grey-100",
+                    )}
+                  >
+                    <Repeat size={11} aria-hidden="true" />
+                    {recurrenceSummary ?? "Schedule"}
+                  </button>
                   <span className="shrink-0 rounded-md bg-grey-100 px-1.5 py-0.5 text-[11px] font-medium text-grey-500">
                     {formatDuration(task?.durationMinutes ?? undefined)}
                   </span>
@@ -838,6 +885,37 @@ function LocationGroupCard({
       {groupErrors?.tasks?.message && (
         <p className="mt-2 text-xs text-danger">{groupErrors.tasks.message}</p>
       )}
+
+      {recurEditIndex != null && (() => {
+        const idx = recurEditIndex;
+        const t = watch(`groups.${groupIndex}.tasks.${idx}`);
+        const base = `groups.${groupIndex}.tasks.${idx}` as const;
+        return (
+          <RecurrenceDialog
+            taskName={t?.name}
+            initialValue={{
+              recurrenceType: t?.recurrenceType,
+              recurrenceInterval: t?.recurrenceInterval,
+              daysOfWeek: t?.daysOfWeek ?? [],
+              monthlyMode: t?.monthlyMode ?? "DAY_OF_MONTH",
+              dayOfMonth: t?.dayOfMonth,
+              weekOfMonth: t?.weekOfMonth,
+              monthlyWeekday: t?.monthlyWeekday,
+            }}
+            onClose={() => setRecurEditIndex(null)}
+            onSave={(r) => {
+              setValue(`${base}.recurrenceType`, r.recurrenceType, { shouldDirty: true });
+              setValue(`${base}.recurrenceInterval`, r.recurrenceInterval);
+              setValue(`${base}.daysOfWeek`, r.daysOfWeek);
+              setValue(`${base}.monthlyMode`, r.monthlyMode);
+              setValue(`${base}.dayOfMonth`, r.dayOfMonth);
+              setValue(`${base}.weekOfMonth`, r.weekOfMonth);
+              setValue(`${base}.monthlyWeekday`, r.monthlyWeekday);
+              setRecurEditIndex(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1107,6 +1185,23 @@ export function NewAssignmentModal({
     });
   }
 
+  /** Copy the assignment-level recurrence into every task's own rule (override all). */
+  function applyRecurrenceToAllTasks() {
+    const values = getValues();
+    values.groups.forEach((group, gi) => {
+      group.tasks.forEach((_task, ti) => {
+        const base = `groups.${gi}.tasks.${ti}` as const;
+        setValue(`${base}.recurrenceType`, values.recurrenceType, { shouldDirty: true });
+        setValue(`${base}.recurrenceInterval`, values.recurrenceCount);
+        setValue(`${base}.daysOfWeek`, values.daysOfWeek ?? []);
+        setValue(`${base}.monthlyMode`, values.monthlyMode);
+        setValue(`${base}.dayOfMonth`, values.dayOfMonth);
+        setValue(`${base}.weekOfMonth`, values.weekOfMonth);
+        setValue(`${base}.monthlyWeekday`, values.monthlyWeekday);
+      });
+    });
+  }
+
   function toggleCleaner(id: string) {
     const current = selectedCleaners ?? [];
     if (current.includes(id)) {
@@ -1353,7 +1448,18 @@ export function NewAssignmentModal({
               {/* Periodical (or Other + recurrence): recurrence settings */}
               {showRecurrence && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
-                  <p className="mb-3 text-sm font-medium text-on-surface">Recurrence</p>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-on-surface">Recurrence</p>
+                    <button
+                      type="button"
+                      onClick={applyRecurrenceToAllTasks}
+                      title="Give every task this recurrence (overrides per-task schedules)"
+                      className="inline-flex items-center gap-1 rounded-lg border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <Repeat size={12} aria-hidden="true" />
+                      Apply to all tasks
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label

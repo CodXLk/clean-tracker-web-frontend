@@ -71,6 +71,9 @@ export const TaskOccurrenceSchema = z.object({
   floorName: z.string(),
   areaId: z.string().uuid(),
   areaName: z.string(),
+  floorSortOrder: z.number().default(0),
+  areaSortOrder: z.number().default(0),
+  orderIndex: z.number().default(0),
   assignmentType: WorkTypeSchema,
   poId: z.string().nullable().optional(),
   templateName: z.string().nullable().optional(),
@@ -121,6 +124,7 @@ export const SiteTaskSummarySchema = z.object({
   assignmentType: WorkTypeSchema,
   orderIndex: z.number().default(0),
   nextDate: z.string().nullish(),
+  recurrenceLabel: z.string().nullish(),
 });
 export const SiteTaskSummaryListSchema = z.array(SiteTaskSummarySchema);
 export type SiteTaskSummary = z.infer<typeof SiteTaskSummarySchema>;
@@ -163,6 +167,12 @@ export const AssignmentSchema = z.object({
       colorHex: z.string().nullable().optional(),
       orderIndex: z.number(),
       endDate: z.string().nullable().optional(),
+      recurrenceType: RecurrenceTypeSchema.nullable().optional(),
+      recurrenceInterval: z.number().nullable().optional(),
+      daysOfWeek: z.array(DayOfWeekSchema).default([]),
+      dayOfMonth: z.number().nullable().optional(),
+      weekOfMonth: z.number().nullable().optional(),
+      monthlyWeekday: DayOfWeekSchema.nullable().optional(),
       cleaners: z.array(AssignmentCleanerSchema),
       supervisors: z.array(AssignmentCleanerSchema).default([]),
       items: z
@@ -220,6 +230,15 @@ export const GroupTaskFormSchema = z.object({
       quantity: z.number().positive("Quantity must be greater than zero"),
     }),
   ),
+  // Optional per-task recurrence override (used within a recurrence-capable assignment).
+  // When recurrenceType is set, this task schedules on its own rule instead of the assignment's.
+  recurrenceType: RecurrenceTypeSchema.optional(),
+  recurrenceInterval: z.number().min(1).optional(),
+  daysOfWeek: z.array(DayOfWeekSchema),
+  monthlyMode: z.enum(["DAY_OF_MONTH", "DAY_OF_WEEK"]),
+  dayOfMonth: z.number().min(1).max(31).optional(),
+  weekOfMonth: z.number().min(1).max(4).optional(),
+  monthlyWeekday: DayOfWeekSchema.optional(),
 });
 export type GroupTaskFormInput = z.infer<typeof GroupTaskFormSchema>;
 
@@ -412,6 +431,18 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
           ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
           ...((task.items ?? []).length > 0
             ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
+            : {}),
+          ...(usesRecurrence && task.recurrenceType
+            ? {
+                recurrenceType: task.recurrenceType,
+                recurrenceInterval: task.recurrenceInterval ?? 1,
+                ...(task.recurrenceType === "WEEKLY" ? { daysOfWeek: task.daysOfWeek } : {}),
+                ...(task.recurrenceType === "MONTHLY"
+                  ? task.monthlyMode === "DAY_OF_WEEK"
+                    ? { weekOfMonth: task.weekOfMonth, monthlyWeekday: task.monthlyWeekday }
+                    : { dayOfMonth: task.dayOfMonth }
+                  : {}),
+              }
             : {}),
         })),
       ),

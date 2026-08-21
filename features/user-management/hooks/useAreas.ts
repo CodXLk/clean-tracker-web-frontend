@@ -65,3 +65,15 @@ export function useDeleteArea() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: areaKeys.lists() }),
   });
 }
+
+/** Persist a new area display order within a floor (super admin / company admin). */
+export function useReorderAreas() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ floorId, areaIds }: { floorId: string; areaIds: string[] }) => {
+      const { data } = await clientApi.put(ENDPOINTS.areas.reorder, { floorId, areaIds });
+      return AreaListSchema.parse(data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: areaKeys.lists() }),
+  });
+}

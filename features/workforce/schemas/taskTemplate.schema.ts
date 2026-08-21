@@ -1,9 +1,13 @@
 import { z } from "zod";
+import { DayOfWeekSchema } from "@/features/user-management/schemas/site.schema";
+
+const TemplateRecurrenceTypeSchema = z.enum(["DAILY", "WEEKLY", "MONTHLY"]);
 
 /**
  * A saved task template (mirrors backend TaskTemplateResponse). `tasks` is a
- * reusable list of task definitions with optional expected inventory items,
- * loaded into a floor/area group in the New Assignment form.
+ * reusable list of task definitions with optional expected inventory items and an
+ * optional per-task recurrence rule, loaded into a floor/area group in the New
+ * Assignment form.
  */
 export const TemplateTaskSchema = z.object({
   name: z.string(),
@@ -17,6 +21,14 @@ export const TemplateTaskSchema = z.object({
       }),
     )
     .default([]),
+  // Optional per-task recurrence saved with the template.
+  recurrenceType: TemplateRecurrenceTypeSchema.nullable().optional(),
+  recurrenceInterval: z.number().nullable().optional(),
+  daysOfWeek: z.array(DayOfWeekSchema).optional(),
+  monthlyMode: z.enum(["DAY_OF_MONTH", "DAY_OF_WEEK"]).nullable().optional(),
+  dayOfMonth: z.number().nullable().optional(),
+  weekOfMonth: z.number().nullable().optional(),
+  monthlyWeekday: DayOfWeekSchema.nullable().optional(),
 });
 export type TemplateTask = z.infer<typeof TemplateTaskSchema>;
 

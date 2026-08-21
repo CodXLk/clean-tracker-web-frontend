@@ -39,6 +39,11 @@ export function SuppliersTab({ canManage }: SuppliersTabProps) {
       cell: (s) => (
         <div className="flex items-center gap-2">
           <span className="font-medium text-on-surface">{s.name}</span>
+          {s.clientSelfSupplying && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              Client{s.siteName ? ` · ${s.siteName}` : ""}
+            </span>
+          )}
           {!s.active && <span className="rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-500">Inactive</span>}
         </div>
       ),

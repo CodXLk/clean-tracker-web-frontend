@@ -245,6 +245,9 @@ export const SupplierSchema = z.object({
   phone: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
   active: z.boolean(),
+  clientSelfSupplying: z.boolean().default(false),
+  siteId: z.string().uuid().nullable().optional(),
+  siteName: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
@@ -256,6 +259,8 @@ export const SupplierFormSchema = z.object({
   email: z.string().email("Enter a valid email").max(150).optional().or(z.literal("")),
   phone: z.string().max(30, "Phone is too long").optional().or(z.literal("")),
   address: z.string().max(500, "Address is too long").optional().or(z.literal("")),
+  clientSelfSupplying: z.boolean(),
+  siteId: z.string().uuid().optional().or(z.literal("")),
 });
 export type SupplierFormInput = z.infer<typeof SupplierFormSchema>;
 
@@ -263,6 +268,8 @@ export type SupplierFormInput = z.infer<typeof SupplierFormSchema>;
 
 export const PurchaseOrderStatusSchema = z.enum([
   "SENT",
+  "AWAITING_CLIENT",
+  "CLIENT_DISPATCHED",
   "PARTIALLY_RECEIVED",
   "RECEIVED",
   "CANCELLED",
@@ -271,6 +278,8 @@ export type PurchaseOrderStatus = z.infer<typeof PurchaseOrderStatusSchema>;
 
 export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   SENT: "Sent",
+  AWAITING_CLIENT: "Awaiting client",
+  CLIENT_DISPATCHED: "Client dispatched",
   PARTIALLY_RECEIVED: "Partially received",
   RECEIVED: "Received",
   CANCELLED: "Cancelled",
@@ -293,6 +302,9 @@ export const PurchaseOrderSchema = z.object({
   supplierId: z.string().uuid(),
   supplierName: z.string(),
   supplierEmail: z.string().nullable().optional(),
+  clientSelfSupplying: z.boolean().default(false),
+  siteId: z.string().uuid().nullable().optional(),
+  siteName: z.string().nullable().optional(),
   status: PurchaseOrderStatusSchema,
   expectedDate: z.string().nullable().optional(),
   note: z.string().nullable().optional(),

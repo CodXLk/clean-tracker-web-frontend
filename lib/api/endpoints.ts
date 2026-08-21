@@ -83,6 +83,7 @@ export const ENDPOINTS = {
   areas: {
     list:   "/areas",
     create: "/areas",
+    reorder: "/areas/reorder",
     byId:   (id: string) => `/areas/${id}`,
   },
   cleaners: {
@@ -112,6 +113,7 @@ export const ENDPOINTS = {
     create:      "/assignments",
     occurrences: "/assignments/occurrences",
     siteTasks:   "/assignments/site-tasks",
+    tasksReorder: "/assignments/tasks/reorder",
     stats:       "/assignments/stats",
     taskNames:   "/assignments/task-names",
     byId:        (id: string) => `/assignments/${id}`,
@@ -156,6 +158,8 @@ export const ENDPOINTS = {
   purchaseOrders: {
     list:   "/purchase-orders",
     create: "/purchase-orders",
+    clientRequests: "/purchase-orders/client-requests",
+    clientDispatch: (id: string) => `/purchase-orders/${id}/client-dispatch`,
     byId:   (id: string) => `/purchase-orders/${id}`,
     cancel: (id: string) => `/purchase-orders/${id}/cancel`,
   },
@@ -279,6 +283,7 @@ export const BACKEND = {
   areas: {
     list:   "/api/v1/areas",
     create: "/api/v1/areas",
+    reorder: "/api/v1/areas/reorder",
     byId:   (id: string) => `/api/v1/areas/${id}`,
   },
   cleaners: {
@@ -308,6 +313,7 @@ export const BACKEND = {
     create:      "/api/v1/assignments",
     occurrences: "/api/v1/assignments/occurrences",
     siteTasks:   "/api/v1/assignments/site-tasks",
+    tasksReorder: "/api/v1/assignments/tasks/reorder",
     stats:       "/api/v1/assignments/stats",
     taskNames:   "/api/v1/assignments/task-names",
     byId:        (id: string) => `/api/v1/assignments/${id}`,
@@ -352,6 +358,8 @@ export const BACKEND = {
   purchaseOrders: {
     list:   "/api/v1/purchase-orders",
     create: "/api/v1/purchase-orders",
+    clientRequests: "/api/v1/purchase-orders/client-requests",
+    clientDispatch: (id: string) => `/api/v1/purchase-orders/${id}/client-dispatch`,
     byId:   (id: string) => `/api/v1/purchase-orders/${id}`,
     cancel: (id: string) => `/api/v1/purchase-orders/${id}/cancel`,
   },

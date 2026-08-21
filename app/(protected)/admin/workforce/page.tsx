@@ -27,6 +27,8 @@ export default function WorkforcePage() {
   const [prefill, setPrefill] = useState<AssignmentPrefill>({});
   const [loadedDraft, setLoadedDraft] = useState<{ id: string; payload: unknown } | null>(null);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  // Bumped on every open so the modal remounts with a fresh, empty form (no leftover tasks).
+  const [assignmentModalKey, setAssignmentModalKey] = useState(0);
 
   const draftsQuery = useDrafts();
   const draftCount = draftsQuery.data?.length ?? 0;
@@ -34,12 +36,14 @@ export default function WorkforcePage() {
   function handlePrefill(next: AssignmentPrefill) {
     setLoadedDraft(null);
     setPrefill(next);
+    setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
 
   function handleNewAssignmentButton() {
     setLoadedDraft(null);
     setPrefill({ date: new Date(), time: "09:00" });
+    setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
 
@@ -47,6 +51,7 @@ export default function WorkforcePage() {
     setPrefill({});
     setLoadedDraft({ id: draft.id, payload: draft.payload });
     setDraftsOpen(false);
+    setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
 
@@ -115,6 +120,7 @@ export default function WorkforcePage() {
 
       {/* New Assignment Modal */}
       <NewAssignmentModal
+        key={assignmentModalKey}
         open={newAssignmentOpen}
         onClose={handleAssignmentModalClose}
         defaultDate={prefill.date}

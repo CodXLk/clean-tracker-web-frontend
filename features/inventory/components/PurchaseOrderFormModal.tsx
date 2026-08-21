@@ -92,12 +92,23 @@ export function PurchaseOrderFormModal({ open, onClose }: PurchaseOrderFormModal
         <SearchableSelect
           label="Supplier"
           required
-          options={(suppliers ?? []).map((s) => ({ value: s.id, label: s.name, sublabel: s.email ?? undefined }))}
+          options={(suppliers ?? []).map((s) => ({
+            value: s.id,
+            label: s.clientSelfSupplying ? `${s.name} (client · ${s.siteName ?? "site"})` : s.name,
+            sublabel: s.email ?? undefined,
+          }))}
           value={supplierId || null}
           onChange={(v) => setSupplierId(v ?? "")}
           loading={suppliersLoading}
           placeholder="Select supplier"
         />
+
+        {(suppliers ?? []).find((s) => s.id === supplierId)?.clientSelfSupplying && (
+          <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary">
+            This is a hotel client. Instead of a supplier email, this becomes an item request the client
+            confirms and dispatches directly to their site.
+          </p>
+        )}
 
         <TextField
           label="Expected date"
