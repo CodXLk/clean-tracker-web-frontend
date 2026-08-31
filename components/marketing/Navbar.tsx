@@ -13,14 +13,13 @@ const NAV_LINKS = [
   { label: "Home", href: "/" },
   { label: "Our services", href: "/services" },
   { label: "Industries", href: "/industries" },
-  { label: "Compliance", href: "/#compliance" },
-  { label: "Reviews", href: "/#reviews" },
+  { label: "Compliance", href: "/compliance" },
+  { label: "Reviews", href: "/reviews" },
   { label: "About us", href: "/about" },
   { label: "Contact", href: "/contact" },
 ] as const;
 
 function isActive(pathname: string, href: string) {
-  if (href.startsWith("/#")) return false;
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
 }

@@ -11,9 +11,9 @@ const QUICK_LINKS = [
     { label: "About Us", href: "/about" },
     { label: "Specialised Services", href: "/services" },
     { label: "Industries We Serve", href: "/industries" },
-    { label: "Compliance & Safety", href: "/#compliance" },
+    { label: "Compliance & Safety", href: "/compliance" },
     { label: "Latest Insights", href: "/blog" },
-    { label: "FAQs", href: "/contact#faq" },
+    { label: "FAQs", href: "/faq" },
     { label: "Contact Us", href: "/contact" },
 ] as const;
 

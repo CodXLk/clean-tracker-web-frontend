@@ -7,7 +7,21 @@ import { PROJECTS } from "@/lib/constants/projects";
 /** Public, indexable marketing routes only — (auth), (protected) and /api are intentionally excluded. */
 export default function sitemap(): MetadataRoute.Sitemap {
     const base = BUSINESS.siteUrl;
-    const staticRoutes = ["/", "/about", "/services", "/industries", "/projects", "/blog", "/contact", "/privacy", "/terms", "/cookies"];
+    const staticRoutes = [
+        "/",
+        "/about",
+        "/services",
+        "/industries",
+        "/projects",
+        "/blog",
+        "/reviews",
+        "/compliance",
+        "/faq",
+        "/contact",
+        "/privacy",
+        "/terms",
+        "/cookies",
+    ];
 
     return [
         ...staticRoutes.map((route) => ({ url: `${base}${route}` })),

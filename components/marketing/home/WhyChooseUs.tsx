@@ -30,10 +30,10 @@ const REASONS = [
     },
 ] as const;
 
-/** id="compliance" — the nav's "Compliance" link scrolls here from any page. */
+/** Full compliance detail now lives on its own /compliance page — this section stays a general "why choose us" overview. */
 export function WhyChooseUs() {
     return (
-        <section id="compliance" aria-labelledby="why-choose-us-heading" className="mx-auto max-w-[1368px] px-5 py-20 sm:px-8">
+        <section aria-labelledby="why-choose-us-heading" className="mx-auto max-w-[1368px] px-5 py-20 sm:px-8">
             <div className="grid gap-10 lg:grid-cols-[340px_1fr] lg:gap-16">
                 <div className="flex flex-col justify-between gap-10">
                     <div className="flex flex-col gap-4">
