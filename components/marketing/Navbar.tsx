@@ -57,6 +57,12 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className="hidden rounded-full border border-line px-5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-2 hover:text-brand-2 lg:inline-flex"
+          >
+            Login
+          </Link>
           <QuoteButton className="hidden lg:inline-flex" />
 
           <button
@@ -95,6 +101,13 @@ export function Navbar() {
               </li>
             ))}
           </ul>
+          <Link
+            href="/login"
+            onClick={() => setOpen(false)}
+            className="mt-2 block rounded-full border border-line px-3 py-2.5 text-center text-sm font-medium text-ink"
+          >
+            Login
+          </Link>
           <QuoteButton className="mt-2 w-full justify-center" onClick={() => setOpen(false)} />
         </nav>
       )}
