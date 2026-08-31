@@ -12,6 +12,7 @@ export function ComplianceCta() {
                 fill
                 sizes="100vw"
                 className="object-cover"
+                style={{ transform: "scaleX(-1)" }}
             />
             <div aria-hidden="true" className="absolute inset-0 bg-ink/65" />
 

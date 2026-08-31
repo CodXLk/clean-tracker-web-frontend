@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { Phone, ArrowDownRight, MapPin } from "lucide-react";
 import { Navbar } from "@/components/marketing/Navbar";
 import { Footer } from "@/components/marketing/Footer";
-import { PageHero } from "@/components/marketing/PageHero";
 import { SectionTag } from "@/components/marketing/SectionTag";
+import { QuoteButton } from "@/components/marketing/QuoteButton";
 import { JsonLd } from "@/components/marketing/JsonLd";
 import { ContactForm } from "@/components/marketing/ContactForm";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
@@ -16,6 +16,19 @@ export const metadata: Metadata = {
         "Request a commercial cleaning quote from Primeway Property Services. Call 1800 890 991 or send us your facility details.",
     alternates: { canonical: "/contact" },
 };
+
+const INFO_ITEMS: { label: string; value: string; href?: string }[] = [
+    { label: "Email:", value: BUSINESS.email, href: BUSINESS.emailHref },
+    { label: "Phone:", value: BUSINESS.phone, href: BUSINESS.phoneHref },
+    {
+        label: "Address:",
+        value: `${BUSINESS.streetAddress}, ${BUSINESS.addressLocality} ${BUSINESS.addressRegion} ${BUSINESS.postalCode}`,
+    },
+    {
+        label: "Working Hours:",
+        value: "By appointment, including before/after hours and overnight scheduling.",
+    },
+];
 
 export default function ContactPage() {
     return (
@@ -33,47 +46,73 @@ export default function ContactPage() {
             />
             <Navbar />
             <main>
-                <PageHero
-                    eyebrow="Contact Us"
-                    title="Request a Commercial Cleaning Quote"
-                    description="Tell us about your facility and we'll get back to you with a tailored quote."
-                    breadcrumbs={[{ label: "Contact Us", href: "/contact" }]}
-                />
+                <section className="border-b border-line bg-surface-muted">
+                    <div className="mx-auto max-w-[1368px] px-5 py-12 sm:px-8 sm:py-16">
+                        <div className="flex flex-col gap-10 lg:flex-row lg:items-stretch lg:justify-between">
+                            <div className="flex flex-col justify-between gap-16 lg:max-w-lg">
+                                <div className="flex flex-col gap-4">
+                                    <SectionTag>Contact us</SectionTag>
+                                    <h1 className="flex flex-wrap items-end gap-2 text-4xl font-medium tracking-tight text-ink sm:text-5xl lg:text-6xl">
+                                        Request a Commercial Facility Quote
+                                        <ArrowDownRight size={36} className="hidden shrink-0 sm:block" aria-hidden="true" />
+                                    </h1>
+                                </div>
 
-                <section className="mx-auto max-w-[1368px] px-5 py-16 sm:px-8">
-                    <div className="grid gap-10 lg:grid-cols-[1fr_360px]">
-                        <div className="rounded-xl border border-line p-6 sm:p-8">
-                            <ContactForm />
-                        </div>
-
-                        <aside className="flex flex-col gap-4">
-                            <div className="rounded-xl border border-line p-6">
-                                <h2 className="text-lg font-medium text-ink">Get in Touch</h2>
-                                <ul className="mt-4 flex flex-col gap-3 text-sm text-body-2">
-                                    <li className="flex items-center gap-2.5">
-                                        <Phone size={16} className="text-brand-2" aria-hidden="true" />
-                                        <a href={BUSINESS.phoneHref} className="hover:text-brand-2 hover:underline">
-                                            {BUSINESS.phone}
-                                        </a>
-                                    </li>
-                                    <li className="flex items-center gap-2.5">
-                                        <Mail size={16} className="text-brand-2" aria-hidden="true" />
-                                        <a href={BUSINESS.emailHref} className="break-all hover:text-brand-2 hover:underline">
-                                            {BUSINESS.email}
-                                        </a>
-                                    </li>
-                                    <li className="flex items-center gap-2.5">
-                                        <MapPin size={16} className="text-brand-2" aria-hidden="true" />
-                                        {BUSINESS.streetAddress}, {BUSINESS.addressLocality} {BUSINESS.addressRegion} {BUSINESS.postalCode}
-                                    </li>
+                                <ul className="grid grid-cols-2 gap-x-12 gap-y-8">
+                                    {INFO_ITEMS.map(({ label, value, href }) => (
+                                        <li key={label} className="flex flex-col gap-2">
+                                            <p className="text-ink">{label}</p>
+                                            {href ? (
+                                                <a href={href} className="break-words text-sm text-body-2 hover:text-brand-2 hover:underline">
+                                                    {value}
+                                                </a>
+                                            ) : (
+                                                <p className="text-sm text-body-2">{value}</p>
+                                            )}
+                                        </li>
+                                    ))}
                                 </ul>
                             </div>
-                            <div className="rounded-xl bg-surface-muted p-6 text-sm text-body-2">
-                                ABN {BUSINESS.abn}
-                                <br />
-                                Servicing {BUSINESS.serviceArea}
+
+                            <div className="w-full rounded-lg border border-line p-6 sm:p-8 lg:max-w-xl">
+                                <ContactForm />
                             </div>
-                        </aside>
+                        </div>
+                    </div>
+                </section>
+
+                <section aria-labelledby="coverage-heading">
+                    <div className="mx-auto max-w-[1368px] px-5 py-16 sm:px-8">
+                        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                            <div className="flex flex-col gap-4">
+                                <SectionTag>Service Coverage</SectionTag>
+                                <h2 id="coverage-heading" className="max-w-2xl text-4xl font-medium tracking-tight text-ink sm:text-5xl">
+                                    {BUSINESS.serviceArea} Wide Coverage — Backed by Our Victorian Operations Base
+                                </h2>
+                            </div>
+                            <p className="max-w-md text-body-2 lg:text-right">
+                                Our head office is located in {BUSINESS.addressLocality}, {BUSINESS.addressRegion}, with dedicated
+                                operational teams delivering commercial cleaning across Melbourne, Docklands, Dandenong, Geelong
+                                and other regional hubs — extending to facilities across {BUSINESS.serviceArea}.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="relative flex h-[500px] w-full flex-col items-center justify-center gap-4 bg-surface-muted sm:h-[600px]">
+                        <MapPin size={40} className="text-brand-2" aria-hidden="true" />
+                        <p className="text-lg font-medium text-ink">
+                            {BUSINESS.streetAddress}, {BUSINESS.addressLocality} {BUSINESS.addressRegion} {BUSINESS.postalCode}
+                        </p>
+                        <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                `${BUSINESS.streetAddress}, ${BUSINESS.addressLocality} ${BUSINESS.addressRegion} ${BUSINESS.postalCode}, Australia`,
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-brand-2 hover:underline"
+                        >
+                            View on Google Maps
+                        </a>
                     </div>
                 </section>
 
@@ -82,12 +121,15 @@ export default function ContactPage() {
                         <div className="flex flex-col gap-4">
                             <SectionTag>FAQ</SectionTag>
                             <h2 id="faq-heading" className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">
-                                Honest Answers, No Guesswork
+                                Clear answers for facility managers
                             </h2>
                         </div>
                         <div className="mt-8 max-w-3xl">
                             <FaqAccordion items={FAQ_ITEMS} />
                         </div>
+                        <QuoteButton href={BUSINESS.phoneHref} icon={Phone} className="mt-10 w-fit">
+                            Speak with Operations
+                        </QuoteButton>
                     </div>
                 </section>
             </main>
