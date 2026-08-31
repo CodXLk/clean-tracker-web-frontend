@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ArrowDownRight } from "lucide-react";
+import { SectionTag } from "@/components/marketing/SectionTag";
 import { Navbar } from "@/components/marketing/Navbar";
 import { Footer } from "@/components/marketing/Footer";
-import { PageHero } from "@/components/marketing/PageHero";
 import { ServicesGrid } from "@/components/marketing/ServicesGrid";
+import { ComplianceCta } from "@/components/marketing/home/ComplianceCta";
 import { BUSINESS } from "@/lib/constants/business";
 
 export const metadata: Metadata = {
@@ -18,23 +19,26 @@ export default function ServicesPage() {
         <>
             <Navbar />
             <main>
-                <PageHero
-                    eyebrow="Our Services"
-                    title="Specialised Commercial Cleaning Services"
-                    description={`${BUSINESS.name} tailors every cleaning program to your facility, schedule and industry standards across ${BUSINESS.serviceArea}.`}
-                    breadcrumbs={[{ label: "Our Services", href: "/services" }]}
-                />
-                <ServicesGrid heading={false} />
-                <section className="mx-auto max-w-[1368px] px-5 py-16 text-center sm:px-8">
-                    <h2 className="text-2xl font-medium text-ink sm:text-3xl">Not sure which service you need?</h2>
-                    <p className="mt-3 text-body-2">Tell us about your facility and we&rsquo;ll recommend a cleaning plan.</p>
-                    <Link
-                        href="/contact"
-                        className="mt-6 inline-flex items-center rounded-full bg-brand-2 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-2-dark"
-                    >
-                        Request a Quote
-                    </Link>
+                <section className="border-b border-line bg-surface-muted">
+                    <div className="mx-auto max-w-[1368px] px-5 py-12 sm:px-8 sm:py-16">
+                        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="flex flex-col gap-4 lg:max-w-4xl lg:flex-1">
+                                <SectionTag>Our Services</SectionTag>
+                                <h1 className="text-4xl font-medium tracking-tight text-ink sm:text-6xl">
+                                    Commercial Cleaning Solutions Across {BUSINESS.serviceArea}
+                                    <ArrowDownRight size={36} className="ml-2 hidden align-middle sm:inline" aria-hidden="true" />
+                                </h1>
+                            </div>
+                            <p className="max-w-xs text-body-2 lg:mt-40">
+                                From routine office care to specialised hospital-grade sanitisation, {BUSINESS.name} delivers
+                                tailored commercial cleaning designed around your operational requirements.
+                            </p>
+                        </div>
+                    </div>
                 </section>
+
+                <ServicesGrid />
+                <ComplianceCta />
             </main>
             <Footer />
         </>
