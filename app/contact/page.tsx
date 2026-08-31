@@ -46,7 +46,7 @@ export default function ContactPage() {
             />
             <Navbar />
             <main>
-                <section className="border-b border-line bg-surface-muted">
+                <section className="bg-surface-muted">
                     <div className="mx-auto max-w-[1368px] px-5 py-12 sm:px-8 sm:py-16">
                         <div className="flex flex-col gap-10 lg:flex-row lg:items-stretch lg:justify-between">
                             <div className="flex flex-col justify-between gap-16 lg:max-w-lg">
@@ -81,12 +81,12 @@ export default function ContactPage() {
                     </div>
                 </section>
 
-                <section aria-labelledby="coverage-heading">
+                <section aria-labelledby="coverage-heading" className="bg-surface-muted">
                     <div className="mx-auto max-w-[1368px] px-5 py-16 sm:px-8">
                         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                             <div className="flex flex-col gap-4">
                                 <SectionTag>Service Coverage</SectionTag>
-                                <h2 id="coverage-heading" className="max-w-2xl text-4xl font-medium tracking-tight text-ink sm:text-5xl">
+                                <h2 id="coverage-heading" className="max-w-3xl text-4xl font-medium tracking-tight text-ink sm:text-6xl lg:text-7xl">
                                     {BUSINESS.serviceArea} Wide Coverage — Backed by Our Victorian Operations Base
                                 </h2>
                             </div>
@@ -116,8 +116,8 @@ export default function ContactPage() {
                     </div>
                 </section>
 
-                <section id="faq" aria-labelledby="faq-heading" className="bg-surface-muted">
-                    <div className="mx-auto max-w-[1368px] px-5 py-16 sm:px-8">
+                <section id="faq" aria-labelledby="faq-heading" className="border-y border-line bg-[#ededed]">
+                    <div className="mx-auto max-w-[1368px] px-5 py-20 sm:px-8 lg:py-28">
                         <div className="grid gap-10 lg:grid-cols-[1fr_1.4fr]">
                             <div className="flex flex-col justify-between gap-10">
                                 <div className="flex flex-col gap-4">
