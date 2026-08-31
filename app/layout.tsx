@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { BUSINESS } from "@/lib/constants/business";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,9 +27,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Primeway Property Services | Commercial Cleaning in, Australia",
+  metadataBase: new URL(BUSINESS.siteUrl),
+  title: {
+    default: `${BUSINESS.name} | Commercial Cleaning Across Australia`,
+    template: `%s | ${BUSINESS.name}`,
+  },
   description:
-    "Primeway Property Services is a commercial cleaning company based in, Australia, offering regular, periodical, deep, and specialist cleaning across a wide range of industries.",
+    `${BUSINESS.name} is a commercial cleaning company based in ${BUSINESS.addressRegion}, Australia, offering regular, deep, disinfecting, carpet and window cleaning across a wide range of industries.`,
 };
 
 export default function RootLayout({
