@@ -6,7 +6,7 @@ import { PageHero } from "@/components/marketing/PageHero";
 import { SectionTag } from "@/components/marketing/SectionTag";
 import { QuoteButton } from "@/components/marketing/QuoteButton";
 import { ReviewCard } from "@/components/marketing/ReviewCard";
-import { REVIEW_ROLES } from "@/lib/constants/reviews";
+import { REVIEWS } from "@/lib/constants/reviews";
 
 export const metadata: Metadata = {
     title: "Reviews",
@@ -35,8 +35,8 @@ export default function ReviewsPage() {
                     </div>
 
                     <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {REVIEW_ROLES.map((role, i) => (
-                            <ReviewCard key={i} role={role} className="w-full" />
+                        {REVIEWS.map((review, i) => (
+                            <ReviewCard key={i} review={review} className="w-full" />
                         ))}
                     </ul>
                 </section>

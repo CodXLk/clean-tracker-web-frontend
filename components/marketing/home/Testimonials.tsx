@@ -1,11 +1,11 @@
 import { SectionTag } from "../SectionTag";
 import { ReviewCard } from "../ReviewCard";
-import { REVIEW_ROLES } from "@/lib/constants/reviews";
+import { REVIEWS } from "@/lib/constants/reviews";
 
-const ROW_1 = REVIEW_ROLES.slice(0, 4);
-const ROW_2 = REVIEW_ROLES.slice(4, 8);
+const ROW_1 = REVIEWS.slice(0, 4);
+const ROW_2 = REVIEWS.slice(4, 8);
 
-/** Home page preview of the first 8 review roles — the full set has its own page at /reviews. */
+/** Home page preview of the first 8 reviews — the full set has its own page at /reviews. */
 export function Testimonials() {
   return (
     <section id="reviews" aria-labelledby="reviews-heading" className="bg-surface-muted py-20">
@@ -24,13 +24,13 @@ export function Testimonials() {
 
         <div className="flex flex-col gap-4">
           <ul className="flex gap-4 overflow-x-auto px-5 pb-2 sm:px-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {ROW_1.map((role, i) => (
-              <ReviewCard key={i} role={role} />
+            {ROW_1.map((review, i) => (
+              <ReviewCard key={i} review={review} />
             ))}
           </ul>
           <ul className="flex gap-4 overflow-x-auto px-5 pb-2 sm:px-8 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {ROW_2.map((role, i) => (
-              <ReviewCard key={i} role={role} />
+            {ROW_2.map((review, i) => (
+              <ReviewCard key={i} review={review} />
             ))}
           </ul>
         </div>
