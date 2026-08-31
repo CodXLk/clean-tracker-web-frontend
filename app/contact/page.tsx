@@ -118,18 +118,21 @@ export default function ContactPage() {
 
                 <section id="faq" aria-labelledby="faq-heading" className="bg-surface-muted">
                     <div className="mx-auto max-w-[1368px] px-5 py-16 sm:px-8">
-                        <div className="flex flex-col gap-4">
-                            <SectionTag>FAQ</SectionTag>
-                            <h2 id="faq-heading" className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">
-                                Clear answers for facility managers
-                            </h2>
-                        </div>
-                        <div className="mt-8 max-w-3xl">
+                        <div className="grid gap-10 lg:grid-cols-[1fr_1.4fr]">
+                            <div className="flex flex-col justify-between gap-10">
+                                <div className="flex flex-col gap-4">
+                                    <SectionTag>FAQ</SectionTag>
+                                    <h2 id="faq-heading" className="text-3xl font-medium tracking-tight text-ink sm:text-4xl">
+                                        Clear answers for facility managers
+                                    </h2>
+                                </div>
+                                <QuoteButton href={BUSINESS.phoneHref} icon={Phone} className="w-fit">
+                                    Speak with Operations
+                                </QuoteButton>
+                            </div>
+
                             <FaqAccordion items={FAQ_ITEMS} />
                         </div>
-                        <QuoteButton href={BUSINESS.phoneHref} icon={Phone} className="mt-10 w-fit">
-                            Speak with Operations
-                        </QuoteButton>
                     </div>
                 </section>
             </main>
