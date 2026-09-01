@@ -112,7 +112,7 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
                 className={
                   "h-11 rounded-xl border px-3 text-sm font-semibold transition-colors " +
                   (requestType === type
-                    ? "border-primary bg-primary/10 text-primary"
+                    ? "border-primary bg-primary/10 text-ink"
                     : "border-grey-300 text-grey-500 hover:border-primary/50")
                 }
               >
@@ -185,7 +185,7 @@ export function RequestFormModal({ open, onClose, fixedSiteId }: RequestFormModa
           <button
             type="button"
             onClick={() => setLines((prev) => [...prev, { itemId: "", quantity: "" }])}
-            className="mt-1 flex items-center gap-1.5 self-start rounded-lg border border-dashed border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:border-primary hover:text-primary"
+            className="mt-1 flex items-center gap-1.5 self-start rounded-lg border border-dashed border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:border-primary hover:text-ink"
           >
             <Plus size={14} aria-hidden="true" />
             Add item

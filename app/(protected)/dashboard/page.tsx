@@ -181,7 +181,7 @@ function DashboardContent() {
             <AdminStatCard
               icon={MapPin}
               iconBg="bg-primary/10"
-              iconColor="text-primary"
+              iconColor="text-ink"
               value={siteKpis.total}
               label="Total Sites"
             />
@@ -211,7 +211,7 @@ function DashboardContent() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <section aria-labelledby="attendance-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
-                <Clock size={18} className="text-primary" aria-hidden="true" />
+                <Clock size={18} className="text-ink" aria-hidden="true" />
                 <h2 id="attendance-heading" className="text-sm font-semibold text-on-surface">
                   Attendance
                 </h2>
@@ -257,7 +257,7 @@ function DashboardContent() {
 
             <section aria-labelledby="shifts-heading" className="rounded-2xl bg-surface p-5 shadow-sm lg:col-span-2">
               <div className="mb-4 flex items-center gap-2">
-                <Calendar size={18} className="text-primary" aria-hidden="true" />
+                <Calendar size={18} className="text-ink" aria-hidden="true" />
                 <h2 id="shifts-heading" className="text-sm font-semibold text-on-surface">
                   Upcoming Shifts
                 </h2>
@@ -280,7 +280,7 @@ function DashboardContent() {
                           </p>
                         )}
                       </div>
-                      <span className="shrink-0 text-xs font-semibold text-primary">{shift.timeRange}</span>
+                      <span className="shrink-0 text-xs font-semibold text-ink">{shift.timeRange}</span>
                     </div>
                   ))
                 )}
@@ -293,7 +293,7 @@ function DashboardContent() {
                 className="rounded-2xl bg-surface p-5 shadow-sm lg:col-span-2"
               >
                 <div className="mb-4 flex items-center gap-2">
-                  <CalendarClock size={18} className="text-primary" aria-hidden="true" />
+                  <CalendarClock size={18} className="text-ink" aria-hidden="true" />
                   <h2 id="inspections-heading" className="text-sm font-semibold text-on-surface">
                     Upcoming Inspections
                   </h2>
@@ -305,7 +305,7 @@ function DashboardContent() {
                         <p className="text-xs font-semibold text-on-surface">{inspectionDateLabel(ins.date)}</p>
                         <p className="text-xs text-grey-500">{ins.site}</p>
                       </div>
-                      <span className="shrink-0 text-[11px] font-medium text-primary">{ins.summary}</span>
+                      <span className="shrink-0 text-[11px] font-medium text-ink">{ins.summary}</span>
                     </div>
                   ))}
                 </div>
@@ -382,7 +382,7 @@ function DashboardContent() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Clock size={18} className="text-primary" />
+                  <Clock size={18} className="text-ink" />
                   <h2
                     id="attendance-heading-mobile"
                     className="text-sm font-semibold text-on-surface"
@@ -402,7 +402,7 @@ function DashboardContent() {
             >
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <MapPin size={18} className="text-primary" />
+                  <MapPin size={18} className="text-ink" />
                   <h2
                     id="tasks-heading-mobile"
                     className="text-sm font-semibold text-on-surface"
@@ -500,7 +500,7 @@ function DashboardContent() {
               className="rounded-3xl border border-white/20 bg-white/40 p-5 shadow-sm backdrop-blur-sm"
             >
               <div className="mb-3 flex items-center gap-2">
-                <Calendar size={18} className="text-primary" />
+                <Calendar size={18} className="text-ink" />
                 <h2
                   id="shifts-heading-mobile"
                   className="text-sm font-semibold text-on-surface"
@@ -529,7 +529,7 @@ function DashboardContent() {
                           </p>
                         )}
                       </div>
-                      <span className="shrink-0 text-xs font-semibold text-primary">{shift.timeRange}</span>
+                      <span className="shrink-0 text-xs font-semibold text-ink">{shift.timeRange}</span>
                     </div>
                   ))
                 )}
@@ -542,7 +542,7 @@ function DashboardContent() {
                 className="rounded-3xl border border-white/20 bg-white/40 p-5 shadow-sm backdrop-blur-sm"
               >
                 <div className="mb-3 flex items-center gap-2">
-                  <CalendarClock size={18} className="text-primary" />
+                  <CalendarClock size={18} className="text-ink" />
                   <h2 id="inspections-heading-mobile" className="text-sm font-semibold text-on-surface">
                     Upcoming Inspections
                   </h2>
@@ -557,7 +557,7 @@ function DashboardContent() {
                         <p className="text-xs font-semibold text-on-surface">{inspectionDateLabel(ins.date)}</p>
                         <p className="text-xs text-grey-500">{ins.site}</p>
                       </div>
-                      <span className="shrink-0 text-[11px] font-medium text-primary">{ins.summary}</span>
+                      <span className="shrink-0 text-[11px] font-medium text-ink">{ins.summary}</span>
                     </div>
                   ))}
                 </div>
@@ -583,7 +583,7 @@ function KpiCard({ label, value, color }: KpiCardProps) {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
     green:  "text-success bg-success/10",
     grey:   "text-grey-700 bg-grey-100",
-    teal:   "text-primary bg-primary/10",
+    teal:   "text-ink bg-primary/10",
   };
 
   return (

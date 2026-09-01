@@ -214,7 +214,7 @@ export function SupervisorScheduleModal({ open, onClose, site }: SupervisorSched
         {/* Editor */}
         <div className="rounded-xl border border-grey-200 p-4">
           <div className="mb-3 flex items-center gap-2">
-            <CalendarClock size={18} className="text-primary" />
+            <CalendarClock size={18} className="text-ink" />
             <h3 className="text-sm font-semibold text-on-surface">
               {editingId ? "Edit schedule" : "Add schedule"}
             </h3>

@@ -305,7 +305,7 @@ export default function ClientSiteManagementPage() {
       {!siteId ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-grey-300 bg-grey-50 p-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Building2 className="h-6 w-6 text-primary" aria-hidden="true" />
+            <Building2 className="h-6 w-6 text-ink" aria-hidden="true" />
           </div>
           <p className="text-sm font-semibold text-on-surface">Select a site to begin</p>
           <p className="max-w-sm text-xs text-grey-500">
@@ -377,7 +377,7 @@ export default function ClientSiteManagementPage() {
                         <span
                           className={cn(
                             "text-[11px] font-bold uppercase tracking-wide",
-                            isToday ? "text-primary" : isWeekend ? "text-grey-400" : "text-grey-600",
+                            isToday ? "text-ink" : isWeekend ? "text-grey-400" : "text-grey-600",
                           )}
                         >
                           {DAY_LABELS[i]}
@@ -438,7 +438,7 @@ export default function ClientSiteManagementPage() {
                                   className="group/area grid border-b border-grey-200 bg-primary/10"
                                   style={{ gridTemplateColumns: GRID_TEMPLATE }}
                                 >
-                                  <div className="flex items-center px-4 py-1.5 text-[13px] font-semibold text-primary">
+                                  <div className="flex items-center px-4 py-1.5 text-[13px] font-semibold text-ink">
                                     {area.name}
                                   </div>
                                   {weekISO.map((iso) => {
@@ -527,7 +527,7 @@ export default function ClientSiteManagementPage() {
                                                 });
                                               }}
                                               className={cn(
-                                                "mx-auto flex h-5 w-5 items-center justify-center rounded-md text-primary transition-all hover:bg-primary hover:text-white hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0",
+                                                "mx-auto flex h-5 w-5 items-center justify-center rounded-md text-ink transition-all hover:bg-primary hover:text-white hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0",
                                                 added.length > 0
                                                   ? "opacity-40 group-hover/area:opacity-70"
                                                   : "opacity-0 group-hover/area:opacity-70",

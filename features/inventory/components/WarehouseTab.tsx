@@ -55,7 +55,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
       header: "Category",
       sortAccessor: (i) => i.category,
       cell: (i) => (
-        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
           {CATEGORY_LABELS[i.category]}
         </span>
       ),
@@ -96,7 +96,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <AdminStatCard icon={Boxes} iconBg="bg-primary/10" iconColor="text-primary" value={items.length} label="Items in catalog" />
+        <AdminStatCard icon={Boxes} iconBg="bg-primary/10" iconColor="text-ink" value={items.length} label="Items in catalog" />
         <AdminStatCard icon={DollarSign} iconBg="bg-success/10" iconColor="text-success" value={fmtMoney(totalValue)} label="Total stock value" />
         <AdminStatCard icon={AlertTriangle} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={lowStockQuery.data?.length ?? 0} label="Low-stock (all sites)" />
       </div>

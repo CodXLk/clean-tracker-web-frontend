@@ -100,7 +100,7 @@ function DesktopInventoryConsole() {
                 <button
                   type="button"
                   onClick={() => setTab("Site Inventory")}
-                  className="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-primary"
+                  className="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-ink"
                 >
                   +{lowStock.length - 8} more
                 </button>
@@ -274,7 +274,7 @@ function RequestCard({ req, onClick }: { req: InventoryRequest; onClick: () => v
       className="flex w-full items-start gap-3 rounded-2xl bg-white p-4 shadow-sm text-left transition-shadow hover:shadow-md"
     >
       <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary">
-        <RotateCcw size={16} className="text-primary" />
+        <RotateCcw size={16} className="text-ink" />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -285,7 +285,7 @@ function RequestCard({ req, onClick }: { req: InventoryRequest; onClick: () => v
         <span className="text-xs text-grey-500">{req.siteName}</span>
         <span className="text-xs text-grey-500">#{req.id.slice(0, 8)}</span>
         <div className="mt-1 flex items-center justify-between gap-2">
-          <span className="rounded-xl bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+          <span className="rounded-xl bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
             {req.lines.length} item{req.lines.length === 1 ? "" : "s"}
           </span>
           <span className="text-xs text-grey-500">{fmtDateTime(req.createdAt)}</span>

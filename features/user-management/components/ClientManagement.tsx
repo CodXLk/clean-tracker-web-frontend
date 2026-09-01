@@ -43,7 +43,7 @@ export function ClientManagement() {
       header: "Client-company",
       sortAccessor: (c) => c.clientCompanyName.toLowerCase(),
       cell: (c) => (
-        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
           {c.clientCompanyName}
         </span>
       ),

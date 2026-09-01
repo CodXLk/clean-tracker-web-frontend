@@ -42,14 +42,14 @@ const STATUS_LABEL_MAP: Record<Complaint["status"], string> = {
 
 const STATUS_COLOR_MAP: Record<Complaint["status"], string> = {
   open: "bg-[#ED5F25]/20 text-[#ED5F25]",
-  in_progress: "bg-primary/20 text-primary",
+  in_progress: "bg-primary/20 text-ink",
   resolved: "bg-success/20 text-success",
-  closed: "bg-primary/20 text-primary",
+  closed: "bg-primary/20 text-ink",
 };
 
 function getStatusIcon(status: Complaint["status"]) {
   if (status === "resolved") return <CheckCircle size={18} className="text-success" />;
-  if (status === "closed") return <Clock size={18} className="text-primary" />;
+  if (status === "closed") return <Clock size={18} className="text-ink" />;
   return <AlertCircle size={18} className="text-[#ED5F25]" />;
 }
 
@@ -172,11 +172,11 @@ export default function ComplaintsPage() {
             <AdminStatCard
               icon={Clock}
               iconBg="bg-primary/10"
-              iconColor="text-primary"
+              iconColor="text-ink"
               value={kpis.awaitingReview}
               label="Awaiting Review"
               badge="Review"
-              badgeColor="text-primary"
+              badgeColor="text-ink"
             />
             <AdminStatCard
               icon={CheckCircle2}

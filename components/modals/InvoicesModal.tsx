@@ -65,7 +65,7 @@ export function InvoicesModal({ open, onClose }: InvoicesModalProps) {
         <div className="mb-6 rounded-2xl bg-grey-100 p-4">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <CalendarDays size={20} className="text-primary" />
+              <CalendarDays size={20} className="text-ink" />
             </div>
             <div>
               <p className="text-sm font-semibold text-on-surface">Current Period</p>
@@ -111,7 +111,7 @@ export function InvoicesModal({ open, onClose }: InvoicesModalProps) {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-xl border border-primary px-2.5 py-0.5 text-xs font-medium text-primary">
+                    <span className="rounded-xl border border-primary px-2.5 py-0.5 text-xs font-medium text-ink">
                       {inv.status}
                     </span>
                     <ChevronDown size={16} className="text-grey-500" />

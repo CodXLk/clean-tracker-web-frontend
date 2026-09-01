@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ListChecks, Plus, Pencil, Trash2, Clock } from "lucide-react";
 import { useTaskTemplates, useDeleteTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { TaskTemplateModal } from "@/features/workforce/components/TaskTemplateModal";
+import { SearchInput } from "@/components/shared/SearchInput";
 import type { TaskTemplate } from "@/features/workforce/schemas/taskTemplate.schema";
 
 function totalDuration(template: TaskTemplate): number {
@@ -17,8 +18,18 @@ export function TaskTemplatesTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TaskTemplate | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TaskTemplate | null>(null);
+  const [search, setSearch] = useState("");
 
-  const templates = templatesQuery.data ?? [];
+  const templates = useMemo(() => {
+    const list = templatesQuery.data ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.tasks.some((task) => task.name.toLowerCase().includes(q)),
+    );
+  }, [templatesQuery.data, search]);
 
   function openNew() {
     setEditing(null);
@@ -43,12 +54,12 @@ export function TaskTemplatesTab() {
     <div>
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-on-surface">Task List Templates</h2>
-          <p className="text-sm text-grey-500">
-            Reusable task lists you can load when creating assignments or cleaning schedules.
-          </p>
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search templates…"
+          className="w-full sm:max-w-xs"
+        />
         <button
           type="button"
           onClick={openNew}
@@ -64,7 +75,7 @@ export function TaskTemplatesTab() {
         <p className="text-sm text-grey-500">Loading templates…</p>
       ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-grey-300 bg-grey-50 px-6 py-16 text-center">
-          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-ink">
             <ListChecks size={24} aria-hidden="true" />
           </span>
           <h3 className="text-sm font-semibold text-on-surface">No templates yet</h3>
@@ -101,7 +112,7 @@ export function TaskTemplatesTab() {
                       type="button"
                       aria-label="Edit template"
                       onClick={() => openEdit(template)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-primary"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink"
                     >
                       <Pencil size={15} aria-hidden="true" />
                     </button>

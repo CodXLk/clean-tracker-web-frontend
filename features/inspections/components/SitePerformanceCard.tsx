@@ -15,7 +15,7 @@ export function SitePerformanceCard({ site }: SitePerformanceCardProps) {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-grey-500">Completion</span>
-          <span className="text-sm text-primary">{site.completion}%</span>
+          <span className="text-sm text-ink">{site.completion}%</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-grey-500">Avg. Time</span>

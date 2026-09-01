@@ -87,7 +87,7 @@ export function FloorsSection({ siteId, onManageAreas }: FloorsSectionProps) {
                     onClick={() => onManageAreas(floor)}
                     aria-label="Manage areas"
                     title="Manage areas"
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-primary"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-ink"
                   >
                     <LayoutGrid size={14} aria-hidden="true" />
                   </button>
@@ -123,7 +123,7 @@ export function FloorsSection({ siteId, onManageAreas }: FloorsSectionProps) {
                       onClick={saveEdit}
                       disabled={updateMutation.isPending}
                       aria-label="Save floor name"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary/10"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-ink hover:bg-primary/10"
                     >
                       <Check size={15} aria-hidden="true" />
                     </button>
@@ -143,7 +143,7 @@ export function FloorsSection({ siteId, onManageAreas }: FloorsSectionProps) {
                       type="button"
                       onClick={() => startEdit(floor)}
                       aria-label="Edit floor"
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-primary"
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-ink"
                     >
                       <Pencil size={14} aria-hidden="true" />
                     </button>
@@ -185,7 +185,7 @@ export function FloorsSection({ siteId, onManageAreas }: FloorsSectionProps) {
           type="button"
           onClick={handleAdd}
           disabled={createMutation.isPending || !newName.trim()}
-          className="flex h-8 items-center gap-1 rounded-md bg-primary/10 px-2.5 text-xs font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-8 items-center gap-1 rounded-md bg-primary/10 px-2.5 text-xs font-semibold text-ink hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={14} aria-hidden="true" />
           Add floor

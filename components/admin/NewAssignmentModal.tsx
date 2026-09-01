@@ -21,7 +21,7 @@ import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAre
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
 import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
-import { useCreateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
+import { useCreateAssignment, useUpdateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
@@ -59,6 +59,11 @@ interface NewAssignmentModalProps {
   defaultSiteId?: string;
   defaultFloorId?: string;
   defaultAreaId?: string;
+  /** Day-view quick add — seed the first task's name. */
+  defaultTaskName?: string;
+  /** When set, edit this existing assignment in place with the full form prefilled. */
+  editAssignmentId?: string;
+  editData?: AssignmentFormInput | null;
   /** When set, load this draft's saved form state instead of a blank form. */
   loadedDraft?: { id: string; payload: unknown } | null;
 }
@@ -80,11 +85,24 @@ function cleanerInitials(c: { firstName?: string | null; lastName?: string | nul
   return (first + last).toUpperCase() || "?";
 }
 
-function emptyGroup(floorId = "", areaId = "") {
+function emptyGroup(floorId = "", areaId = "", taskName = "") {
   return {
     floorId,
     areaIds: areaId ? [areaId] : [],
-    tasks: [] as AssignmentFormInput["groups"][number]["tasks"],
+    tasks: (taskName
+      ? [
+          {
+            name: taskName,
+            durationMinutes: undefined,
+            description: "",
+            cleanerIds: [],
+            profileIds: [],
+            items: [],
+            daysOfWeek: [],
+            monthlyMode: "DAY_OF_MONTH",
+          },
+        ]
+      : []) as AssignmentFormInput["groups"][number]["tasks"],
   };
 }
 
@@ -94,6 +112,7 @@ interface Prefill {
   defaultSiteId?: string;
   defaultFloorId?: string;
   defaultAreaId?: string;
+  defaultTaskName?: string;
 }
 
 function buildDefaults({
@@ -102,6 +121,7 @@ function buildDefaults({
   defaultSiteId = "",
   defaultFloorId = "",
   defaultAreaId = "",
+  defaultTaskName = "",
 }: Prefill): AssignmentFormInput {
   return {
     workType: "GENERAL_TASK",
@@ -110,7 +130,7 @@ function buildDefaults({
     date: defaultDate ? formatDateForInput(defaultDate) : "",
     startTime: defaultTime,
     poId: "",
-    groups: [emptyGroup(defaultFloorId, defaultAreaId)],
+    groups: [emptyGroup(defaultFloorId, defaultAreaId, defaultTaskName)],
     cleanerIds: [],
     profileIds: [],
     supervisorIds: [],
@@ -185,7 +205,7 @@ function TaskItemsEditor({ groupIndex, taskIndex }: TaskItemsEditorProps) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-grey-300 px-2.5 py-1 text-[11px] font-medium text-grey-600 transition-colors hover:border-primary hover:text-primary"
+          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-grey-300 px-2.5 py-1 text-[11px] font-medium text-grey-600 transition-colors hover:border-primary hover:text-ink"
         >
           <Plus size={12} aria-hidden="true" />
           Add items
@@ -460,10 +480,10 @@ function LocationGroupCard({
     <div className="rounded-2xl border border-grey-200 bg-white/70 p-4">
       {/* Header */}
       <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-ink">
           <MapPin size={13} aria-hidden="true" />
         </span>
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink">
           {fields.length} task{fields.length === 1 ? "" : "s"}
         </span>
         {canRemove && (
@@ -509,7 +529,7 @@ function LocationGroupCard({
             title="Add a new floor"
             disabled={!siteId}
             onClick={() => setFloorPromptOpen(true)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={18} aria-hidden="true" />
           </button>
@@ -526,7 +546,7 @@ function LocationGroupCard({
               title="Add a new area"
               disabled={!floorId}
               onClick={() => setAreaPromptOpen(true)}
-              className="flex h-8 items-center gap-1 rounded-lg border border-dashed border-primary px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-8 items-center gap-1 rounded-lg border border-dashed border-primary px-2 text-xs font-medium text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus size={14} aria-hidden="true" /> Area
             </button>
@@ -735,7 +755,7 @@ function LocationGroupCard({
               setTemplateError(null);
             }}
             disabled={fields.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <BookmarkPlus size={14} aria-hidden="true" />
             Save as list
@@ -801,7 +821,7 @@ function LocationGroupCard({
                 className="rounded-xl border border-grey-200 bg-white px-3 py-2"
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-primary">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-ink">
                     {taskIndex + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={task?.name}>
@@ -815,7 +835,7 @@ function LocationGroupCard({
                     className={cn(
                       "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       recurrenceSummary
-                        ? "bg-primary/10 text-primary hover:bg-primary/20"
+                        ? "bg-primary/10 text-ink hover:bg-primary/20"
                         : "text-grey-500 hover:bg-grey-100",
                     )}
                   >
@@ -931,6 +951,9 @@ export function NewAssignmentModal({
   defaultSiteId,
   defaultFloorId,
   defaultAreaId,
+  defaultTaskName,
+  editAssignmentId,
+  editData,
   loadedDraft,
 }: NewAssignmentModalProps) {
   const [cleanerSearch, setCleanerSearch] = useState("");
@@ -939,12 +962,13 @@ export function NewAssignmentModal({
 
   const sitesQuery = useSites();
   const createMutation = useCreateAssignment();
+  const updateMutation = useUpdateAssignment();
   const saveDraftMutation = useSaveDraft();
   const deleteDraftMutation = useDeleteDraft();
 
   const methods = useForm<AssignmentFormInput>({
     resolver: zodResolver(AssignmentFormSchema),
-    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId }),
+    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName }),
   });
   const {
     register,
@@ -1107,22 +1131,26 @@ export function NewAssignmentModal({
 
   useEffect(() => {
     if (open) {
-      if (loadedDraft?.payload) {
+      if (editData) {
+        reset(editData);
+        setActiveDraftId(undefined);
+      } else if (loadedDraft?.payload) {
         // Merge over defaults so any newly-added form fields are still present.
         const base = buildDefaults({});
         reset({ ...base, ...(loadedDraft.payload as Partial<AssignmentFormInput>) } as AssignmentFormInput);
         setActiveDraftId(loadedDraft.id);
       } else {
-        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId }));
+        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName }));
         setActiveDraftId(undefined);
       }
       setCleanerSearch("");
       setShowClosePrompt(false);
       createMutation.reset();
+      updateMutation.reset();
       saveDraftMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, loadedDraft, reset]);
+  }, [open, defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, editData, loadedDraft, reset]);
 
   // Close directly when there's nothing to lose; otherwise offer to save a draft.
   const handleClose = useCallback(() => {
@@ -1175,6 +1203,18 @@ export function NewAssignmentModal({
   }
 
   function handleFormSubmit(data: AssignmentFormInput) {
+    if (editAssignmentId) {
+      updateMutation.mutate(
+        { id: editAssignmentId, input: data },
+        {
+          onSuccess: () => {
+            onCreated?.();
+            onClose();
+          },
+        },
+      );
+      return;
+    }
     createMutation.mutate(data, {
       onSuccess: () => {
         // A draft that has become a real assignment no longer needs to linger.
@@ -1246,7 +1286,7 @@ export function NewAssignmentModal({
 
       <div className="relative z-10 w-full max-w-2xl rounded-3xl bg-surface shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 id="modal-title" className="text-lg font-medium text-primary">
+          <h2 id="modal-title" className="text-lg font-medium text-ink">
             Create New Assignment
           </h2>
           <button
@@ -1454,7 +1494,7 @@ export function NewAssignmentModal({
                       type="button"
                       onClick={applyRecurrenceToAllTasks}
                       title="Give every task this recurrence (overrides per-task schedules)"
-                      className="inline-flex items-center gap-1 rounded-lg border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="inline-flex items-center gap-1 rounded-lg border border-primary px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       <Repeat size={12} aria-hidden="true" />
                       Apply to all tasks
@@ -1665,7 +1705,7 @@ export function NewAssignmentModal({
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-medium text-on-surface">Tasks by location</span>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
                     {totalTasks} total
                   </span>
                 </div>
@@ -1690,7 +1730,7 @@ export function NewAssignmentModal({
                 <button
                   type="button"
                   onClick={() => appendGroup(emptyGroup())}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <Plus size={15} aria-hidden="true" />
                   Add another floor / area
@@ -1704,10 +1744,10 @@ export function NewAssignmentModal({
               {/* Expected End Time (derived once tasks exist) */}
               {expectedEndTime && (
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-primary/5 px-4 py-3">
-                  <Clock size={16} className="shrink-0 text-primary" aria-hidden="true" />
+                  <Clock size={16} className="shrink-0 text-ink" aria-hidden="true" />
                   <span className="text-sm text-on-surface">
                     Expected End Time:{" "}
-                    <span className="font-semibold text-primary">{expectedEndTime}</span>
+                    <span className="font-semibold text-ink">{expectedEndTime}</span>
                   </span>
                   <span className="ml-auto text-xs text-grey-500">start + total task durations</span>
                 </div>
@@ -1719,7 +1759,7 @@ export function NewAssignmentModal({
                   <span className="text-sm font-medium text-on-surface">
                     {usingProfiles ? "Responsible cleaner slots" : "Assign Cleaners"}
                   </span>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
                     {!siteId
                       ? "Select a site"
                       : cleanersLoading
@@ -1846,7 +1886,7 @@ export function NewAssignmentModal({
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-3">
                   <span className="text-sm font-medium text-on-surface">Assign Supervisors</span>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
                     {!siteId
                       ? "Select a site"
                       : supervisorsQuery.isLoading
@@ -1918,15 +1958,19 @@ export function NewAssignmentModal({
               {createMutation.isError && (
                 <p className="mb-3 text-sm text-danger">{getErrorMessage(createMutation.error)}</p>
               )}
+              {updateMutation.isError && (
+                <p className="mb-3 text-sm text-danger">{getErrorMessage(updateMutation.error)}</p>
+              )}
               {saveDraftMutation.isError && (
                 <p className="mb-3 text-sm text-danger">{getErrorMessage(saveDraftMutation.error)}</p>
               )}
               <div className="flex gap-3">
+                {!editAssignmentId && (
                 <button
                   type="button"
                   onClick={() => saveDraftNow(false)}
                   disabled={saveDraftMutation.isPending || createMutation.isPending}
-                  className="h-11 shrink-0 rounded-xl border border-primary px-4 text-sm font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-11 shrink-0 rounded-xl border border-primary px-4 text-sm font-medium text-ink transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saveDraftMutation.isPending
                     ? "Saving…"
@@ -1936,14 +1980,19 @@ export function NewAssignmentModal({
                         ? "Update draft"
                         : "Save as draft"}
                 </button>
+                )}
                 <button
                   type="submit"
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending}
                   className="h-11 flex-1 rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {createMutation.isPending
-                    ? "Creating…"
-                    : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
+                  {editAssignmentId
+                    ? updateMutation.isPending
+                      ? "Updating…"
+                      : "Update Assignment"
+                    : createMutation.isPending
+                      ? "Creating…"
+                      : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
                 </button>
               </div>
             </div>

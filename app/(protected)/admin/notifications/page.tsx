@@ -42,14 +42,14 @@ const ICONS: Record<NotificationType, LucideIcon> = {
 
 const ICON_TONES: Record<NotificationType, string> = {
   LOW_STOCK: "bg-[#ED5F25]/10 text-[#ED5F25]",
-  REQUEST_SUBMITTED: "bg-primary/10 text-primary",
+  REQUEST_SUBMITTED: "bg-primary/10 text-ink",
   REQUEST_APPROVED: "bg-success/10 text-success",
   REQUEST_REJECTED: "bg-error/10 text-error",
-  DELIVERY_DISPATCHED: "bg-primary/10 text-primary",
+  DELIVERY_DISPATCHED: "bg-primary/10 text-ink",
   DELIVERY_CONFIRMED: "bg-success/10 text-success",
   CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
   COMPLAINT_RAISED: "bg-error/10 text-error",
-  TASK_REDO_ASSIGNED: "bg-primary/10 text-primary",
+  TASK_REDO_ASSIGNED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
 
@@ -94,29 +94,29 @@ function NotificationRow({ n }: { n: Notification }) {
         {n.message && <p className="mt-0.5 text-sm text-grey-500">{n.message}</p>}
         <div className="mt-2 flex items-center gap-3">
           {n.type === "LOW_STOCK" && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
               View inventory
             </Link>
           )}
           {(n.type === "REQUEST_SUBMITTED" ||
             n.type === "REQUEST_APPROVED" ||
             n.type === "REQUEST_REJECTED") && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
               View requests
             </Link>
           )}
           {(n.type === "DELIVERY_DISPATCHED" || n.type === "DELIVERY_CONFIRMED") && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
               View deliveries
             </Link>
           )}
           {n.type === "COMPLAINT_RAISED" && (
-            <Link href="/admin/complaints" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/admin/complaints" className="text-xs font-medium text-ink hover:underline">
               View complaint
             </Link>
           )}
           {(n.type === "CHECKOUT_WITH_PENDING_TASKS" || n.type === "TASK_REDO_ASSIGNED") && (
-            <Link href="/admin/cleaner-logs" className="text-xs font-medium text-primary hover:underline">
+            <Link href="/admin/cleaner-logs" className="text-xs font-medium text-ink hover:underline">
               View cleaner logs
             </Link>
           )}

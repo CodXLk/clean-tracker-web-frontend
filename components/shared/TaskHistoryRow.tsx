@@ -28,7 +28,7 @@ export function TaskHistoryRow({
           {title}
         </span>
         <span className="text-xs text-grey-500">{category}</span>
-        <span className="text-xs text-primary">{time}</span>
+        <span className="text-xs text-ink">{time}</span>
       </div>
 
       {/* Right: status badge */}

@@ -17,10 +17,12 @@ export async function POST(request: NextRequest) {
     const envelope = (result.json ?? {}) as { data?: LoginData; message?: string };
 
     if (!result.ok || !envelope.data?.accessToken) {
-      return NextResponse.json(
-        { message: envelope.message ?? "Invalid credentials" },
-        { status: result.status || 401 },
-      );
+      const message =
+        envelope.message ??
+        (result.status === 401
+          ? "Invalid email or password."
+          : "We couldn't sign you in right now. Please try again in a moment.");
+      return NextResponse.json({ message }, { status: result.status || 401 });
     }
 
     const { accessToken, expiresIn, user } = envelope.data;

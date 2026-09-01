@@ -47,9 +47,15 @@ export async function callBackend(path: string, options: BackendCallOptions = {}
   const text = await response.text();
   if (text) {
     try {
-      json = JSON.parse(text);
+      const parsed = JSON.parse(text);
+      // Only accept object/array envelopes. A non-JSON body (e.g. an upstream
+      // HTML error page) must never become a user-facing message.
+      if (parsed && typeof parsed === "object") json = parsed;
     } catch {
-      json = { message: text };
+      // Not JSON — fall through so callers use their own friendly fallback.
+    }
+    if (json === null) {
+      console.error(`Backend ${response.status} non-JSON response for ${path}: ${text.slice(0, 300)}`);
     }
   }
 

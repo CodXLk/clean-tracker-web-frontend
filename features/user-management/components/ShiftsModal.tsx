@@ -121,7 +121,7 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                   <p className="flex items-center gap-2 text-sm font-medium text-on-surface">
                     <Clock className="h-4 w-4 text-grey-400" /> {shift.name}
                     {shift.isDefault && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-ink">
                         <Star className="h-3 w-3" /> Default
                       </span>
                     )}
@@ -143,7 +143,7 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                     onClick={() => startEdit(shift)}
                     className={
                       editingId === shift.id
-                        ? "inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary disabled:opacity-50"
+                        ? "inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50"
                         : "inline-flex items-center gap-1 rounded-full border border-grey-200 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50 disabled:opacity-50"
                     }
                   >

@@ -211,3 +211,30 @@ export function useDeleteAssignment() {
     onSuccess: () => invalidateAll(queryClient),
   });
 }
+
+/** Full assignment detail (all tasks, recurrence, cleaners, supervisors, items). */
+export function useAssignment(id: string | undefined) {
+  return useQuery({
+    queryKey: ["assignment", id ?? "none"],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.assignments.byId(id!));
+      return AssignmentSchema.parse(data);
+    },
+  });
+}
+
+/** Update an existing assignment/series in place (whole assignment). */
+export function useUpdateAssignment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: AssignmentFormInput }) => {
+      const { data } = await clientApi.put(
+        ENDPOINTS.assignments.byId(id),
+        toCreateAssignmentPayload(input),
+      );
+      return AssignmentSchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}

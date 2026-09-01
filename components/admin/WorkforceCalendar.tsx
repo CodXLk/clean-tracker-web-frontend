@@ -26,10 +26,12 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { EditOccurrenceModal } from "@/components/admin/EditOccurrenceModal";
+import { TaskInfoModal } from "@/components/admin/TaskInfoModal";
+import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
-import { WORK_TYPE_LABELS, type WorkType } from "@/features/workforce/schemas/assignment.schema";
+import { WORK_TYPE_LABELS, assignmentToFormInput, type WorkType, type Assignment } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
@@ -77,10 +79,15 @@ export interface AssignmentPrefill {
   siteId?: string;
   floorId?: string;
   areaId?: string;
+  /** Day-view quick add — seed the first task's name. */
+  taskName?: string;
 }
 
 interface WorkforceCalendarProps {
   onNewAssignment?: (prefill: AssignmentPrefill) => void;
+  /** Controlled site selection — the Operations tab lifts this to the page header. */
+  siteId?: string;
+  onSiteChange?: (id: string) => void;
 }
 
 interface QuickAddState {
@@ -137,7 +144,9 @@ function getDayDates(weekStart: Date): string[] {
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
-  d.setDate(d.getDate() - day);
+  // Shift back to Monday (getDay: 0=Sun..6=Sat).
+  const diff = (day + 6) % 7;
+  d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -209,7 +218,7 @@ const SLOT_HEIGHT = 60;
 const START_HOUR = 6;
 const END_HOUR = 21;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => i + START_HOUR);
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const EVENT_COLORS: Array<{ color: string; textColor: string; hex: string; label: string }> = [
   { color: "bg-[#0B585A]",  textColor: "text-white", hex: "#0B585A", label: "Teal"   },
@@ -223,7 +232,7 @@ export const EVENT_COLORS: Array<{ color: string; textColor: string; hex: string
 
 // Default calendar colour per work type (falls back when no colorHex is stored).
 const ASSIGNMENT_TYPE_COLOR: Record<string, string> = {
-  GENERAL_TASK: "#0B585A",
+  GENERAL_TASK: "#0D9488",
   PERIODICAL_TASK: "#A855F7",
   WORK_ORDER: "#F97316",
   OTHER: "#3B82F6",
@@ -398,7 +407,7 @@ function OccurrenceScopeDialog({ state, isPending, onSelect, onCancel }: Occurre
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} aria-hidden="true" />
       <div className="relative z-10 w-full max-w-sm rounded-2xl bg-surface p-5 shadow-2xl ring-1 ring-grey-200">
         <div className="flex items-center gap-2">
-          <Repeat size={16} className="shrink-0 text-primary" aria-hidden="true" />
+          <Repeat size={16} className="shrink-0 text-ink" aria-hidden="true" />
           <h2 id="scope-dialog-title" className="text-base font-semibold text-on-surface">
             {isDelete ? "Delete recurring event" : "Update recurring event"}
           </h2>
@@ -895,7 +904,7 @@ function WeekView({
                 !working && "bg-grey-100/70",
               )}
             >
-              <span className={cn("text-xs font-medium", isToday ? "text-primary" : "text-grey-500")}>
+              <span className={cn("text-xs font-medium", isToday ? "text-ink" : "text-grey-500")}>
                 {day}
               </span>
               <span
@@ -1294,21 +1303,29 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
 
 // ── Main WorkforceCalendar Component ──────────────────────────────────────────
 
-export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
+export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: WorkforceCalendarProps) {
   const today = formatDate(new Date());
+  const siteControlled = siteId !== undefined && onSiteChange !== undefined;
   // Main toggle: the table-like weekly scope view (default) vs the time-grid calendar.
   const [mainView, setMainView] = useState<"calendar" | "scope">("scope");
   const [calendarMode, setCalendarMode] = useState<"week" | "month">("week");
+  // Scope view sub-mode: dated week grid vs weekday (Mon–Sun) recurrence grid.
+  const [scopeView, setScopeView] = useState<"date" | "day">("date");
   const viewMode: "week" | "month" | "schedule" =
     mainView === "scope" ? "schedule" : calendarMode;
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [siteFilter, setSiteFilter] = useState<string>(""); // "" = all sites
+  const [internalSiteFilter, setInternalSiteFilter] = useState<string>(""); // "" = all sites
+  const siteFilter = siteControlled ? siteId! : internalSiteFilter;
+  const setSiteFilter = siteControlled ? onSiteChange! : setInternalSiteFilter;
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [quickAdd, setQuickAdd] = useState<QuickAddState>({
     show: false, date: "", time: "", x: 0, y: 0,
   });
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  // Scope-view cell click → brief info popup → full edit of the whole assignment.
+  const [infoOccurrence, setInfoOccurrence] = useState<TaskOccurrence | null>(null);
+  const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
   const [editOccurrence, setEditOccurrence] = useState<TaskOccurrence | null>(null);
   const [scopeDialog, setScopeDialog] = useState<ScopeDialogState | null>(null);
 
@@ -1333,7 +1350,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   // Exactly one site is always selected (no "all sites"). Auto-pick the first once
   // sites load, or if the current selection is no longer present.
   const sites = sitesQuery.data;
-  if (sites && sites.length > 0 && !sites.some((s) => s.id === siteFilter)) {
+  if (!siteControlled && sites && sites.length > 0 && !sites.some((s) => s.id === siteFilter)) {
     setSiteFilter(sites[0]!.id);
   }
   const selectedSite = useMemo(
@@ -1675,6 +1692,7 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
       siteId: siteFilter,
       floorId: target.floorId,
       areaId: target.areaId,
+      taskName: target.taskName,
     });
   }
 
@@ -1721,8 +1739,8 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
   const floorMutation = floorModal?.mode === "edit" ? updateFloor : createFloor;
   const areaMutation = areaModal?.mode === "edit" ? updateArea : createArea;
   const deleteMut = deleteTarget?.kind === "floor" ? deleteFloor : deleteArea;
-  // Monday of the visible week (weekDates is Sunday-first).
-  const mondayDate = weekDates[1];
+  // Monday of the visible week (weekDates is Monday-first).
+  const mondayDate = weekDates[0];
 
   // Close quick-add on outside click
   useEffect(() => {
@@ -1782,13 +1800,15 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           className="h-9 rounded-xl border border-grey-200 bg-surface px-2.5 text-xs font-medium text-on-surface outline-none transition-colors hover:border-grey-300 focus-visible:ring-2 focus-visible:ring-primary"
         />
 
-        {/* Site selector — exactly one site is always in view */}
-        <SiteFilterSelect
-          sites={sitesQuery.data ?? []}
-          value={siteFilter}
-          onChange={setSiteFilter}
-          loading={sitesQuery.isLoading}
-        />
+        {/* Site selector — hidden when the Operations header supplies its own. */}
+        {!siteControlled && (
+          <SiteFilterSelect
+            sites={sitesQuery.data ?? []}
+            value={siteFilter}
+            onChange={setSiteFilter}
+            loading={sitesQuery.isLoading}
+          />
+        )}
 
         {/* Working-day legend (when a site with working days is selected) */}
         {workingDays && (
@@ -1800,6 +1820,30 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
 
         {/* View toggles: Week/Month sub-toggle (calendar only) + Calendar/Scope */}
         <div className="ml-auto flex items-center gap-2">
+          {mainView === "scope" && (
+            <div className="flex overflow-hidden rounded-xl border border-grey-200">
+              <button
+                type="button"
+                onClick={() => setScopeView("date")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  scopeView === "date" ? "bg-primary text-white" : "text-on-surface hover:bg-grey-100",
+                )}
+              >
+                Date
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeView("day")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  scopeView === "day" ? "bg-primary text-white" : "text-on-surface hover:bg-grey-100",
+                )}
+              >
+                Day
+              </button>
+            </div>
+          )}
           {mainView === "calendar" && (
             <div className="flex overflow-hidden rounded-xl border border-grey-200">
               <button
@@ -1864,8 +1908,9 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
           occurrences={serverOccurrences ?? []}
           today={today}
           workingDays={workingDays}
+          dayView={scopeView === "day"}
           isLoading={occurrencesQuery.isLoading}
-          onOccurrenceClick={(occurrence) => handleEventClick(mapOccurrenceToEvent(occurrence))}
+          onOccurrenceClick={(occurrence) => setInfoOccurrence(occurrence)}
           siteId={managing ? siteFilter : undefined}
           floors={managing ? floors : undefined}
           siteTasks={managing ? siteTasksQuery.data ?? [] : undefined}
@@ -1940,6 +1985,29 @@ export function WorkforceCalendar({ onNewAssignment }: WorkforceCalendarProps) {
       {/* Full prefilled task editor (profiles / supervisors / items) with scope */}
       {editOccurrence && (
         <EditOccurrenceModal occurrence={editOccurrence} onClose={() => setEditOccurrence(null)} />
+      )}
+
+      {/* Scope-view: brief task info with an entry into the full editor */}
+      {infoOccurrence && (
+        <TaskInfoModal
+          occurrence={infoOccurrence}
+          onClose={() => setInfoOccurrence(null)}
+          onEditTask={(assignment) => {
+            setInfoOccurrence(null);
+            setEditAssignment(assignment);
+          }}
+        />
+      )}
+
+      {/* Full New Assignment window, prefilled, updating the assignment in place */}
+      {editAssignment && (
+        <NewAssignmentModal
+          open
+          editAssignmentId={editAssignment.id}
+          editData={assignmentToFormInput(editAssignment)}
+          onClose={() => setEditAssignment(null)}
+          onCreated={() => setEditAssignment(null)}
+        />
       )}
 
       {/* Scope dialog (recurring events) */}

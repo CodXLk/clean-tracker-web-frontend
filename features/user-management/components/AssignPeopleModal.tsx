@@ -106,7 +106,7 @@ export function AssignPeopleModal({
                 aria-label="Search"
               />
             </div>
-            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-ink">
               {selected.size} selected
             </span>
           </div>

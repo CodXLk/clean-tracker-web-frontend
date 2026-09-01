@@ -2,7 +2,6 @@
 
 import { AlertTriangle } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
-import { PillButton } from "@/components/shared/PillButton";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,37 +26,37 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error">
             <AlertTriangle size={20} aria-hidden="true" />
           </div>
-          <p className="text-sm text-grey-500">{description}</p>
+          <p className="pt-0.5 text-sm leading-relaxed text-body-2">{description}</p>
         </div>
 
         {error && (
-          <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+          <p role="alert" className="rounded-xl bg-error/10 px-3 py-2 text-sm font-medium text-error">
             {error}
           </p>
         )}
 
-        <div className="mt-1 flex gap-3">
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="h-11 flex-1 rounded-full border border-grey-300 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+            disabled={isPending}
+            className="h-11 flex-1 rounded-xl border border-line text-sm font-semibold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50"
           >
             Cancel
           </button>
-          <PillButton
+          <button
             type="button"
-            variant="orange"
-            className="h-11 flex-1 !bg-error"
-            disabled={isPending}
             onClick={onConfirm}
+            disabled={isPending}
+            className="h-11 flex-1 rounded-xl bg-error text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isPending ? "Deleting…" : confirmLabel}
-          </PillButton>
+            {isPending ? "Please wait…" : confirmLabel}
+          </button>
         </div>
       </div>
     </Modal>

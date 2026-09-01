@@ -48,7 +48,7 @@ export default function ItemRequestsPage() {
             </div>
           ) : requests.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-grey-300 bg-grey-50 px-6 py-16 text-center">
-              <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-ink">
                 <ClipboardList size={24} aria-hidden="true" />
               </span>
               <h3 className="text-sm font-semibold text-on-surface">No item requests yet</h3>

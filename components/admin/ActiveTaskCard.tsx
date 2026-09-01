@@ -71,7 +71,7 @@ export function ActiveTaskCard({
           className={cn(
             "rounded-full px-2 py-0.5 text-xs",
             status === "Active" && "bg-success/10 text-success",
-            status === "Scheduled" && "bg-primary/10 text-primary",
+            status === "Scheduled" && "bg-primary/10 text-ink",
             status === "In Progress" && "bg-[#ED5F25]/10 text-[#ED5F25]",
           )}
         >

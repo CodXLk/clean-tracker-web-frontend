@@ -27,13 +27,13 @@ export function AppShell({ children }: AppShellProps) {
   const useDrawerNav = useIsDrawerNav();
 
   return (
-    <div className="min-h-screen bg-[#F8FAFB]">
+    <div className="min-h-screen bg-surface-muted">
       <AppNav />
 
       <div className="lg:pl-64">
         <header
           className={cn(
-            "sticky top-0 z-30 h-16 shrink-0 items-center gap-3 bg-[#F8FAFB] px-4 lg:flex lg:px-8",
+            "sticky top-0 z-30 h-16 shrink-0 items-center gap-3 bg-surface-muted px-4 lg:flex lg:px-8",
             useDrawerNav ? "flex" : "hidden",
           )}
         >

@@ -97,7 +97,7 @@ export function InspectingTaskModal({
 
       <div className="relative z-10 w-full max-w-2xl rounded-3xl bg-surface shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 id="inspecting-task-title" className="text-lg font-medium text-primary">
+          <h2 id="inspecting-task-title" className="text-lg font-medium text-ink">
             Inspecting Task
           </h2>
           <button

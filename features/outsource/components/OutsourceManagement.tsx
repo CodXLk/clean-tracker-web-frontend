@@ -120,7 +120,7 @@ export function OutsourceManagement() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 font-medium text-primary">
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 font-medium text-ink">
                   <Building2 size={12} aria-hidden="true" />
                   {p.siteName ?? "Site"}
                 </span>

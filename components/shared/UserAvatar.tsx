@@ -39,7 +39,7 @@ export function UserAvatar({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 font-semibold text-primary",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 font-semibold text-ink",
         className,
       )}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}

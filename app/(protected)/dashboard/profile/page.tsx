@@ -44,9 +44,9 @@ interface StatCard {
 // "Avg. Rating" has no backing data anywhere in the system yet (no rating concept
 // exists in the backend), so it stays a placeholder until that's built.
 const STATS_META = [
-  { label: "Tasks Completed", icon: ClipboardCheck, iconColor: "text-primary",    iconBg: "bg-primary/10"    },
+  { label: "Tasks Completed", icon: ClipboardCheck, iconColor: "text-ink",    iconBg: "bg-primary/10"    },
   { label: "Total Hours",     icon: Clock,          iconColor: "text-[#ED5F25]",  iconBg: "bg-[#ED5F25]/10"  },
-  { label: "Avg. Rating",     icon: Star,           iconColor: "text-primary",    iconBg: "bg-primary/10"    },
+  { label: "Avg. Rating",     icon: Star,           iconColor: "text-ink",    iconBg: "bg-primary/10"    },
   { label: "Days Active",     icon: CalendarCheck,  iconColor: "text-purple-600", iconBg: "bg-purple-100"    },
 ] satisfies Omit<StatCard, "value">[];
 
@@ -173,7 +173,7 @@ export default function ProfilePage() {
                   className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
                 >
                   <div className="flex items-center gap-3">
-                    <FileText size={18} className="text-primary" />
+                    <FileText size={18} className="text-ink" />
                     <div>
                       <p className="text-sm font-medium text-on-surface">My Invoices</p>
                       <p className="text-xs text-grey-500">View payment history</p>
@@ -268,7 +268,7 @@ export default function ProfilePage() {
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                  <FileText size={20} className="text-primary" />
+                  <FileText size={20} className="text-ink" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-on-surface">My Invoices</p>

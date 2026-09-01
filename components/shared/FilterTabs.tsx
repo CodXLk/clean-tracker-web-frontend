@@ -31,7 +31,7 @@ export function FilterTabs<T extends string>({
               "rounded-full px-4 py-1.5 text-sm transition-colors",
               isActive
                 ? "bg-primary text-white font-medium"
-                : "border border-primary text-primary hover:bg-primary/10",
+                : "border border-primary text-ink hover:bg-primary/10",
             )}
           >
             {getLabel ? getLabel(option) : option}

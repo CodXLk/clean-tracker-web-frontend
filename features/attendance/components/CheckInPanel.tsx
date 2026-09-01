@@ -278,7 +278,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             {site.nfcRegistered && (
               <span
                 title="NFC check-in available"
-                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink"
               >
                 <Nfc size={12} /> NFC
               </span>
@@ -401,7 +401,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 type="button"
                 onClick={scanAndCheckIn}
                 disabled={scanning}
-                className="flex items-center justify-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 rounded-full border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-primary/10 disabled:opacity-60"
               >
                 <Nfc size={16} aria-hidden="true" />
                 {scanning ? "Scanning… tap your phone to the tag" : "Scan NFC to check in"}

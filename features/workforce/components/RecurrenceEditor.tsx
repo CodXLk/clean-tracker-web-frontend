@@ -75,7 +75,7 @@ export function RecurrenceEditor({ value, onChange, toggleLabel, className }: Re
           }
           className="h-4 w-4 rounded border-grey-300 accent-primary"
         />
-        <Repeat size={14} className="text-primary" aria-hidden="true" />
+        <Repeat size={14} className="text-ink" aria-hidden="true" />
         {toggleLabel ?? "Custom recurrence for this task"}
       </label>
 
@@ -227,7 +227,7 @@ export function RecurrenceDialog({ taskName, initialValue, onSave, onClose }: Re
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-ink">
               <Repeat size={16} aria-hidden="true" />
             </span>
             <div className="min-w-0">

@@ -133,7 +133,7 @@ export function AdminDashboard() {
     <div className="flex flex-col gap-5">
       {/* Headline totals */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AdminStatCard icon={Users2} iconBg="bg-primary/10" iconColor="text-primary" value={d.totals.cleaners} label="Total Cleaners" />
+        <AdminStatCard icon={Users2} iconBg="bg-primary/10" iconColor="text-ink" value={d.totals.cleaners} label="Total Cleaners" />
         <AdminStatCard icon={UserCog} iconBg="bg-purple-100" iconColor="text-purple-600" value={d.totals.supervisors} label="Total Supervisors" />
         <AdminStatCard icon={Building2} iconBg="bg-[#2B7FFF]/10" iconColor="text-[#2B7FFF]" value={d.totals.sites} label="Total Sites" />
         <AdminStatCard icon={ClipboardList} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={d.today.total} label="Today's Tasks" />

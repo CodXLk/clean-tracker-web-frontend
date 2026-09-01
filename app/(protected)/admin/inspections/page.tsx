@@ -159,7 +159,7 @@ export default function InspectionsPage() {
           <AdminStatCard
             icon={CheckCircle2}
             iconBg="bg-primary/10"
-            iconColor="text-primary"
+            iconColor="text-ink"
             value={`${KPIS.taskCompletionRate}%`}
             label="Task Completion Rate"
           />
@@ -193,7 +193,7 @@ export default function InspectionsPage() {
         {/* Areas Needing Inspection */}
         <div className="mb-6 rounded-2xl bg-surface p-6 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-base font-semibold text-primary">Areas Needing Inspection</h2>
+            <h2 className="text-base font-semibold text-ink">Areas Needing Inspection</h2>
             <select
               value={areaFilter}
               onChange={(e) => setAreaFilter(e.target.value)}

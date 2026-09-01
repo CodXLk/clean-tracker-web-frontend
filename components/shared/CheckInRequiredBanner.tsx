@@ -11,7 +11,7 @@ export function CheckInRequiredBanner({ action = "complete" }: CheckInRequiredBa
   const verb = action === "inspect" ? "view and inspect" : "view and complete";
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-8 text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-ink">
         <MapPin size={24} aria-hidden="true" />
       </span>
       <div>

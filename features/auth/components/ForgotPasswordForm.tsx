@@ -130,7 +130,7 @@ export function ForgotPasswordForm() {
           type="button"
           onClick={resendCode}
           disabled={forgot.isPending}
-          className="text-sm font-medium text-primary transition-opacity hover:opacity-80 disabled:opacity-50"
+          className="text-sm font-medium text-ink transition-opacity hover:opacity-80 disabled:opacity-50"
         >
           {forgot.isPending ? "Sending…" : "Didn't get a code? Resend"}
         </button>
@@ -162,7 +162,7 @@ export function ForgotPasswordForm() {
 
       <Link
         href="/login"
-        className="text-center text-sm font-medium text-primary transition-opacity hover:opacity-80"
+        className="text-center text-sm font-medium text-ink transition-opacity hover:opacity-80"
       >
         Back to sign in
       </Link>
