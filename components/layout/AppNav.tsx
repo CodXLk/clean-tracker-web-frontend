@@ -15,11 +15,9 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
-  MapPin,
   MessageSquare,
   Package,
   PackageCheck,
-  Sparkles,
   User,
   Users,
   UsersRound,
@@ -66,13 +64,11 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inventory", href: "/admin/inventory", icon: Package },
   { label: "Item Requests", href: "/admin/item-requests", icon: PackageCheck },
   { label: "Users", href: "/admin/users", icon: Users },
-  { label: "Cleaner Management", href: "/admin/cleaner-management", icon: Sparkles },
   { label: "Workforce Management", href: "/admin/workforce", icon: UsersRound },
   { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Outsource Management", href: "/admin/outsource-management", icon: Handshake },
-  { label: "Site Management", href: "/admin/user-management/sites", icon: MapPin },
   {
     label: "Client Management",
     icon: ContactRound,
@@ -224,7 +220,7 @@ function BottomBarItem({ item, isActive }: { item: NavItemConfig; isActive: bool
       <span
         className={cn(
           "text-[11px] leading-none transition-colors duration-200",
-          isActive ? "font-semibold text-primary" : "font-medium text-nav-icon-inactive",
+          isActive ? "font-semibold text-ink" : "font-medium text-nav-icon-inactive",
         )}
       >
         {item.label}
@@ -253,8 +249,8 @@ function SidebarNavItem({
       aria-current={isActive ? "page" : undefined}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
-        isActive ? "bg-[#ED5F25] text-white font-medium" : "text-white/70 hover:bg-white/10 font-normal",
+        "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40",
+        isActive ? "bg-brand-2 text-white font-medium" : "text-body-2 hover:bg-surface-muted font-normal",
       )}
     >
       <Icon size={20} strokeWidth={isActive ? 2.5 : 1.75} aria-hidden="true" />
@@ -287,8 +283,8 @@ function SidebarNavGroup({
         aria-controls={submenuId}
         onClick={() => setExpanded((v) => !v)}
         className={cn(
-          "flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
-          groupActive ? "bg-white/10 text-white font-medium" : "text-white/70 hover:bg-white/10 font-normal",
+          "flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40",
+          groupActive ? "bg-surface-muted text-ink font-medium" : "text-body-2 hover:bg-surface-muted font-normal",
         )}
       >
         <span className="flex items-center gap-3">
@@ -313,13 +309,13 @@ function SidebarNavGroup({
                   aria-current={active ? "page" : undefined}
                   onClick={onLinkClick}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
-                    active ? "bg-[#ED5F25] text-white font-medium" : "text-white/60 hover:bg-white/10 font-normal",
+                    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40",
+                    active ? "bg-brand-2 text-white font-medium" : "text-body-2 hover:bg-surface-muted font-normal",
                   )}
                 >
                   <span
                     aria-hidden="true"
-                    className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-white/40")}
+                    className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-line-2")}
                   />
                   {child.label}
                 </Link>
@@ -349,9 +345,9 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-primary">
+    <div className="flex h-full flex-col border-r border-line bg-white">
       <div className="flex items-center gap-3 px-4 pb-4 pt-6">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-surface-muted">
           <Image
             src="/images/marketing/brand/logomark.png"
             alt="Primeway"
@@ -362,8 +358,8 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
           />
         </div>
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-base font-bold text-white">Primeway</p>
-          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-white/60">
+          <p className="truncate text-base font-bold text-ink">Primeway</p>
+          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-body-2">
             Cleaning Management
           </p>
         </div>
@@ -387,7 +383,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
         )}
       </nav>
 
-      <div className="mt-auto border-t border-white/10 px-4 py-4">
+      <div className="mt-auto border-t border-line px-4 py-4">
         <div className="flex items-center gap-3">
           {me.data ? (
             <UserAvatar
@@ -400,15 +396,15 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
             />
           ) : (
             <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25] text-sm font-semibold text-white"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-2 text-sm font-semibold text-white"
               aria-hidden="true"
             >
               {initial}
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{fullName}</p>
-            <p className="text-xs text-white/50">{me.data ? ROLE_LABELS[me.data.role] : ""}</p>
+            <p className="truncate text-sm font-medium text-ink">{fullName}</p>
+            <p className="text-xs text-body-2">{me.data ? ROLE_LABELS[me.data.role] : ""}</p>
           </div>
           <button
             type="button"
@@ -416,7 +412,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
             disabled={logout.isPending}
             aria-label="Sign out"
             title="Sign out"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-50"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-body-2 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40 disabled:opacity-50"
           >
             <LogOut size={16} aria-hidden="true" />
           </button>
@@ -485,7 +481,7 @@ function MobileDrawer() {
             type="button"
             aria-label="Close navigation"
             onClick={() => setMobileNav(false)}
-            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-lg text-body-2 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40"
           >
             <X size={18} aria-hidden="true" />
           </button>

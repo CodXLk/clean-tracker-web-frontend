@@ -38,14 +38,14 @@ const ICONS: Record<NotificationType, LucideIcon> = {
 
 const ICON_TONES: Record<NotificationType, string> = {
   LOW_STOCK: "bg-[#ED5F25]/10 text-[#ED5F25]",
-  REQUEST_SUBMITTED: "bg-primary/10 text-primary",
+  REQUEST_SUBMITTED: "bg-primary/10 text-ink",
   REQUEST_APPROVED: "bg-success/10 text-success",
   REQUEST_REJECTED: "bg-error/10 text-error",
-  DELIVERY_DISPATCHED: "bg-primary/10 text-primary",
+  DELIVERY_DISPATCHED: "bg-primary/10 text-ink",
   DELIVERY_CONFIRMED: "bg-success/10 text-success",
   CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
   COMPLAINT_RAISED: "bg-error/10 text-error",
-  TASK_REDO_ASSIGNED: "bg-primary/10 text-primary",
+  TASK_REDO_ASSIGNED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
 
@@ -128,7 +128,7 @@ export default function CleanerNotificationsPage() {
               type="button"
               onClick={() => markAllRead.mutate()}
               disabled={markAllRead.isPending}
-              className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+              className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-primary/20 disabled:opacity-50"
             >
               Mark all read
             </button>

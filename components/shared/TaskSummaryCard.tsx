@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<TaskSummaryStatus, string> = {
 
 const STATUS_TEXT_CLASSES: Record<TaskSummaryStatus, string> = {
   pending:     "text-[#ED5F25]",
-  in_progress: "text-primary",
+  in_progress: "text-ink",
   completed:   "text-success",
   scheduled:   "text-grey-700",
 };
@@ -81,7 +81,7 @@ export function TaskSummaryCard({
         <span className={cn("text-xs font-medium", STATUS_TEXT_CLASSES[status])}>
           {STATUS_LABEL[status]}
         </span>
-        <span className="text-xs font-medium text-primary">{dueLabel}</span>
+        <span className="text-xs font-medium text-ink">{dueLabel}</span>
       </div>
     </Wrapper>
   );

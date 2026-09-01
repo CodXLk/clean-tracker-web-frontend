@@ -83,7 +83,7 @@ export function SiteInventoryTab({ canManage }: SiteInventoryTabProps) {
                     <td className="px-4 py-3 text-right">
                       <button type="button" onClick={() => setAdjusting(r)}
                         aria-label={`Adjust ${r.itemName}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 hover:text-primary">
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 hover:text-ink">
                         <SlidersHorizontal size={15} aria-hidden="true" />
                       </button>
                     </td>

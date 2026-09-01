@@ -66,18 +66,18 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={cn("max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-xl", maxWidthClassName)}
+        className={cn("max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-line bg-white p-6 shadow-xl", maxWidthClassName)}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-on-surface">{title}</h2>
-            {description && <p className="mt-0.5 text-sm text-grey-500">{description}</p>}
+            <h2 className="text-lg font-semibold text-ink">{title}</h2>
+            {description && <p className="mt-0.5 text-sm text-body-2">{description}</p>}
           </div>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-body-2 transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40"
           >
             <X size={18} aria-hidden="true" />
           </button>

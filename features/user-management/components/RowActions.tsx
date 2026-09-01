@@ -17,7 +17,7 @@ export function RowActions({ onEdit, onDelete, editLabel = "Edit", deleteLabel =
         onClick={onEdit}
         aria-label={editLabel}
         title={editLabel}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         <Pencil size={16} aria-hidden="true" />
       </button>

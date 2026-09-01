@@ -12,9 +12,9 @@ const STATUS_LABEL: Record<Complaint["status"], string> = {
 
 const STATUS_CLASSES: Record<Complaint["status"], string> = {
   open:        "bg-[#ED5F25]/10 text-[#ED5F25]",
-  in_progress: "bg-primary/10 text-primary",
+  in_progress: "bg-primary/10 text-ink",
   resolved:    "bg-success/10 text-success",
-  closed:      "bg-primary/10 text-primary",
+  closed:      "bg-primary/10 text-ink",
 };
 
 interface ComplaintRowProps {

@@ -228,7 +228,7 @@ function EditFieldRow({ label, value, onChange, type = "text", className, readOn
         <button
           onClick={() => setEditing(true)}
           aria-label={`Edit ${label}`}
-          className="shrink-0 rounded-full p-1 text-grey-500 transition-colors hover:bg-grey-100 hover:text-primary"
+          className="shrink-0 rounded-full p-1 text-grey-500 transition-colors hover:bg-grey-100 hover:text-ink"
         >
           <Pencil size={14} strokeWidth={2} />
         </button>

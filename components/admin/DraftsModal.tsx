@@ -214,7 +214,7 @@ interface MetaPersonProps {
 function MetaPerson({ icon, label, name, absolute, relative }: MetaPersonProps) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-ink">
         {initialsOf(name)}
       </span>
       <div className="min-w-0">

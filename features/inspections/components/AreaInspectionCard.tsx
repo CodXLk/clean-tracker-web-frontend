@@ -15,7 +15,7 @@ export function AreaInspectionCard({ area, onClick }: AreaInspectionCardProps) {
       className="flex w-[200px] shrink-0 flex-col gap-2 rounded-2xl bg-surface p-3 text-left shadow-sm transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="flex items-center gap-1.5">
-        <MapPin size={16} className="shrink-0 text-primary" aria-hidden="true" />
+        <MapPin size={16} className="shrink-0 text-ink" aria-hidden="true" />
         <span className="truncate text-xs font-medium text-on-surface">{area.site}</span>
       </div>
       <p className="text-sm text-on-surface">{area.area}</p>

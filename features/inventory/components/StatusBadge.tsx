@@ -2,16 +2,16 @@ import { cn } from "@/lib/utils/cn";
 
 const STYLES: Record<string, string> = {
   PENDING: "bg-[#ED5F25]/10 text-[#ED5F25]",
-  APPROVED: "bg-primary/10 text-primary",
+  APPROVED: "bg-primary/10 text-ink",
   REJECTED: "bg-error/10 text-error",
   FULFILLED: "bg-success/10 text-success",
   CANCELLED: "bg-grey-100 text-grey-500",
-  DISPATCHED: "bg-primary/10 text-primary",
+  DISPATCHED: "bg-primary/10 text-ink",
   CONFIRMED: "bg-success/10 text-success",
   SENT: "bg-[#ED5F25]/10 text-[#ED5F25]",
   AWAITING_CLIENT: "bg-[#ED5F25]/10 text-[#ED5F25]",
-  CLIENT_DISPATCHED: "bg-primary/10 text-primary",
-  PARTIALLY_RECEIVED: "bg-primary/10 text-primary",
+  CLIENT_DISPATCHED: "bg-primary/10 text-ink",
+  PARTIALLY_RECEIVED: "bg-primary/10 text-ink",
   RECEIVED: "bg-success/10 text-success",
 };
 

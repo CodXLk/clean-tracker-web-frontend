@@ -161,7 +161,7 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-grey-200 p-6">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-ink">
               <ListChecks size={20} aria-hidden="true" />
             </span>
             <div>
@@ -214,7 +214,7 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
             {tasks.map((task, index) => (
               <div key={index} className="rounded-xl border border-grey-200 bg-grey-50 p-4">
                 <div className="flex items-start gap-3">
-                  <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-ink">
                     {index + 1}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -284,7 +284,7 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
           <button
             type="button"
             onClick={addTask}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-grey-300 px-3 py-2 text-sm font-medium text-grey-600 transition-colors hover:border-primary hover:text-primary"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-grey-300 px-3 py-2 text-sm font-medium text-grey-600 transition-colors hover:border-primary hover:text-ink"
           >
             <Plus size={16} aria-hidden="true" />
             Add task
@@ -355,7 +355,7 @@ function TemplateItemsEditor({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-grey-300 px-2.5 py-1 text-[11px] font-medium text-grey-600 transition-colors hover:border-primary hover:text-primary"
+          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-grey-300 px-2.5 py-1 text-[11px] font-medium text-grey-600 transition-colors hover:border-primary hover:text-ink"
         >
           <Plus size={12} aria-hidden="true" />
           Add items

@@ -160,7 +160,7 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
           <button
             type="button"
             onClick={() => setLines((prev) => [...prev, { itemId: "", expected: "", minStock: "" }])}
-            className="mt-1 flex items-center gap-1.5 self-start rounded-lg border border-dashed border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:border-primary hover:text-primary"
+            className="mt-1 flex items-center gap-1.5 self-start rounded-lg border border-dashed border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:border-primary hover:text-ink"
           >
             <Plus size={14} aria-hidden="true" />
             Add item

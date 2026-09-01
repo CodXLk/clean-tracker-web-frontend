@@ -70,7 +70,7 @@ export function SiteManagement() {
       header: "Client-company",
       sortAccessor: (s) => s.clientCompanyName.toLowerCase(),
       cell: (s) => (
-        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
           {s.clientCompanyName}
         </span>
       ),
@@ -111,7 +111,7 @@ export function SiteManagement() {
             href={s.googleMapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-ink hover:underline"
           >
             View <ExternalLink size={12} aria-hidden="true" />
           </a>

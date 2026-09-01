@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 const STATUS_CHIP: Record<TaskStatus, string> = {
   SCHEDULED: "bg-[#ED5F25]/15 text-[#ED5F25]",
   ACTIVE: "bg-[#ED5F25]/15 text-[#ED5F25]",
-  IN_PROGRESS: "bg-primary/15 text-primary",
+  IN_PROGRESS: "bg-primary/15 text-ink",
   COMPLETED: "bg-success/15 text-success",
   CANCELLED: "bg-grey-200 text-grey-600",
 };
@@ -145,7 +145,7 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-on-surface">Calendar</h2>
-            <CalendarDays size={20} className="text-primary" />
+            <CalendarDays size={20} className="text-ink" />
           </div>
           <button
             onClick={onClose}

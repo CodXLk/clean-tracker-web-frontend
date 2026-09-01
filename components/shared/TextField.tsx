@@ -44,7 +44,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
             onClick={() => setVisible((v) => !v)}
             aria-label={visible ? "Hide password" : "Show password"}
             aria-pressed={visible}
-            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-grey-500 transition-colors hover:text-on-surface focus-visible:outline-none focus-visible:text-primary"
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-grey-500 transition-colors hover:text-on-surface focus-visible:outline-none focus-visible:text-ink"
           >
             {visible ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>

@@ -91,7 +91,7 @@ export function AreasSection({ floorId }: AreasSectionProps) {
                   onClick={saveEdit}
                   disabled={updateMutation.isPending}
                   aria-label="Save area name"
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-primary hover:bg-primary/10"
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-ink hover:bg-primary/10"
                 >
                   <Check size={14} aria-hidden="true" />
                 </button>
@@ -111,7 +111,7 @@ export function AreasSection({ floorId }: AreasSectionProps) {
                   type="button"
                   onClick={() => startEdit(area)}
                   aria-label="Edit area"
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-primary"
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-grey-500 hover:bg-primary/10 hover:text-ink"
                 >
                   <Pencil size={13} aria-hidden="true" />
                 </button>
@@ -145,7 +145,7 @@ export function AreasSection({ floorId }: AreasSectionProps) {
           type="button"
           onClick={handleAdd}
           disabled={createMutation.isPending || !newName.trim()}
-          className="flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs font-semibold text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-7 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs font-semibold text-ink hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={13} aria-hidden="true" />
           Add

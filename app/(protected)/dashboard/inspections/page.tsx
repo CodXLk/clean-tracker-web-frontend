@@ -140,7 +140,7 @@ export default function InspectionsPage() {
           <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
             <AdminStatCard icon={ClipboardList} iconBg="bg-grey-100" iconColor="text-grey-700" value={kpis.total} label="Total Tasks" />
             <AdminStatCard icon={ClipboardList} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={kpis.pending} label="Pending" />
-            <AdminStatCard icon={ClipboardList} iconBg="bg-primary/10" iconColor="text-primary" value={kpis.inProgress} label="In Progress" />
+            <AdminStatCard icon={ClipboardList} iconBg="bg-primary/10" iconColor="text-ink" value={kpis.inProgress} label="In Progress" />
             <AdminStatCard icon={ClipboardList} iconBg="bg-success/10" iconColor="text-success" value={kpis.completed} label="Completed" />
           </div>
 
@@ -246,7 +246,7 @@ export default function InspectionsPage() {
               {/* Periodical Task list (hidden entirely when the site has none) */}
               {periodicalTasks.length > 0 && (
                 <section aria-labelledby="periodical-heading-mobile" className="flex flex-col gap-3">
-                  <h2 id="periodical-heading-mobile" className="text-base font-medium text-primary">
+                  <h2 id="periodical-heading-mobile" className="text-base font-medium text-ink">
                     Periodical Task
                   </h2>
                   <div className="flex flex-col gap-3">
@@ -342,7 +342,7 @@ function InspectionScheduleBanner({ schedules }: { schedules: SupervisorSchedule
   return (
     <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/[0.05] p-4">
       <div className="mb-2 flex items-center gap-2">
-        <CalendarClock size={16} className="text-primary" aria-hidden="true" />
+        <CalendarClock size={16} className="text-ink" aria-hidden="true" />
         <p className="text-sm font-semibold text-on-surface">Your inspection schedule</p>
       </div>
       <ul className="flex flex-col gap-1.5">
@@ -351,7 +351,7 @@ function InspectionScheduleBanner({ schedules }: { schedules: SupervisorSchedule
             <span className="font-medium text-on-surface">{s.siteName}</span>
             <span className="text-grey-600">{s.summary}</span>
             {s.upcomingDates.length > 0 && (
-              <span className="font-medium text-primary">Next: {scheduleDateLabel(s.upcomingDates[0])}</span>
+              <span className="font-medium text-ink">Next: {scheduleDateLabel(s.upcomingDates[0])}</span>
             )}
           </li>
         ))}
@@ -371,7 +371,7 @@ function KpiCard({ label, value, color }: KpiCardProps) {
     orange: "text-[#ED5F25] bg-[#ED5F25]/10",
     green: "text-success bg-success/10",
     grey: "text-grey-700 bg-grey-100",
-    blue: "text-primary bg-primary/10",
+    blue: "text-ink bg-primary/10",
   };
 
   return (

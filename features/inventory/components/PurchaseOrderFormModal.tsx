@@ -104,7 +104,7 @@ export function PurchaseOrderFormModal({ open, onClose }: PurchaseOrderFormModal
         />
 
         {(suppliers ?? []).find((s) => s.id === supplierId)?.clientSelfSupplying && (
-          <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-primary">
+          <p className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-ink">
             This is a hotel client. Instead of a supplier email, this becomes an item request the client
             confirms and dispatches directly to their site.
           </p>

@@ -1179,23 +1179,40 @@ Every time a new reusable component is built, add it to the table below so futur
 
 #### `components/marketing/`
 
-Public landing page (`/`) only. These follow the Figma "Primeway" file rather than the in-app design system: Plus Jakarta Sans headings, Inter body copy, and the `text-hero` … `text-body-lg` fluid type scale in `globals.css`.
+The public marketing site (Home, About, Services, Industries, Projects, Blog, Contact, Privacy,
+Cookies) — rebuilt Aug 2026 from the "CleanHub" Figma redesign of the Primeway file. Flat,
+card-based, Inter-only; colours/spacing come from the `--color-brand-2` / `--color-ink` /
+`--color-body-2` / `--color-line*` / `--color-surface-muted` tokens in `globals.css`, not the
+older atmospheric-scene tokens (`--color-accent`, `--text-hero`, etc.) those still exist for
+reference only until nothing depends on them.
 
 | Component | File | Props | Use for |
 |---|---|---|---|
-| `SectionHeading` | `SectionHeading.tsx` | `lead`, `accent`, `as`, plus any `h2` props | The two-tone 55px section title ("Who **We Are?**") |
-| `QuoteButton` | `QuoteButton.tsx` | `href`, `onNavigate`, `children` | The teal pill "Get a Quote" CTA |
-| `ServiceCard` | `ServiceCard.tsx` | `image`, `label`, `service` | 249x395 photo card with a coloured caption band |
-| `IndustryCard` | `IndustryCard.tsx` | `icon`, `label`, `tone` | 130x130 diamond tile with a photo hover state |
-| `FooterNav` · `BackToTopButton` | `FooterNav.tsx` | none | The footer's only interactive parts, split out so `Footer` itself stays a Server Component |
+| `Navbar` | `Navbar.tsx` | none — reads route from `usePathname` | Sticky header, real routes (not anchor scroll except `Compliance`/`Reviews`, which are Home-only sections) |
+| `Footer` | `Footer.tsx` + `BackToTop.tsx` | none | Quick Links / Our Services / Contact / Legal, dark `bg-ink` footer |
+| `SectionTag` | `SectionTag.tsx` | `children`, `className` | The small pill "eyebrow" label above a section heading |
+| `PageHero` | `PageHero.tsx` | `eyebrow?`, `title`, `description?`, `breadcrumbs` | Shared H1 header for every inner page |
+| `Breadcrumbs` | `Breadcrumbs.tsx` | `items: Crumb[]` | Visible trail + matching `BreadcrumbList` JSON-LD |
+| `JsonLd` | `JsonLd.tsx` | `data` | Structured data `<script>` — only ever real, verifiable content |
+| `ServicesGrid` | `ServicesGrid.tsx` | `heading?` | The 5-service card grid, shared by Home and `/services` |
+| `ContactForm` | `ContactForm.tsx` | none | React Hook Form + Zod (`features/contact/schemas/contact.schema.ts`), posts to `/api/contact` |
+| `FaqAccordion` | `FaqAccordion.tsx` | `items: FaqItem[]` | Native `<details>`/`<summary>` accordion |
+| Home sections | `home/Hero.tsx`, `home/WhyChooseUs.tsx`, `home/BeforeAfterGallery.tsx`, `home/ProcessSteps.tsx`, `home/Testimonials.tsx`, `home/BlogTeaser.tsx` | none | Home-only sections; `WhyChooseUs` owns `id="compliance"`, `Testimonials` owns `id="reviews"` |
+
+Data lives in `lib/constants/`: `business.ts` (real facts only), `marketing-services.ts` (the 5
+services), `industries.ts`, `projects.ts` (illustrative case studies, no invented client names),
+`blog.ts` (post metadata; bodies are placeholders until real copy exists), `faq.ts`.
 
 **Landing page conventions**
 
-- Every section carries `data-nav-theme="light" \| "dark"`; `Navbar` observes them to flip its link colour to suit whatever sits behind it.
-- In-page navigation goes through `scrollToAnchor` / `scrollToTop` in `lib/scroll.ts`, never `scrollIntoView` directly — the helpers also move focus to the target, so the keyboard travels with the viewport.
-- Scene geometry is expressed as percentages of Figma's 1512x982 canvas. When a scene sits inside a padded container, rebase the percentage onto the *content box* rather than the canvas.
-- Scroll animation is GSAP + ScrollTrigger, gated on `useMediaQuery("(prefers-reduced-motion: reduce)")`. Markup must render the settled state, so animations are always `gsap.from(...)` — never `to`.
-- Animate transforms only. Where Figma expresses a move as a change of `left`/`top`/`width`, convert it to `scale` + `xPercent`/`yPercent` off the settled layout.
+- No client reviews have been supplied — `Testimonials` renders an honest empty state rather than
+  fabricated names/quotes. Replace the `REVIEWS` array in `home/Testimonials.tsx` once real,
+  attributed reviews exist; do not add placeholder names.
+- Every indexable page sets its own `metadata` (or `generateMetadata` for `[slug]` routes) with a
+  unique title/description and `alternates.canonical` — the root layout only supplies the
+  `title.template` suffix and site-wide description fallback.
+- `app/sitemap.ts` / `app/robots.ts` are the source of truth for what's indexable; add new routes
+  there when they're added to `app/`.
 
 ---
 

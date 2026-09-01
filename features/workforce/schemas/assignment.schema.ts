@@ -394,6 +394,56 @@ export const AssignmentFormSchema = z
 
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
 
+/** Map a saved assignment (detail response) back into the form for full editing.
+ *  Each task becomes its own floor/area group so nothing is lost on round-trip. */
+export function assignmentToFormInput(a: Assignment): AssignmentFormInput {
+  const groups: LocationGroupFormInput[] = a.tasks.map((t) => ({
+    floorId: t.floorId,
+    areaIds: [t.areaId],
+    tasks: [
+      {
+        name: t.name,
+        durationMinutes: t.durationMinutes ?? undefined,
+        description: t.description ?? "",
+        cleanerIds: t.cleaners.map((c) => c.id),
+        profileIds: [],
+        items: t.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+        daysOfWeek: t.daysOfWeek ?? [],
+        monthlyMode: t.weekOfMonth != null ? "DAY_OF_WEEK" : "DAY_OF_MONTH",
+        recurrenceType: t.recurrenceType ?? undefined,
+        recurrenceInterval: t.recurrenceInterval ?? undefined,
+        dayOfMonth: t.dayOfMonth ?? undefined,
+        weekOfMonth: t.weekOfMonth ?? undefined,
+        monthlyWeekday: t.monthlyWeekday ?? undefined,
+      },
+    ],
+  }));
+  return {
+    workType: a.assignmentType,
+    siteId: a.siteId,
+    shiftId: a.shiftId ?? "",
+    date: a.startDate,
+    startTime: (a.startTime ?? "").slice(0, 5),
+    poId: a.poId ?? "",
+    templateName: "",
+    groups,
+    cleanerIds: [],
+    profileIds: [],
+    supervisorIds: Array.from(new Set(a.tasks.flatMap((t) => t.supervisors.map((s) => s.id)))),
+    assignPerTask: a.tasks.some((t) => t.cleaners.length > 0),
+    recurrenceType: a.recurrenceType ?? undefined,
+    recurrenceCount: a.recurrenceInterval ?? undefined,
+    daysOfWeek: a.daysOfWeek ?? [],
+    monthlyMode: a.weekOfMonth != null ? "DAY_OF_WEEK" : "DAY_OF_MONTH",
+    dayOfMonth: a.dayOfMonth ?? undefined,
+    weekOfMonth: a.weekOfMonth ?? undefined,
+    monthlyWeekday: a.monthlyWeekday ?? undefined,
+    otherRepeatWorkingDays: a.otherRepeatWorkingDays,
+    otherUseRecurrence: a.otherUseRecurrence,
+    generalUseRecurrence: a.generalUseRecurrence,
+  };
+}
+
 /** All tasks across all groups, flattened — used for totals/end-time. */
 export function allTasksOf(input: Pick<AssignmentFormInput, "groups">): GroupTaskFormInput[] {
   return input.groups.flatMap((g) => g.tasks);

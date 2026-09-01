@@ -6,45 +6,48 @@
  * e.g. --color-primary  →  bg-primary, text-primary, border-primary, ring-primary
  */
 @theme {
-  /* Brand */
-  --color-primary:            #0B585A;
-  --color-primary-variant:    #073D3E;
-  --color-secondary:          #03DAC6;
-  --color-secondary-variant:  #018786;
+  /* Brand — unified with the marketing home page (orange `brand-2` + `ink`).
+     `primary` used to be the teal #0B585A; it now resolves to the home orange so
+     every bg-primary / text-primary / focus:ring-primary across the app matches
+     the landing page without touching each call site. */
+  --color-primary: #F08519;
+  --color-primary-variant: #C96A0F;
+  --color-secondary: #F08519;
+  --color-secondary-variant: #C96A0F;
 
   /* Marketing site (Primeway) — values taken from the Figma "Primeway" file.
      `accent` is the Figma "Secondary (Accent)" style; `sky-*` are the sampled
      endpoints of the atmospheric backdrop that runs behind every scene after
      the hero; `ribbon-*` are the four service-card caption bands. */
-  --color-accent:             #ED5F25;
-  --color-accent-variant:     #C94A17;
-  --color-atmos-top:          #8EAAB1;
-  --color-atmos-bottom:       #9FAFB2;
-  --color-ribbon-regular:     #756E5B;
-  --color-ribbon-periodical:  #A4A5A0;
-  --color-ribbon-deep:        #1B5468;
-  --color-ribbon-specialist:  #908281;
+  --color-accent: #F08519;
+  --color-accent-variant: #C96A0F;
+  --color-atmos-top: #8EAAB1;
+  --color-atmos-bottom: #9FAFB2;
+  --color-ribbon-regular: #756E5B;
+  --color-ribbon-periodical: #A4A5A0;
+  --color-ribbon-deep: #1B5468;
+  --color-ribbon-specialist: #908281;
 
   /* Surface / Background */
   --color-background: #F5F5F5;
-  --color-surface:    #FFFFFF;
+  --color-surface: #FFFFFF;
 
   /* On-colors (text/icon color on top of each surface) */
-  --color-on-primary:    #FFFFFF;
-  --color-on-secondary:  #000000;
-  --color-on-background: #1C1B1F;
-  --color-on-surface:    #1C1B1F;
-  --color-on-error:      #FFFFFF;
+  --color-on-primary: #FFFFFF;
+  --color-on-secondary: #FFFFFF;
+  --color-on-background: #2E2E2E;
+  --color-on-surface: #2E2E2E;
+  --color-on-error: #FFFFFF;
 
   /* Semantic */
   --color-success: #27AE60;
   --color-warning: #FFC107;
-  --color-info:    #0B585A;
-  --color-error:   #B00020;
-  --color-danger:  #FF0000;
+  --color-info: #1B5468;
+  --color-error: #B00020;
+  --color-danger: #FF0000;
 
   /* Grey scale */
-  --color-grey-50:  #FAFAFA;
+  --color-grey-50: #FAFAFA;
   --color-grey-100: #F5F5F5;
   --color-grey-200: #EEEEEE;
   --color-grey-300: #E0E0E0;
@@ -56,12 +59,12 @@
   --color-grey-900: #212121;
 
   /* Status (used in StatusDot — orange not in original palette, added for in-progress state) */
-  --color-status-active:   #27AE60;
-  --color-status-pending:  #F97316;
+  --color-status-active: #27AE60;
+  --color-status-pending: #F97316;
   --color-status-inactive: #9E9E9E;
 
   /* Navigation */
-  --color-nav-bar-bg:        #1C1C2E;
+  --color-nav-bar-bg: #2E2E2E;
   --color-nav-icon-inactive: #737373;
 
   /* Typography — fallbacks used until Next.js injects --font-* at runtime */
@@ -70,19 +73,40 @@
   /* Marketing site (Primeway): Plus Jakarta Sans for headings and nav,
      Inter for body copy — both as specified in Figma. */
   --font-heading: var(--font-plus-jakarta-sans, ui-sans-serif, system-ui, sans-serif);
-  --font-body:    var(--font-inter, ui-sans-serif, system-ui, sans-serif);
+  --font-body: var(--font-inter, ui-sans-serif, system-ui, sans-serif);
 
   /* Marketing type scale. The Figma frames are a fixed 1512px canvas, so each
      step is the design's pixel size expressed as a vw of 1512 and clamped to a
      legible minimum — the whole scene then scales with the viewport instead of
      stepping between breakpoints. Comment shows the size at the 1512px mark. */
-  --text-hero:     clamp(2.5rem,     5.952vw, 5.625rem);  /* 90px */
-  --text-section:  clamp(1.75rem,    3.638vw, 3.4375rem); /* 55px */
-  --text-lead:     clamp(1.375rem,   2.778vw, 2.625rem);  /* 42px */
-  --text-subhead:  clamp(1.375rem,   2.646vw, 2.5rem);    /* 40px */
-  --text-quote:    clamp(1.0625rem,  1.984vw, 1.875rem);  /* 30px */
-  --text-nav:      clamp(1rem,       1.653vw, 1.5625rem); /* 25px */
-  --text-body-lg:  clamp(0.9375rem,  1.455vw, 1.375rem);  /* 22px */
+  --text-hero: clamp(2.5rem, 5.952vw, 5.625rem);
+  /* 90px */
+  --text-section: clamp(1.75rem, 3.638vw, 3.4375rem);
+  /* 55px */
+  --text-lead: clamp(1.375rem, 2.778vw, 2.625rem);
+  /* 42px */
+  --text-subhead: clamp(1.375rem, 2.646vw, 2.5rem);
+  /* 40px */
+  --text-quote: clamp(1.0625rem, 1.984vw, 1.875rem);
+  /* 30px */
+  --text-nav: clamp(1rem, 1.653vw, 1.5625rem);
+  /* 25px */
+  --text-body-lg: clamp(0.9375rem, 1.455vw, 1.375rem);
+  /* 22px */
+
+  /* Marketing site v2 (Primeway — "CleanHub" Figma redesign, Aug 2026).
+     Flat, card-based, Inter-only — replaces the atmospheric scene design
+     above. Colours and the 4/8/16px spacing rhythm are sampled directly from
+     the new frames rather than reusing the old `--color-accent` teal/orange
+     pair, since the two files render side by side until the old landing
+     sections are removed. */
+  --color-brand-2: #F08519;
+  --color-brand-2-dark: #C96A0F;
+  --color-ink: #2E2E2E;
+  --color-body-2: #5E5E5E;
+  --color-line: #E3E3E3;
+  --color-line-2: #DBDBDB;
+  --color-surface-muted: #F7F7F7;
 }
 
 /* ── CSS Variables (for direct CSS usage outside Tailwind) ─────────────────── */

@@ -27,9 +27,9 @@ const STATUS_LABEL: Record<Complaint["status"], string> = {
 
 const STATUS_CLASSES: Record<Complaint["status"], string> = {
   open:        "bg-[#ED5F25]/10 text-[#ED5F25]",
-  in_progress: "bg-primary/10 text-primary",
+  in_progress: "bg-primary/10 text-ink",
   resolved:    "bg-success/10 text-success",
-  closed:      "bg-primary/10 text-primary",
+  closed:      "bg-primary/10 text-ink",
 };
 
 export function AdminComplaintDetailModal({
@@ -164,7 +164,7 @@ export function AdminComplaintDetailModal({
               <div>
                 <p className="text-xs font-medium text-grey-500">Assigned To</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-primary">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-xs font-semibold text-ink">
                     {complaint.assignedTo
                       .split(" ")
                       .map((p) => p[0])
@@ -220,7 +220,7 @@ export function AdminComplaintDetailModal({
 
           {(complaint.completionPhotos.length > 0 || complaint.completionNote || complaint.completedBy) && (
             <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
-              <p className="text-xs font-semibold text-primary">Cleaner completion</p>
+              <p className="text-xs font-semibold text-ink">Cleaner completion</p>
               {complaint.completedBy && (
                 <p className="mt-1 text-xs text-grey-600">
                   Completed by {complaint.completedBy}

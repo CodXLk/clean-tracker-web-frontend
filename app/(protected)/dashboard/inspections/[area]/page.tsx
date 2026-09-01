@@ -37,7 +37,7 @@ const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
 const STATUS_COLOR_MAP: Record<TaskStatus, string> = {
   SCHEDULED: "bg-[#ED5F25]/20 text-[#ED5F25]",
   ACTIVE: "bg-[#ED5F25]/20 text-[#ED5F25]",
-  IN_PROGRESS: "bg-primary/20 text-primary",
+  IN_PROGRESS: "bg-primary/20 text-ink",
   COMPLETED: "bg-success/20 text-success",
   CANCELLED: "bg-grey-200 text-grey-600",
 };
@@ -394,7 +394,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
             type="button"
             onClick={() => setCalendarOpen(true)}
             aria-label="Open calendar"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
           >
             <CalendarDays size={18} strokeWidth={2} />
           </button>
@@ -402,10 +402,10 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
             <button
               onClick={toggleSelectAll}
               aria-pressed={allSelected}
-              className="flex items-center gap-2 text-sm text-grey-700 transition-colors hover:text-primary"
+              className="flex items-center gap-2 text-sm text-grey-700 transition-colors hover:text-ink"
             >
               {allSelected ? (
-                <SquareCheck size={20} className="text-primary" />
+                <SquareCheck size={20} className="text-ink" />
               ) : (
                 <Square size={20} className="text-grey-500" />
               )}
@@ -461,7 +461,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                   <span className="mt-0.5 shrink-0">
                     {isSelectable ? (
                       selected ? (
-                        <SquareCheck size={20} className="text-primary" />
+                        <SquareCheck size={20} className="text-ink" />
                       ) : (
                         <Square size={20} className="text-grey-500" />
                       )

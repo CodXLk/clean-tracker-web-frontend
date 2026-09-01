@@ -89,7 +89,11 @@ export function useChangePassword() {
 
 export function getAuthErrorMessage(error: unknown): string {
   if (error instanceof AxiosError) {
-    return error.response?.data?.message ?? error.message;
+    const data = error.response?.data as { message?: unknown } | undefined;
+    const message = typeof data?.message === "string" ? data.message.trim() : "";
+    // Guard against raw HTML/markup slipping through as a "message".
+    if (message && !message.startsWith("<")) return message;
+    return "Unable to sign in right now. Please try again.";
   }
   return error instanceof Error ? error.message : "Something went wrong";
 }

@@ -30,7 +30,7 @@ function MethodBadge({ method }: { method?: string | null }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-        isNfc ? "bg-primary/10 text-primary" : "bg-grey-100 text-grey-700"
+        isNfc ? "bg-primary/10 text-ink" : "bg-grey-100 text-grey-700"
       }`}
     >
       {isNfc ? <Nfc size={12} /> : <MapPin size={12} />}
@@ -176,7 +176,7 @@ export function AttendanceLogsTable() {
                           type="button"
                           onClick={() => setMapLog(log)}
                           disabled={!hasCoords}
-                          className="inline-flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:text-grey-400"
+                          className="inline-flex items-center gap-1 rounded-lg border border-grey-300 px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:text-grey-400"
                         >
                           <LocateFixed size={13} /> View
                         </button>

@@ -1,48 +1,30 @@
-"use client";
-
+import Link from "next/link";
+import { Phone, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 interface QuoteButtonProps {
-  /** Anchor target — defaults to the quote form at the foot of the page. */
-  href?: string;
-  onNavigate?: (href: string) => void;
-  className?: string;
-  children?: React.ReactNode;
+    href?: string;
+    children?: React.ReactNode;
+    className?: string;
+    onClick?: () => void;
+    icon?: LucideIcon;
 }
 
-/**
- * The teal pill CTA from the Figma navbar: 55px tall, 100px radius, 20px
- * Plus Jakarta Sans ExtraBold, with the file's shared drop shadow
- * (0 10px 15px -3px rgba(0,0,0,0.1)).
- */
-export function QuoteButton({
-  href = "#contact",
-  onNavigate,
-  className,
-  children = "Get a Quote",
-}: QuoteButtonProps) {
-  return (
-    <a
-      href={href}
-      onClick={
-        onNavigate
-          ? (e) => {
-              e.preventDefault();
-              onNavigate(href);
-            }
-          : undefined
-      }
-      className={cn(
-        "inline-flex h-[clamp(2.75rem,3.64vw,3.4375rem)] shrink-0 items-center justify-center",
-        "rounded-full bg-primary px-[clamp(1rem,1.19vw,1.125rem)]",
-        "font-heading text-[clamp(0.875rem,1.32vw,1.25rem)] font-extrabold whitespace-nowrap text-white",
-        "shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1)] transition-[background-color,transform] duration-200",
-        "hover:bg-primary-variant active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-        className,
-      )}
-    >
-      {children}
-    </a>
-  );
+/** The orange pill CTA with a trailing white icon circle, reused across the Figma redesign (Nav, Hero, section CTAs). */
+export function QuoteButton({ href = "/contact", children = "Request a Quote", className, onClick, icon: Icon = Phone }: QuoteButtonProps) {
+    return (
+        <Link
+            href={href}
+            onClick={onClick}
+            className={cn(
+                "inline-flex shrink-0 items-center gap-4 rounded-full border border-white/15 bg-brand-2 py-1 pl-6 pr-1 text-sm font-medium whitespace-nowrap text-white shadow-sm transition-colors hover:bg-brand-2-dark",
+                className,
+            )}
+        >
+            {children}
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-brand-2">
+                <Icon size={16} aria-hidden="true" />
+            </span>
+        </Link>
+    );
 }

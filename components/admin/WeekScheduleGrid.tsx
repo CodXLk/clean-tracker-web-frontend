@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Check, GripVertical, Plus, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Building2, GripVertical, Plus, Pencil, Repeat, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import type { SiteTaskSummary, TaskOccurrence, WorkType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
@@ -11,7 +12,7 @@ import type { Area } from "@/features/user-management/schemas/area.schema";
 
 // Default colour per work type (matches the calendar's mapping).
 const TYPE_HEX: Record<string, string> = {
-  GENERAL_TASK: "#0B585A",
+  GENERAL_TASK: "#0D9488",
   PERIODICAL_TASK: "#A855F7",
   WORK_ORDER: "#F97316",
   OTHER: "#3B82F6",
@@ -41,6 +42,10 @@ function dayOfWeekOf(dateStr: string): DayOfWeek {
 
 function occurrenceHex(occurrence: TaskOccurrence): string {
   return occurrence.colorHex ?? TYPE_HEX[occurrence.assignmentType] ?? "#0B585A";
+}
+
+function cleanerName(c: { firstName?: string | null; lastName?: string | null }): string {
+  return [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || "Cleaner";
 }
 
 function formatTimeShort(time: string): string {
@@ -210,6 +215,8 @@ export interface AddAssignmentTarget {
   floorId: string;
   areaId: string;
   date: string;
+  /** Day-view quick add: prefill the New Assignment with this task's name. */
+  taskName?: string;
 }
 
 interface WeekScheduleGridProps {
@@ -219,6 +226,8 @@ interface WeekScheduleGridProps {
   /** Null = no single site selected → no working-day distinction. */
   workingDays: DayOfWeek[] | null;
   isLoading?: boolean;
+  /** Weekday (Mon–Sun) recurrence view instead of the dated week grid. */
+  dayView?: boolean;
   onOccurrenceClick?: (occurrence: TaskOccurrence) => void;
 
   // ── Managed mode (a single site is selected) ────────────────────────────────
@@ -262,6 +271,7 @@ export function WeekScheduleGrid({
   today,
   workingDays,
   isLoading = false,
+  dayView = false,
   onOccurrenceClick,
   siteId,
   floors,
@@ -393,7 +403,7 @@ export function WeekScheduleGrid({
   function DayHeaderRow() {
     return (
       <div
-        className="sticky top-0 z-10 grid border-b-2 border-grey-300 bg-surface"
+        className="grid border-b-2 border-grey-300 bg-surface"
         style={{ gridTemplateColumns: gridTemplate }}
       >
         <div className="flex items-end px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-wide text-grey-500">
@@ -416,19 +426,21 @@ export function WeekScheduleGrid({
               <span
                 className={cn(
                   "text-[11px] font-bold uppercase tracking-wide",
-                  isToday ? "text-primary" : working ? "text-grey-600" : "text-grey-400",
+                  isToday ? "text-ink" : working ? "text-grey-600" : "text-grey-400",
                 )}
               >
                 {day}
               </span>
-              <span
-                className={cn(
-                  "mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
-                  isToday ? "bg-primary text-white shadow-sm" : working ? "text-on-surface" : "text-grey-400",
-                )}
-              >
-                {dt.getDate()}
-              </span>
+              {!dayView && (
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                    isToday ? "bg-primary text-white shadow-sm" : working ? "text-on-surface" : "text-grey-400",
+                  )}
+                >
+                  {dt.getDate()}
+                </span>
+              )}
             </div>
           );
         })}
@@ -484,7 +496,17 @@ export function WeekScheduleGrid({
   }
 
   /** One task row of check marks — shared by both modes. */
-  function TaskRowView({ row, striped }: { row: TaskRow; striped: boolean }) {
+  function TaskRowView({
+    row,
+    striped,
+    floorId,
+    areaId,
+  }: {
+    row: TaskRow;
+    striped: boolean;
+    floorId?: string;
+    areaId?: string;
+  }) {
     // A task with no occurrence in the visible week: highlight the whole row and show its
     // next available date + work type instead of the day cells.
     if (managed && row.byDate.size === 0) {
@@ -506,7 +528,7 @@ export function WeekScheduleGrid({
               {row.name}
             </span>
             {row.recurrenceLabel && (
-              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
                 <Repeat size={9} aria-hidden="true" />
                 {row.recurrenceLabel}
               </span>
@@ -534,7 +556,7 @@ export function WeekScheduleGrid({
     return (
       <div
         className={cn(
-          "grid border-b border-grey-200 transition-colors hover:bg-primary/[0.04]",
+          "group/trow grid border-b border-grey-200 transition-colors hover:bg-primary/[0.04]",
           striped && "bg-grey-100/40",
         )}
         style={{ gridTemplateColumns: gridTemplate }}
@@ -549,7 +571,7 @@ export function WeekScheduleGrid({
             {row.name}
           </span>
           {row.recurrenceLabel && (
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
               <Repeat size={9} aria-hidden="true" />
               {row.recurrenceLabel}
             </span>
@@ -564,31 +586,71 @@ export function WeekScheduleGrid({
                 .map((o) => formatTimeShort(o.startTime.slice(0, 5)))
                 .join(", ")}`
             : undefined;
+          // Unique, named cleaners assigned across this cell's occurrences
+          // (skip unnamed/placeholder entries so empty slots show no badge).
+          const cleaners = first
+            ? Array.from(
+                new Map(cellOccurrences.flatMap((o) => o.cleaners).map((c) => [c.id, c])).values(),
+              ).filter((c) => (c.firstName?.trim() || c.lastName?.trim()))
+            : [];
           return (
             <div
               key={dateStr}
               className={cn(
-                "flex items-center justify-center border-l border-grey-200 py-1.5",
+                "relative border-l border-grey-200",
+                dayView ? "min-h-[46px]" : "min-h-[38px]",
                 dateStr === today && "bg-primary/[0.04]",
                 !working && "bg-grey-100/60",
               )}
             >
-              {first && (
+              {first ? (
                 <button
                   type="button"
                   title={label}
                   aria-label={label}
                   onClick={() => onOccurrenceClick?.(first)}
-                  className="relative flex h-6 w-6 items-center justify-center rounded-md shadow-sm transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+                  className="absolute inset-1 flex flex-col items-center justify-center gap-0.5 rounded-md px-1 text-center text-white shadow-sm transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
                   style={{ backgroundColor: occurrenceHex(first) }}
                 >
-                  <Check size={14} strokeWidth={3.5} className="text-white" aria-hidden="true" />
-                  {cellOccurrences.length > 1 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-on-surface text-[9px] font-semibold text-white">
-                      {cellOccurrences.length}
+                  {dayView && row.recurrenceLabel && (
+                    <span className="text-[9px] font-semibold uppercase leading-none tracking-wide">
+                      {row.recurrenceLabel}
                     </span>
                   )}
+                  {cleaners.length > 0 ? (
+                    <span className="flex items-center">
+                      {cleaners.slice(0, 3).map((c) => (
+                        <InitialsAvatar
+                          key={c.id}
+                          name={cleanerName(c)}
+                          size={18}
+                          className="-ml-1.5 ring-2 ring-white first:ml-0"
+                        />
+                      ))}
+                      {cleaners.length > 3 && (
+                        <span className="-ml-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-black/40 px-1 text-[9px] font-bold leading-none ring-2 ring-white">
+                          +{cleaners.length - 3}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    cellOccurrences.length > 1 && (
+                      <span className="text-[11px] font-bold leading-none">×{cellOccurrences.length}</span>
+                    )
+                  )}
                 </button>
+              ) : (
+                dayView && floorId && areaId && onAddAssignment && (
+                  <button
+                    type="button"
+                    aria-label={`Add ${row.name} on this day`}
+                    title="Add this task to this day"
+                    onClick={() => onAddAssignment({ floorId, areaId, date: dateStr, taskName: row.name })}
+                    className="absolute inset-1 flex items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-primary/10 hover:text-primary group-hover/trow:opacity-70 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                  </button>
+                )
               )}
             </div>
           );
@@ -610,7 +672,7 @@ export function WeekScheduleGrid({
           <button
             type="button"
             onClick={onAddFloor}
-            className="flex items-center gap-1.5 rounded-lg border border-primary px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex items-center gap-1.5 rounded-lg border border-primary px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Plus size={13} aria-hidden="true" />
             Add floor
@@ -631,9 +693,21 @@ export function WeekScheduleGrid({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[860px]">
-          <DayHeaderRow />
-          {hasWorkOrders && <WorkOrderRow />}
+        <div className="min-w-[900px]">
+          <div className="sticky top-0 z-10 flex bg-surface">
+            {managed && <div className="w-11 shrink-0 border-b-2 border-grey-300" aria-hidden="true" />}
+            <div className="min-w-0 flex-1">
+              <DayHeaderRow />
+            </div>
+          </div>
+          {hasWorkOrders && (
+            <div className="flex">
+              {managed && <div className="w-11 shrink-0 bg-[#F97316]/[0.06]" aria-hidden="true" />}
+              <div className="min-w-0 flex-1">
+                <WorkOrderRow />
+              </div>
+            </div>
+          )}
 
           {/* ── Managed mode ─────────────────────────────────────────────── */}
           {managed ? (
@@ -673,13 +747,14 @@ export function WeekScheduleGrid({
                       }
                       onDrop={canReorderFloors ? () => handleFloorDrop(floor.id) : undefined}
                       className={cn(
+                        "group/floor flex min-h-[6rem] border-b-2 border-grey-300",
                         isDragTarget && "ring-2 ring-inset ring-primary/60",
                         draggingFloorId === floor.id && "opacity-60",
                       )}
                     >
-                      {/* Floor band */}
+                      {/* Vertical floor label + actions (left rail) */}
                       <div
-                        className="group/floor grid bg-primary"
+                        className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-grey-200 bg-surface-muted py-2"
                         draggable={canReorderFloors}
                         onDragStart={canReorderFloors ? () => setDraggingFloorId(floor.id) : undefined}
                         onDragEnd={
@@ -690,60 +765,62 @@ export function WeekScheduleGrid({
                               }
                             : undefined
                         }
-                        style={{ gridTemplateColumns: gridTemplate }}
                       >
-                        <div className="flex items-center gap-2 px-4 py-2">
-                          {canReorderFloors && (
-                            <GripVertical
-                              size={14}
-                              className="cursor-grab text-white/70"
-                              aria-label="Drag to reorder floor"
-                            />
-                          )}
-                          <span className="text-sm font-bold uppercase tracking-wide text-white">
+                        <div className="flex flex-col items-center gap-0.5 opacity-0 transition-opacity group-hover/floor:opacity-100 focus-within:opacity-100">
+                          <button
+                            type="button"
+                            aria-label={`Add area to ${floor.name}`}
+                            title="Add area"
+                            onClick={() => onAddArea?.(floor)}
+                            className="flex h-5 w-5 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            <Plus size={12} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Rename ${floor.name}`}
+                            title="Rename floor"
+                            onClick={() => onEditFloor?.(floor)}
+                            className="flex h-5 w-5 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            <Pencil size={11} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${floor.name}`}
+                            title="Delete floor"
+                            onClick={() => onDeleteFloor?.(floor)}
+                            className="flex h-5 w-5 items-center justify-center rounded-md text-ink transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            <Trash2 size={11} aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div className="flex min-h-0 flex-1 items-center overflow-hidden">
+                          <span
+                            className="whitespace-nowrap rotate-180 text-xs font-bold uppercase leading-none tracking-wide text-ink [writing-mode:vertical-rl]"
+                            title={floor.name}
+                          >
                             {floor.name}
                           </span>
-                          <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/floor:opacity-100 focus-within:opacity-100">
-                            <button
-                              type="button"
-                              aria-label={`Add area to ${floor.name}`}
-                              title="Add area"
-                              onClick={() => onAddArea?.(floor)}
-                              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-white/90 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                            >
-                              <Plus size={12} aria-hidden="true" />
-                              Area
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Rename ${floor.name}`}
-                              title="Rename floor"
-                              onClick={() => onEditFloor?.(floor)}
-                              className="flex h-6 w-6 items-center justify-center rounded-md text-white/90 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                            >
-                              <Pencil size={12} aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Delete ${floor.name}`}
-                              title="Delete floor"
-                              onClick={() => onDeleteFloor?.(floor)}
-                              className="flex h-6 w-6 items-center justify-center rounded-md text-white/90 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                            >
-                              <Trash2 size={12} aria-hidden="true" />
-                            </button>
-                          </div>
                         </div>
-                        {bandCells()}
+                        {canReorderFloors && (
+                          <GripVertical
+                            size={14}
+                            className="cursor-grab text-grey-400"
+                            aria-label="Drag to reorder floor"
+                          />
+                        )}
                       </div>
 
+                      {/* Floor content */}
+                      <div className="min-w-0 flex-1">
                       {floorAreas.length === 0 ? (
                         <div
                           className="grid border-b border-grey-200 bg-grey-100/40"
                           style={{ gridTemplateColumns: gridTemplate }}
                         >
-                          <div className="px-6 py-2 text-xs italic text-grey-500">
-                            No areas — use “+ Area” above to add one.
+                          <div className="px-4 py-2 text-xs italic text-grey-500">
+                            No areas — use the + on the floor rail to add one.
                           </div>
                           {weekDates.map((dateStr) => (
                             <div key={dateStr} className="border-l border-grey-200/60" />
@@ -785,7 +862,7 @@ export function WeekScheduleGrid({
                             >
                               {/* Area band — name + actions + hover-add day cells */}
                               <div
-                                className="group/area grid border-b border-grey-200 bg-primary/10"
+                                className="group/area grid border-y border-grey-200 bg-surface-muted"
                                 draggable={canReorderAreas}
                                 onDragStart={
                                   canReorderAreas
@@ -809,11 +886,11 @@ export function WeekScheduleGrid({
                                   {canReorderAreas && (
                                     <GripVertical
                                       size={12}
-                                      className="cursor-grab text-primary/60"
+                                      className="cursor-grab text-ink/60"
                                       aria-label="Drag to reorder area"
                                     />
                                   )}
-                                  <span className="text-[13px] font-semibold text-primary">
+                                  <span className="text-[13px] font-semibold text-ink">
                                     {area.name}
                                   </span>
                                   <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100">
@@ -839,7 +916,7 @@ export function WeekScheduleGrid({
                                       aria-label={`Rename ${area.name}`}
                                       title="Rename area"
                                       onClick={() => onEditArea?.(area)}
-                                      className="flex h-6 w-6 items-center justify-center rounded-md text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                     >
                                       <Pencil size={12} aria-hidden="true" />
                                     </button>
@@ -848,7 +925,7 @@ export function WeekScheduleGrid({
                                       aria-label={`Delete ${area.name}`}
                                       title="Delete area"
                                       onClick={() => onDeleteArea?.(area)}
-                                      className="flex h-6 w-6 items-center justify-center rounded-md text-primary transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                     >
                                       <Trash2 size={12} aria-hidden="true" />
                                     </button>
@@ -875,7 +952,7 @@ export function WeekScheduleGrid({
                                             date: dateStr,
                                           })
                                         }
-                                        className="flex h-5 w-5 items-center justify-center rounded-md text-primary opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                        className="flex h-5 w-5 items-center justify-center rounded-md text-ink opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                       >
                                         <Plus size={12} aria-hidden="true" />
                                       </button>
@@ -937,7 +1014,7 @@ export function WeekScheduleGrid({
                                         draggingTask?.taskId === row.taskId && "opacity-60",
                                       )}
                                     >
-                                      <TaskRowView row={row} striped={i % 2 === 1} />
+                                      <TaskRowView row={row} striped={i % 2 === 1} floorId={floor.id} areaId={area.id} />
                                     </div>
                                   );
                                 });
@@ -946,6 +1023,7 @@ export function WeekScheduleGrid({
                           );
                         })
                       )}
+                      </div>
                     </div>
                   );
                 })}
@@ -985,7 +1063,7 @@ export function WeekScheduleGrid({
                           className="grid border-b border-grey-200 bg-primary/10"
                           style={{ gridTemplateColumns: gridTemplate }}
                         >
-                          <div className="px-4 py-1.5 text-[13px] font-semibold text-primary">
+                          <div className="px-4 py-1.5 text-[13px] font-semibold text-ink">
                             {area.areaName}
                           </div>
                           {weekDates.map((dateStr) => (

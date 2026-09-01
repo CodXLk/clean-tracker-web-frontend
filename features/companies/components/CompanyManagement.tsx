@@ -48,7 +48,7 @@ export function CompanyManagement() {
             {companiesQuery.data.map((company) => (
               <div key={company.id} className="rounded-2xl bg-surface p-5 shadow-sm">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-ink">
                     <Building2 size={20} aria-hidden="true" />
                   </div>
                   <div className="min-w-0">

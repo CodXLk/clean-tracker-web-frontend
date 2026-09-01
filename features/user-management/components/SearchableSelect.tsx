@@ -143,7 +143,7 @@ export function SearchableSelect({
                             <span className="block truncate text-xs text-grey-500">{option.sublabel}</span>
                           )}
                         </span>
-                        {isSelected && <Check size={16} className="shrink-0 text-primary" aria-hidden="true" />}
+                        {isSelected && <Check size={16} className="shrink-0 text-ink" aria-hidden="true" />}
                       </button>
                     </li>
                   );
