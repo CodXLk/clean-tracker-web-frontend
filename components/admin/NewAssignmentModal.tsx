@@ -21,12 +21,13 @@ import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAre
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
 import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
-import { useCreateAssignment, useUpdateAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
+import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
+import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import {
   AssignmentFormSchema,
   WORK_TYPE_LABELS,
@@ -34,6 +35,7 @@ import {
   WEEK_OF_MONTH_OPTIONS,
   computeExpectedEndTime,
   allTasksOf,
+  taskToCreateFormInput,
   type AssignmentFormInput,
   type WorkType,
   type RecurrenceType,
@@ -61,9 +63,22 @@ interface NewAssignmentModalProps {
   defaultAreaId?: string;
   /** Day-view quick add — seed the first task's name. */
   defaultTaskName?: string;
+  /**
+   * Scope-view create constraint:
+   * - ONE_OFF: single date, recurrence hidden (date-view cell).
+   * - DAY_WEEKLY: weekly/monthly only (no daily), defaults to the clicked weekday (day-view cell).
+   * - TASK_INHERIT: load the source task and keep its recurrence (day-view task row).
+   */
+  scopeMode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
+  /** For DAY_WEEKLY: the weekday to default the weekly recurrence to. */
+  scopeWeekday?: DayOfWeek;
+  /** Task-row add: load this existing task's details into the create form. */
+  sourceTask?: { assignmentId: string; taskId: string };
   /** When set, edit this existing assignment in place with the full form prefilled. */
   editAssignmentId?: string;
   editData?: AssignmentFormInput | null;
+  /** When set, restrict the form to just this task (no add/remove of tasks/groups). */
+  editTaskId?: string;
   /** When set, load this draft's saved form state instead of a blank form. */
   loadedDraft?: { id: string; payload: unknown } | null;
 }
@@ -113,6 +128,8 @@ interface Prefill {
   defaultFloorId?: string;
   defaultAreaId?: string;
   defaultTaskName?: string;
+  scopeMode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
+  scopeWeekday?: DayOfWeek;
 }
 
 function buildDefaults({
@@ -122,12 +139,15 @@ function buildDefaults({
   defaultFloorId = "",
   defaultAreaId = "",
   defaultTaskName = "",
+  scopeMode,
+  scopeWeekday,
 }: Prefill): AssignmentFormInput {
-  return {
+  const base: AssignmentFormInput = {
     workType: "GENERAL_TASK",
     siteId: defaultSiteId,
     shiftId: "",
     date: defaultDate ? formatDateForInput(defaultDate) : "",
+    seriesEndDate: undefined,
     startTime: defaultTime,
     poId: "",
     groups: [emptyGroup(defaultFloorId, defaultAreaId, defaultTaskName)],
@@ -147,6 +167,21 @@ function buildDefaults({
     generalUseRecurrence: false,
     templateName: "",
   };
+  // Date-view cell: a single one-off assignment (no recurrence, no working-day repeat).
+  if (scopeMode === "ONE_OFF") {
+    return { ...base, workType: "OTHER", otherRepeatWorkingDays: false, otherUseRecurrence: false };
+  }
+  // Day-view cell: repeats weekly on the clicked weekday by default (week/month allowed, not day).
+  if (scopeMode === "DAY_WEEKLY") {
+    return {
+      ...base,
+      workType: "PERIODICAL_TASK",
+      recurrenceType: "WEEKLY",
+      recurrenceCount: 1,
+      daysOfWeek: scopeWeekday ? [scopeWeekday] : [],
+    };
+  }
+  return base;
 }
 
 const inputClass =
@@ -306,6 +341,7 @@ interface LocationGroupCardProps {
   assignPerTask: boolean;
   cleaners: Cleaner[];
   usingProfiles: boolean;
+  lockTasks?: boolean;
 }
 
 function LocationGroupCard({
@@ -318,6 +354,7 @@ function LocationGroupCard({
   assignPerTask,
   cleaners,
   usingProfiles,
+  lockTasks,
 }: LocationGroupCardProps) {
   const {
     control,
@@ -658,6 +695,7 @@ function LocationGroupCard({
       />
 
       {/* Quick add — sits directly under floor/area so it never moves out of reach */}
+      {!lockTasks && (
       <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
           <div className="flex-1">
@@ -720,6 +758,7 @@ function LocationGroupCard({
           add and keep going.
         </p>
       </div>
+      )}
 
       {/* Saved task lists — load a set in, or save the current one */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -849,7 +888,10 @@ function LocationGroupCard({
                     type="button"
                     aria-label={`Remove task ${task?.name}`}
                     onClick={() => remove(taskIndex)}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      lockTasks && "hidden",
+                    )}
                   >
                     <X size={13} aria-hidden="true" />
                   </button>
@@ -952,8 +994,12 @@ export function NewAssignmentModal({
   defaultFloorId,
   defaultAreaId,
   defaultTaskName,
+  scopeMode,
+  scopeWeekday,
+  sourceTask,
   editAssignmentId,
   editData,
+  editTaskId,
   loadedDraft,
 }: NewAssignmentModalProps) {
   const [cleanerSearch, setCleanerSearch] = useState("");
@@ -965,10 +1011,12 @@ export function NewAssignmentModal({
   const updateMutation = useUpdateAssignment();
   const saveDraftMutation = useSaveDraft();
   const deleteDraftMutation = useDeleteDraft();
+  // Task-row "+": load the source task's assignment so its details/recurrence can seed the form.
+  const sourceAssignmentQuery = useAssignment(open && sourceTask ? sourceTask.assignmentId : undefined);
 
   const methods = useForm<AssignmentFormInput>({
     resolver: zodResolver(AssignmentFormSchema),
-    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName }),
+    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday }),
   });
   const {
     register,
@@ -985,6 +1033,12 @@ export function NewAssignmentModal({
     control,
     name: "groups",
   });
+
+  // Single-task edit: the group index that holds the task being edited.
+  const singleGroupIndex =
+    editTaskId && editData
+      ? editData.groups.findIndex((g) => g.tasks.some((t) => t.id === editTaskId))
+      : -1;
 
   const workType = watch("workType");
   const siteId = watch("siteId");
@@ -1007,6 +1061,28 @@ export function NewAssignmentModal({
     workType === "PERIODICAL_TASK" ||
     (workType === "OTHER" && otherUseRecurrence) ||
     (workType === "GENERAL_TASK" && generalUseRecurrence);
+
+  // Scope-view constraints (set by the "+" cell that opened this modal).
+  const scopeOneOff = scopeMode === "ONE_OFF";
+  const scopeDayWeekly = scopeMode === "DAY_WEEKLY";
+  const scopeInherit = scopeMode === "TASK_INHERIT";
+  const scopeLocked = scopeOneOff || scopeDayWeekly;
+  // Day-view adds schedule by weekday + recurrence, so the anchor date is hidden.
+  const hideDate = scopeDayWeekly || scopeInherit;
+  const sourceLoading = !!sourceTask && sourceAssignmentQuery.isLoading;
+  // Task-row add: we're just re-adding one existing task, so the location/task/template/items
+  // editors are hidden in favour of a read-only summary of the loaded task.
+  const seededFromTask = !!sourceTask;
+  const seedTask = seededFromTask
+    ? sourceAssignmentQuery.data?.tasks.find((t) => t.id === sourceTask!.taskId)
+    : undefined;
+  const scopeWeekdayLabel = scopeWeekday
+    ? scopeWeekday.charAt(0) + scopeWeekday.slice(1).toLowerCase()
+    : "";
+  // Day-view add allows weekly/monthly repetition only — never daily.
+  const recurrenceTypeOptions = (Object.keys(RECURRENCE_TYPE_LABELS) as RecurrenceType[]).filter(
+    (r) => !(scopeDayWeekly && r === "DAILY"),
+  );
 
   const floorsQuery = useFloors(siteId || undefined);
   // Only cleaners assigned to the selected site can be picked.
@@ -1089,10 +1165,11 @@ export function NewAssignmentModal({
   const allFilteredSelected =
     filteredCleaners.length > 0 && filteredCleaners.every((c) => selectedCleaners?.includes(c.id));
 
-  // Default: every slot is responsible for the assignment unless removed.
+  // Default: every slot is responsible unless the user deselects one (Select All by default).
   const didDefaultProfiles = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!siteId || profilesQuery.isLoading) return;
+    if (sourceTask) return; // seeded tasks pick their default in the seed effect below
     if (didDefaultProfiles.current === siteId) return;
     didDefaultProfiles.current = siteId;
     if (siteProfiles.length > 0 && (getValues("profileIds") ?? []).length === 0) {
@@ -1105,6 +1182,7 @@ export function NewAssignmentModal({
   const didDefaultSupervisors = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!siteId || supervisorsQuery.isLoading) return;
+    if (sourceTask) return; // seeded from a task — keep its own supervisors
     // Only auto-select once per site, and only when nothing is chosen yet.
     if (didDefaultSupervisors.current === siteId) return;
     didDefaultSupervisors.current = siteId;
@@ -1139,8 +1217,12 @@ export function NewAssignmentModal({
         const base = buildDefaults({});
         reset({ ...base, ...(loadedDraft.payload as Partial<AssignmentFormInput>) } as AssignmentFormInput);
         setActiveDraftId(loadedDraft.id);
+      } else if (sourceTask) {
+        // Seeded from an existing task — the form is filled by the source-task effect
+        // once its assignment loads; keep a blank base until then.
+        setActiveDraftId(undefined);
       } else {
-        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName }));
+        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday }));
         setActiveDraftId(undefined);
       }
       setCleanerSearch("");
@@ -1150,7 +1232,67 @@ export function NewAssignmentModal({
       saveDraftMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, editData, loadedDraft, reset]);
+  }, [open, defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday, sourceTask, editData, loadedDraft, reset]);
+
+  // Seed the form from the source task once its assignment has loaded (task-row "+").
+  const didSeedSource = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !sourceTask) {
+      didSeedSource.current = null;
+      return;
+    }
+    const assignment = sourceAssignmentQuery.data;
+    if (!assignment) return;
+    // Wait for the site's slots/cleaners/supervisors so stale assignees can be dropped.
+    if (profilesQuery.isLoading || cleanersQuery.isLoading || supervisorsQuery.isLoading) return;
+    const key = `${sourceTask.taskId}:${scopeMode ?? ""}`;
+    if (didSeedSource.current === key) return;
+    const seeded = taskToCreateFormInput(assignment, sourceTask.taskId, {
+      oneOff: scopeMode === "ONE_OFF",
+      date: defaultDate ? formatDateForInput(defaultDate) : "",
+    });
+    if (!seeded) return;
+    didSeedSource.current = key;
+
+    // Drop any slot/cleaner/supervisor that no longer belongs to the site (e.g. a cleaner
+    // that has since been removed) so the create call doesn't fail validation.
+    const validProfiles = new Set(siteProfiles.map((p) => p.id));
+    const validCleaners = new Set((cleanersQuery.data ?? []).map((c) => c.id));
+    const validSupers = new Set((supervisorsQuery.data ?? []).map((s) => s.id));
+    const cleaned: AssignmentFormInput = {
+      ...seeded,
+      profileIds: seeded.profileIds.filter((id) => validProfiles.has(id)),
+      cleanerIds: seeded.cleanerIds.filter((id) => validCleaners.has(id)),
+      supervisorIds: seeded.supervisorIds.filter((id) => validSupers.has(id)),
+      groups: seeded.groups.map((g) => ({
+        ...g,
+        tasks: g.tasks.map((t) => ({
+          ...t,
+          profileIds: (t.profileIds ?? []).filter((id) => validProfiles.has(id)),
+          cleanerIds: (t.cleanerIds ?? []).filter((id) => validCleaners.has(id)),
+        })),
+      })),
+    };
+    reset(cleaned);
+    // Default to all site slots (Select All) when the loaded task didn't pin specific ones.
+    if (cleaned.profileIds.length === 0 && siteProfiles.length > 0) {
+      setValue("profileIds", siteProfiles.map((p) => p.id), { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    sourceTask,
+    sourceAssignmentQuery.data,
+    scopeMode,
+    defaultDate,
+    reset,
+    siteProfiles,
+    cleanersQuery.data,
+    cleanersQuery.isLoading,
+    supervisorsQuery.data,
+    supervisorsQuery.isLoading,
+    profilesQuery.isLoading,
+  ]);
 
   // Close directly when there's nothing to lose; otherwise offer to save a draft.
   const handleClose = useCallback(() => {
@@ -1304,20 +1446,29 @@ export function NewAssignmentModal({
             <div className="max-h-[72vh] overflow-y-auto px-6 pb-2">
               {/* Row 1: Work Type + Site */}
               <div className="grid grid-cols-2 gap-4">
-                <Controller
-                  name="workType"
-                  control={control}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      label="Work Type"
-                      options={workTypeOptions}
-                      value={field.value || null}
-                      onChange={(v) => field.onChange(v)}
-                      error={errors.workType?.message}
-                      placeholder="Select work type"
-                    />
-                  )}
-                />
+                {scopeLocked ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface">Work Type</label>
+                    <div className="rounded-xl border border-grey-300 bg-grey-100/60 px-3 py-2 text-sm text-on-surface">
+                      {scopeOneOff ? "One-time (single date)" : "Repeating (weekly / monthly)"}
+                    </div>
+                  </div>
+                ) : (
+                  <Controller
+                    name="workType"
+                    control={control}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        label="Work Type"
+                        options={workTypeOptions}
+                        value={field.value || null}
+                        onChange={(v) => field.onChange(v)}
+                        error={errors.workType?.message}
+                        placeholder="Select work type"
+                      />
+                    )}
+                  />
+                )}
                 <Controller
                   name="siteId"
                   control={control}
@@ -1345,6 +1496,22 @@ export function NewAssignmentModal({
                 />
               </div>
 
+              {/* Scope-view constraint banner (added from a scope "+" cell) */}
+              {scopeLocked && (
+                <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-on-surface">
+                  {scopeOneOff
+                    ? "Added to this date only — this is a one-time task and does not repeat."
+                    : `Repeats every week on ${scopeWeekdayLabel || "the selected day"} by default. You can switch to a weekly or monthly rule below — daily is not available here.`}
+                </div>
+              )}
+              {scopeInherit && (
+                <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-on-surface">
+                  {sourceLoading
+                    ? "Loading the selected task…"
+                    : "Loaded from the selected task — added on this day, keeping the original task's recurrence. Adjust below if needed."}
+                </div>
+              )}
+
               {/* Optional shift — only when the selected site defines shifts. */}
               {siteId && (shiftsQuery.data?.length ?? 0) > 0 && (
                 <div className="grid grid-cols-1 gap-4">
@@ -1365,19 +1532,26 @@ export function NewAssignmentModal({
               )}
 
               {/* Row 2: Date + Expected Start Time */}
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="assign-date" className="text-sm font-medium text-on-surface">
-                    Date
-                  </label>
-                  <input
-                    id="assign-date"
-                    type="date"
-                    {...register("date")}
-                    className={cn(inputClass, errors.date ? "border-danger" : "border-grey-300")}
-                  />
-                  {errors.date && <p className="text-xs text-danger">{errors.date.message}</p>}
-                </div>
+              <div className={cn("mt-4 grid gap-4", hideDate ? "grid-cols-1" : "grid-cols-2")}>
+                {!hideDate && (
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="assign-date" className="text-sm font-medium text-on-surface">
+                      Date
+                    </label>
+                    <input
+                      id="assign-date"
+                      type="date"
+                      readOnly={scopeLocked}
+                      {...register("date")}
+                      className={cn(
+                        inputClass,
+                        errors.date ? "border-danger" : "border-grey-300",
+                        scopeLocked && "cursor-not-allowed bg-grey-100/60",
+                      )}
+                    />
+                    {errors.date && <p className="text-xs text-danger">{errors.date.message}</p>}
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="assign-time" className="text-sm font-medium text-on-surface">
                     Expected Start Time
@@ -1412,7 +1586,7 @@ export function NewAssignmentModal({
               )}
 
               {/* Other: behaviour toggles */}
-              {workType === "OTHER" && (
+              {workType === "OTHER" && !scopeOneOff && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
                   <p className="mb-2 text-sm font-medium text-on-surface">Custom behaviour</p>
                   <p className="mb-3 text-xs text-grey-500">
@@ -1441,7 +1615,7 @@ export function NewAssignmentModal({
               )}
 
               {/* General: opt into a custom recurrence rule instead of working days */}
-              {workType === "GENERAL_TASK" && (
+              {workType === "GENERAL_TASK" && !scopeOneOff && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
                   <label className="flex items-center gap-2 text-sm text-on-surface">
                     <input
@@ -1459,7 +1633,7 @@ export function NewAssignmentModal({
               )}
 
               {/* General (or Other + working-day fill): show the site's working days */}
-              {showWorkingDays && (
+              {showWorkingDays && !scopeOneOff && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-primary/5 p-4">
                   <p className="mb-2 text-sm font-medium text-on-surface">Site working days</p>
                   {!siteId ? (
@@ -1486,7 +1660,7 @@ export function NewAssignmentModal({
               )}
 
               {/* Periodical (or Other + recurrence): recurrence settings */}
-              {showRecurrence && (
+              {showRecurrence && !scopeOneOff && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <p className="text-sm font-medium text-on-surface">Recurrence</p>
@@ -1513,7 +1687,7 @@ export function NewAssignmentModal({
                         {...register("recurrenceType")}
                         className={cn(inputClass, "border-grey-300 bg-white")}
                       >
-                        {(Object.keys(RECURRENCE_TYPE_LABELS) as RecurrenceType[]).map((r) => (
+                        {recurrenceTypeOptions.map((r) => (
                           <option key={r} value={r}>
                             {RECURRENCE_TYPE_LABELS[r]}
                           </option>
@@ -1704,37 +1878,69 @@ export function NewAssignmentModal({
               {/* Tasks — grouped by floor & area */}
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="text-sm font-medium text-on-surface">Tasks by location</span>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
-                    {totalTasks} total
+                  <span className="text-sm font-medium text-on-surface">
+                    {seededFromTask ? "Task" : "Tasks by location"}
                   </span>
+                  {!seededFromTask && (
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
+                      {totalTasks} total
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-col gap-3">
-                  {groupFields.map((field, index) => (
-                    <LocationGroupCard
-                      key={field.id}
-                      groupIndex={index}
-                      siteId={siteId}
-                      floorOptions={floorOptions}
-                      floorsLoading={floorsQuery.isLoading}
-                      canRemove={groupFields.length > 1}
-                      onRemove={() => removeGroup(index)}
-                      assignPerTask={assignPerTask}
-                      cleaners={cleaners}
-                      usingProfiles={usingProfiles}
-                    />
-                  ))}
-                </div>
+                {seededFromTask ? (
+                  <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
+                    {sourceLoading ? (
+                      <p className="text-sm text-grey-500">Loading task…</p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-ink">
+                          {seedTask?.name ?? defaultTaskName ?? "Task"}
+                        </p>
+                        {(seedTask?.floorName || seedTask?.areaName) && (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-grey-500">
+                            <MapPin size={12} aria-hidden="true" />
+                            {[seedTask?.floorName, seedTask?.areaName].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3">
+                      {groupFields.map((field, index) => {
+                        if (editTaskId && singleGroupIndex >= 0 && index !== singleGroupIndex) return null;
+                        return (
+                          <LocationGroupCard
+                            key={field.id}
+                            groupIndex={index}
+                            siteId={siteId}
+                            floorOptions={floorOptions}
+                            floorsLoading={floorsQuery.isLoading}
+                            canRemove={!editTaskId && groupFields.length > 1}
+                            onRemove={() => removeGroup(index)}
+                            assignPerTask={assignPerTask}
+                            cleaners={cleaners}
+                            usingProfiles={usingProfiles}
+                            lockTasks={!!editTaskId}
+                          />
+                        );
+                      })}
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => appendGroup(emptyGroup())}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <Plus size={15} aria-hidden="true" />
-                  Add another floor / area
-                </button>
+                    {!editTaskId && (
+                      <button
+                        type="button"
+                        onClick={() => appendGroup(emptyGroup())}
+                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <Plus size={15} aria-hidden="true" />
+                        Add another floor / area
+                      </button>
+                    )}
+                  </>
+                )}
 
                 {typeof errors.groups?.message === "string" && (
                   <p className="mt-2 text-xs text-danger">{errors.groups.message}</p>
@@ -1872,6 +2078,11 @@ export function NewAssignmentModal({
                           );
                         })}
                       </div>
+                    )}
+                    {siteId && !cleanersLoading && cleaners.length > 0 && (selectedCleaners?.length ?? 0) === 0 && (
+                      <p className="mt-2 text-xs text-grey-500">
+                        None selected — this task belongs to all {usingProfiles ? "cleaner slots" : "cleaners"} on the site.
+                      </p>
                     )}
                     {(errors.cleanerIds || errors.profileIds) && (
                       <p className="mt-2 text-xs text-danger">

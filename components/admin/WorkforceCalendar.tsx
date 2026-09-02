@@ -9,6 +9,9 @@ import {
   useEditOccurrence,
   useDeleteOccurrence,
   useReorderTasks,
+  useSetTaskStatus,
+  useRestoreTask,
+  useSiteTaskStatusCounts,
   type OccurrenceQuery,
   type EditOccurrenceInput,
 } from "@/features/workforce/hooks/useAssignments";
@@ -32,7 +35,7 @@ import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS, assignmentToFormInput, type WorkType, type Assignment } from "@/features/workforce/schemas/assignment.schema";
-import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
+import { DAY_OF_WEEK_VALUES, type DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
 
@@ -81,6 +84,12 @@ export interface AssignmentPrefill {
   areaId?: string;
   /** Day-view quick add — seed the first task's name. */
   taskName?: string;
+  /** Scope-view create constraint: one-off (date cell), weekly-on-day, or inherit from a task. */
+  mode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
+  /** For DAY_WEEKLY: the weekday the new task should repeat on. */
+  weekday?: DayOfWeek;
+  /** Task-row add: load this existing task's details into the create form. */
+  sourceTask?: { assignmentId: string; taskId: string };
 }
 
 interface WorkforceCalendarProps {
@@ -1311,6 +1320,8 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const [calendarMode, setCalendarMode] = useState<"week" | "month">("week");
   // Scope view sub-mode: dated week grid vs weekday (Mon–Sun) recurrence grid.
   const [scopeView, setScopeView] = useState<"date" | "day">("date");
+  // Scope view task lifecycle filter (soft-deleted tasks are hidden by default).
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"ACTIVE" | "INACTIVE" | "DELETED" | "ALL">("ACTIVE");
   const viewMode: "week" | "month" | "schedule" =
     mainView === "scope" ? "schedule" : calendarMode;
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -1326,7 +1337,14 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   // Scope-view cell click → brief info popup → full edit of the whole assignment.
   const [infoOccurrence, setInfoOccurrence] = useState<TaskOccurrence | null>(null);
   const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
+  const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [editOccurrence, setEditOccurrence] = useState<TaskOccurrence | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<{
+    taskId: string;
+    status: "ACTIVE" | "INACTIVE";
+    name: string;
+  } | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<{ taskId: string; name: string } | null>(null);
   const [scopeDialog, setScopeDialog] = useState<ScopeDialogState | null>(null);
 
   // Floor/area management (scope view, single site selected).
@@ -1418,18 +1436,46 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   // Visible date range → drives the backend fetch. The schedule grid is weekly too.
   const range = useMemo<OccurrenceQuery>(() => {
     if (viewMode === "week" || viewMode === "schedule") {
-      return { from: weekDates[0]!, to: weekDates[6]!, siteId: siteFilter || undefined };
+      return { from: weekDates[0]!, to: weekDates[6]!, siteId: siteFilter || undefined, taskStatus: taskStatusFilter };
     }
     const weeks = getMonthWeeks(currentYear, currentMonth);
     return {
       from: weeks[0]![0]!,
       to: weeks[weeks.length - 1]![6]!,
       siteId: siteFilter || undefined,
+      taskStatus: taskStatusFilter,
     };
-  }, [viewMode, weekDates, currentYear, currentMonth, siteFilter]);
+  }, [viewMode, weekDates, currentYear, currentMonth, siteFilter, taskStatusFilter]);
 
   const occurrencesQuery = useOccurrences(range);
   const siteTasksQuery = useSiteTasks(managing ? range : undefined);
+  const statusCountsQuery = useSiteTaskStatusCounts(managing ? range : undefined);
+  const setTaskStatusMutation = useSetTaskStatus();
+  const restoreTaskMutation = useRestoreTask();
+
+  // Day view aggregates the recurrence pattern into weekday columns (independent of the
+  // selected week), so it fetches a wider lookahead than the visible week.
+  const dayScope = managing && scopeView === "day";
+  const dayRange = useMemo<OccurrenceQuery | undefined>(() => {
+    if (!dayScope) return undefined;
+    const end = new Date(`${today}T00:00:00`);
+    end.setDate(end.getDate() + 41);
+    return { from: today, to: formatDate(end), siteId: siteFilter || undefined, taskStatus: taskStatusFilter };
+  }, [dayScope, today, siteFilter, taskStatusFilter]);
+  const dayOccurrencesQuery = useOccurrences(dayRange);
+
+  // Persist the task-status filter so a manager who switches to Inactive/All stays there.
+  useEffect(() => {
+    const saved = window.localStorage.getItem("workforce.taskStatusFilter");
+    if (saved === "ACTIVE" || saved === "INACTIVE" || saved === "DELETED" || saved === "ALL") {
+      setTaskStatusFilter(saved);
+    }
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("workforce.taskStatusFilter", taskStatusFilter);
+  }, [taskStatusFilter]);
+
+  const statusCounts = statusCountsQuery.data;
 
   function handleReorderFloors(orderedFloorIds: string[]) {
     if (!siteFilter) return;
@@ -1457,6 +1503,23 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     setSyncedFrom(serverOccurrences);
     setEvents((serverOccurrences ?? []).map(mapOccurrenceToEvent));
   }
+
+  // Upcoming dates a task will lose when deactivated — shown in the confirm dialog so the
+  // manager sees the blast radius before hiding a whole recurring task.
+  function upcomingDatesForTask(taskId: string, limit = 3): string[] {
+    return Array.from(
+      new Set(
+        (serverOccurrences ?? [])
+          .filter((o) => o.taskId === taskId && o.date >= today)
+          .map((o) => o.date),
+      ),
+    )
+      .sort()
+      .slice(0, limit);
+  }
+
+  const toggleUpcoming =
+    pendingToggle?.status === "INACTIVE" ? upcomingDatesForTask(pendingToggle.taskId) : [];
 
   // Keep the latest events available to the resize mouseup handler.
   const eventsRef = useRef(events);
@@ -1686,13 +1749,22 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
 
   // ── Scope view: add assignment prefilled with floor/area/date ──────────────
   function handleScopeAddAssignment(target: AddAssignmentTarget) {
+    const dateObj = new Date(target.date + "T00:00:00");
+    // JS getDay(): 0=Sun..6=Sat → Monday-first enum index.
+    const weekday = DAY_OF_WEEK_VALUES[(dateObj.getDay() + 6) % 7];
     onNewAssignment?.({
-      date: new Date(target.date + "T00:00:00"),
+      date: dateObj,
       time: "09:00",
       siteId: siteFilter,
       floorId: target.floorId,
       areaId: target.areaId,
       taskName: target.taskName,
+      mode: target.mode,
+      weekday: target.mode === "DAY_WEEKLY" ? weekday : undefined,
+      sourceTask:
+        target.sourceAssignmentId && target.sourceTaskId
+          ? { assignmentId: target.sourceAssignmentId, taskId: target.sourceTaskId }
+          : undefined,
     });
   }
 
@@ -1821,6 +1893,27 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
         {/* View toggles: Week/Month sub-toggle (calendar only) + Calendar/Scope */}
         <div className="ml-auto flex items-center gap-2">
           {mainView === "scope" && (
+            <select
+              value={taskStatusFilter}
+              onChange={(e) => setTaskStatusFilter(e.target.value as typeof taskStatusFilter)}
+              aria-label="Task status filter"
+              className="rounded-xl border border-grey-200 bg-surface px-3 py-1.5 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <option value="ACTIVE">Active tasks{statusCounts ? ` (${statusCounts.ACTIVE})` : ""}</option>
+              <option value="INACTIVE">Inactive{statusCounts ? ` (${statusCounts.INACTIVE})` : ""}</option>
+              <option value="DELETED">Deleted{statusCounts ? ` (${statusCounts.DELETED})` : ""}</option>
+              <option value="ALL">All statuses</option>
+            </select>
+          )}
+          {mainView === "scope" && statusCounts && (statusCounts.INACTIVE > 0 || statusCounts.DELETED > 0) && taskStatusFilter === "ACTIVE" && (
+            <span className="text-xs text-grey-500" title="Hidden by the Active filter">
+              {statusCounts.INACTIVE > 0 && `${statusCounts.INACTIVE} inactive`}
+              {statusCounts.INACTIVE > 0 && statusCounts.DELETED > 0 && " · "}
+              {statusCounts.DELETED > 0 && `${statusCounts.DELETED} deleted`}
+              {" hidden"}
+            </span>
+          )}
+          {mainView === "scope" && (
             <div className="flex overflow-hidden rounded-xl border border-grey-200">
               <button
                 type="button"
@@ -1905,7 +1998,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       {viewMode === "schedule" ? (
         <WeekScheduleGrid
           weekDates={weekDates}
-          occurrences={serverOccurrences ?? []}
+          occurrences={dayScope ? dayOccurrencesQuery.data ?? [] : serverOccurrences ?? []}
           today={today}
           workingDays={workingDays}
           dayView={scopeView === "day"}
@@ -1924,6 +2017,19 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           canReorderTasks={canReorderTasks}
           onReorderTasks={handleReorderTasks}
           onAddAssignment={handleScopeAddAssignment}
+          onToggleTaskStatus={(taskId, status) =>
+            setPendingToggle({
+              taskId,
+              status,
+              name: siteTasksQuery.data?.find((t) => t.taskId === taskId)?.name ?? "this task",
+            })
+          }
+          onRestoreTask={(taskId) =>
+            setPendingRestore({
+              taskId,
+              name: siteTasksQuery.data?.find((t) => t.taskId === taskId)?.name ?? "this task",
+            })
+          }
           onAddFloor={() => setFloorModal({ mode: "add" })}
           onEditFloor={(floor) => setFloorModal({ mode: "edit", floor })}
           onDeleteFloor={(floor) => setDeleteTarget({ kind: "floor", floor })}
@@ -1993,6 +2099,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           occurrence={infoOccurrence}
           onClose={() => setInfoOccurrence(null)}
           onEditTask={(assignment) => {
+            setEditTaskId(infoOccurrence?.taskId ?? null);
             setInfoOccurrence(null);
             setEditAssignment(assignment);
           }}
@@ -2005,8 +2112,15 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           open
           editAssignmentId={editAssignment.id}
           editData={assignmentToFormInput(editAssignment)}
-          onClose={() => setEditAssignment(null)}
-          onCreated={() => setEditAssignment(null)}
+          editTaskId={editTaskId ?? undefined}
+          onClose={() => {
+            setEditAssignment(null);
+            setEditTaskId(null);
+          }}
+          onCreated={() => {
+            setEditAssignment(null);
+            setEditTaskId(null);
+          }}
         />
       )}
 
@@ -2084,6 +2198,63 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           setDeleteTarget(null);
           deleteFloor.reset();
           deleteArea.reset();
+        }}
+      />
+
+      {/* Task activate / deactivate */}
+      <ConfirmDialog
+        open={!!pendingToggle}
+        title={pendingToggle?.status === "ACTIVE" ? "Activate task" : "Deactivate task (all future dates)"}
+        description={
+          pendingToggle?.status === "ACTIVE"
+            ? `Activate “${pendingToggle.name}”? It will appear again in upcoming schedules for cleaners and supervisors.`
+            : pendingToggle?.status === "INACTIVE"
+              ? `Deactivate “${pendingToggle.name}” for all future dates? It will be hidden from upcoming schedules for cleaners and supervisors; existing history is kept. To cancel a single day instead, use the occurrence’s skip/move action.${
+                  toggleUpcoming.length
+                    ? ` Upcoming dates that will be removed: ${toggleUpcoming
+                        .map((d) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }))
+                        .join(", ")}${toggleUpcoming.length >= 3 ? "…" : ""}.`
+                    : ""
+                }`
+              : ""
+        }
+        confirmLabel={pendingToggle?.status === "ACTIVE" ? "Activate" : "Deactivate"}
+        isPending={setTaskStatusMutation.isPending}
+        error={setTaskStatusMutation.isError ? getErrorMessage(setTaskStatusMutation.error) : undefined}
+        onConfirm={() => {
+          if (!pendingToggle) return;
+          setTaskStatusMutation.mutate(
+            { taskId: pendingToggle.taskId, status: pendingToggle.status },
+            { onSuccess: () => setPendingToggle(null) },
+          );
+        }}
+        onClose={() => {
+          setPendingToggle(null);
+          setTaskStatusMutation.reset();
+        }}
+      />
+
+      {/* Task restore (from deleted) */}
+      <ConfirmDialog
+        open={!!pendingRestore}
+        title="Restore task"
+        description={
+          pendingRestore
+            ? `Restore “${pendingRestore.name}”? It will become active again and reappear in upcoming schedules for cleaners and supervisors.`
+            : ""
+        }
+        confirmLabel="Restore"
+        isPending={restoreTaskMutation.isPending}
+        error={restoreTaskMutation.isError ? getErrorMessage(restoreTaskMutation.error) : undefined}
+        onConfirm={() => {
+          if (!pendingRestore) return;
+          restoreTaskMutation.mutate(pendingRestore.taskId, {
+            onSuccess: () => setPendingRestore(null),
+          });
+        }}
+        onClose={() => {
+          setPendingRestore(null);
+          restoreTaskMutation.reset();
         }}
       />
     </div>

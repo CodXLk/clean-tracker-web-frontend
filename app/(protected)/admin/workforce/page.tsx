@@ -193,6 +193,9 @@ function WorkforceContent() {
           defaultFloorId={prefill.floorId}
           defaultAreaId={prefill.areaId}
           defaultTaskName={prefill.taskName}
+          scopeMode={prefill.mode}
+          scopeWeekday={prefill.weekday}
+          sourceTask={prefill.sourceTask}
           loadedDraft={loadedDraft}
         />
 
