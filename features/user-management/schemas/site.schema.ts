@@ -96,6 +96,7 @@ export const SiteSchema = z.object({
   generalTaskEndTime: z.string().nullable().optional(),
   requiredCertificates: z.array(CertificateTypeSchema).default([]),
   clientSiteManagementEnabled: z.boolean().optional().default(false),
+  worksOnPublicHolidays: z.boolean().optional().default(false),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
@@ -136,6 +137,7 @@ export const SiteFormSchema = z
     generalTaskEndTime: z.string().optional().or(z.literal("")),
     requiredCertificates: z.array(CertificateTypeSchema),
     clientSiteManagementEnabled: z.boolean().optional(),
+    worksOnPublicHolidays: z.boolean().optional(),
     cleaningTemplates: z.array(
       z.object({
         templateId: z.string().uuid("Please select a template"),
@@ -151,19 +153,16 @@ export const SiteFormSchema = z
         path: ["endDate"],
       });
     }
-    const timePairs: [keyof typeof val, keyof typeof val][] = [
-      ["generalTaskStartTime", "generalTaskEndTime"],
-    ];
-    for (const [startKey, endKey] of timePairs) {
-      const start = val[startKey] as string | undefined;
-      const end = val[endKey] as string | undefined;
-      if (start && end && end < start) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "End time cannot be before the start time",
-          path: [endKey as string],
-        });
-      }
+    // General task end may be earlier than start — that means an overnight window (next day).
+    // Only reject when a start is given without an end, or vice versa.
+    const gStart = val.generalTaskStartTime as string | undefined;
+    const gEnd = val.generalTaskEndTime as string | undefined;
+    if (Boolean(gStart) !== Boolean(gEnd)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Set both a start and end time (or leave both empty)",
+        path: [gStart ? "generalTaskEndTime" : "generalTaskStartTime"],
+      });
     }
   });
 

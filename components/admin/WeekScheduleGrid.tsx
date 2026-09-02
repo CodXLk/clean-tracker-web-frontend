@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Building2, GripVertical, Plus, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
+import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import type { SiteTaskSummary, TaskOccurrence, WorkType, AssignmentTaskStatus, RecurrenceType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
@@ -343,6 +344,8 @@ interface WeekScheduleGridProps {
   isLoading?: boolean;
   /** Weekday (Mon–Sun) recurrence view instead of the dated week grid. */
   dayView?: boolean;
+  /** Public holidays keyed by date (date view) — tints and labels the column. */
+  holidays?: Map<string, string>;
   onOccurrenceClick?: (occurrence: TaskOccurrence) => void;
 
   // ── Managed mode (a single site is selected) ────────────────────────────────
@@ -391,6 +394,7 @@ export function WeekScheduleGrid({
   workingDays,
   isLoading = false,
   dayView = false,
+  holidays,
   onOccurrenceClick,
   siteId,
   floors,
@@ -535,13 +539,15 @@ export function WeekScheduleGrid({
           const day = dt.toLocaleDateString("en-US", { weekday: "short" });
           const isToday = dateStr === today;
           const working = isWorkingDate(dateStr);
+          const holidayName = !dayView ? holidays?.get(dateStr) : undefined;
           return (
             <div
               key={dateStr}
+              title={holidayName}
               className={cn(
                 "flex flex-col items-center border-l border-grey-200 py-2.5",
                 isToday && "bg-primary/5",
-                !working && "bg-grey-100/70",
+                holidayName ? "bg-rose-50" : !working && "bg-grey-100/70",
               )}
             >
               <span
@@ -560,6 +566,14 @@ export function WeekScheduleGrid({
                   )}
                 >
                   {dt.getDate()}
+                </span>
+              )}
+              {holidayName && (
+                <span
+                  className="mt-1 max-w-full truncate rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600"
+                  title={holidayName}
+                >
+                  {holidayName}
                 </span>
               )}
             </div>
@@ -929,8 +943,11 @@ export function WeekScheduleGrid({
 
           {/* ── Managed mode ─────────────────────────────────────────────── */}
           {managed ? (
-            structureLoading ? (
-              <p className="px-4 py-10 text-center text-sm text-grey-500">Loading structure…</p>
+            structureLoading || isLoading ? (
+              <div className="flex items-center justify-center gap-2 px-4 py-16 text-sm text-grey-500">
+                <LoadingSpinner />
+                Loading schedule…
+              </div>
             ) : floors!.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
                 <p className="text-sm text-grey-500">This site has no floors yet.</p>

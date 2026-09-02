@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package, MoonStar } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   useOccurrences,
@@ -31,6 +31,8 @@ import { NameFormModal } from "@/components/admin/NameFormModal";
 import { EditOccurrenceModal } from "@/components/admin/EditOccurrenceModal";
 import { TaskInfoModal } from "@/components/admin/TaskInfoModal";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
+import { TypeDetailsModal } from "@/components/admin/TypeDetailsModal";
+import { usePublicHolidays } from "@/features/workforce/hooks/usePublicHolidays";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
@@ -129,6 +131,12 @@ function timeDiff(start: string, end: string): number {
   return timeToMinutes(end) - timeToMinutes(start);
 }
 
+// Shared toolbar control styling — one consistent height (36px) + font across the row.
+const TOOLBAR_CONTROL =
+  "h-9 rounded-xl border border-grey-200 bg-surface px-3 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary";
+const SEGMENT_BTN =
+  "flex h-9 items-center px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+
 function formatDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -226,6 +234,8 @@ function dayOfWeekOf(dateStr: string): DayOfWeek {
 const SLOT_HEIGHT = 60;
 const START_HOUR = 6;
 const END_HOUR = 21;
+// Vertical offset per stacked rectangle so lower work-type layers peek out at the top.
+const STACK_OFFSET = 9;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => i + START_HOUR);
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -246,6 +256,30 @@ const ASSIGNMENT_TYPE_COLOR: Record<string, string> = {
   WORK_ORDER: "#F97316",
   OTHER: "#3B82F6",
 };
+
+// Stacking order of work-type rectangles in a day cell.
+const WORK_TYPE_ORDER: string[] = ["WORK_ORDER", "GENERAL_TASK", "PERIODICAL_TASK", "OTHER"];
+
+interface DayTypeGroup {
+  type: string;
+  hex: string;
+  events: CalendarEvent[];
+}
+
+/** Group a day's per-task events by work type, in a stable stacking order. */
+function groupDayByType(dayEvents: CalendarEvent[]): DayTypeGroup[] {
+  const byType = new Map<string, CalendarEvent[]>();
+  for (const e of dayEvents) {
+    const list = byType.get(e.assignmentType);
+    if (list) list.push(e);
+    else byType.set(e.assignmentType, [e]);
+  }
+  return WORK_TYPE_ORDER.filter((t) => byType.has(t)).map((t) => ({
+    type: t,
+    hex: ASSIGNMENT_TYPE_COLOR[t] ?? "#0B585A",
+    events: byType.get(t)!,
+  }));
+}
 
 function normalizeTime(time: string): string {
   return time.length >= 5 ? time.slice(0, 5) : time;
@@ -1124,16 +1158,13 @@ interface MonthViewProps {
   events: CalendarEvent[];
   today: string;
   workingDays: DayOfWeek[] | null;
+  holidays: Map<string, string>;
   onDayClick: (date: string, x: number, y: number) => void;
-  onEventClick: (event: CalendarEvent) => void;
+  onTypeClick: (group: DayTypeGroup, date: string) => void;
 }
 
-function MonthView({ year, month, events, today, workingDays, onDayClick, onEventClick }: MonthViewProps) {
+function MonthView({ year, month, events, today, workingDays, holidays, onDayClick, onTypeClick }: MonthViewProps) {
   const weeks = getMonthWeeks(year, month);
-
-  function getEventsForDay(date: string): CalendarEvent[] {
-    return groupDayEvents(events.filter((e) => e.date === date));
-  }
 
   function isWorkingDate(date: string): boolean {
     return workingDays === null || workingDays.includes(dayOfWeekOf(date));
@@ -1158,24 +1189,27 @@ function MonthView({ year, month, events, today, workingDays, onDayClick, onEven
             const isCurrentMonth = dt.getMonth() === month;
             const isToday = dateStr === today;
             const working = isWorkingDate(dateStr);
-            const dayEvents = getEventsForDay(dateStr);
-            const visibleEvents = dayEvents.slice(0, 3);
-            const overflowCount = dayEvents.length - 3;
+            const typeGroups = groupDayByType(events.filter((e) => e.date === dateStr));
+            const visibleGroups = typeGroups.slice(0, 4);
+            const overflow = typeGroups.length - visibleGroups.length;
+            const holidayName = holidays.get(dateStr);
 
             return (
               <div
                 key={dateStr}
+                title={holidayName}
                 className={cn(
-                  "min-h-[100px] cursor-pointer border-r border-grey-200 p-1 last:border-r-0 transition-colors hover:bg-grey-100/50",
+                  "min-h-[112px] cursor-pointer border-r border-grey-200 p-1 last:border-r-0 transition-colors hover:bg-grey-100/50",
                   !isCurrentMonth && "bg-grey-100/30",
-                  isCurrentMonth && !working && "bg-grey-100/60",
+                  isCurrentMonth && !working && !holidayName && "bg-grey-100/60",
+                  holidayName && "bg-rose-50",
                 )}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   onDayClick(dateStr, rect.left + rect.width / 2, rect.top);
                 }}
               >
-                <div className="flex justify-center">
+                <div className="flex items-center justify-between gap-1">
                   <span
                     className={cn(
                       "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
@@ -1186,30 +1220,40 @@ function MonthView({ year, month, events, today, workingDays, onDayClick, onEven
                   >
                     {dt.getDate()}
                   </span>
+                  {holidayName && (
+                    <span
+                      className="min-w-0 max-w-full truncate rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600"
+                      title={holidayName}
+                    >
+                      {holidayName}
+                    </span>
+                  )}
                 </div>
 
-                {/* Event pills */}
-                <div className="mt-1 flex flex-col gap-0.5">
-                  {visibleEvents.map((ev) => (
+                {/* Work-type rectangles — one per type present that day */}
+                <div className="mt-1 flex flex-col gap-1">
+                  {visibleGroups.map((g) => (
                     <button
-                      key={ev.id}
+                      key={g.type}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEventClick(ev.members?.[0] ?? ev);
+                        onTypeClick(g, dateStr);
                       }}
-                      className={cn(
-                        "w-full truncate rounded px-1.5 py-0.5 text-left text-xs font-medium transition-opacity hover:opacity-80",
-                        ev.color,
-                        ev.textColor,
-                      )}
-                      title={ev.title}
+                      className="flex w-full items-center justify-between gap-1 rounded px-1.5 py-1 text-left text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: g.hex }}
+                      title={`${WORK_TYPE_LABELS[g.type as WorkType] ?? g.type} — ${g.events.length} task${g.events.length === 1 ? "" : "s"}`}
                     >
-                      {ev.title}
+                      <span className="truncate">{WORK_TYPE_LABELS[g.type as WorkType] ?? g.type}</span>
+                      {g.events.length > 1 && (
+                        <span className="shrink-0 rounded-full bg-black/20 px-1 text-[9px] leading-tight">
+                          {g.events.length}
+                        </span>
+                      )}
                     </button>
                   ))}
-                  {overflowCount > 0 && (
-                    <span className="text-xs text-grey-400 pl-1">+{overflowCount} more</span>
+                  {overflow > 0 && (
+                    <span className="pl-1 text-[11px] text-grey-400">+{overflow} more</span>
                   )}
                 </div>
               </div>
@@ -1217,6 +1261,293 @@ function MonthView({ year, month, events, today, workingDays, onDayClick, onEven
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Week View (work-type rectangles on a dynamic time grid) ────────────────────
+
+interface TypeBlock extends DayTypeGroup {
+  startMin: number;
+  endMin: number; // may exceed 1440 when the block runs past midnight
+  overnight: boolean;
+  /** 0 = bottom of the stack; higher work types sit on top, offset to reveal the ones below. */
+  stackLevel: number;
+  z: number;
+}
+
+// Stacking order for overlapping rectangles (bottom → top): Other, General, Periodical, Work Order.
+const TYPE_STACK_Z: Record<string, number> = {
+  OTHER: 0,
+  GENERAL_TASK: 1,
+  PERIODICAL_TASK: 2,
+  WORK_ORDER: 3,
+};
+
+/** Layer overlapping time blocks on top of each other (not side by side): within an
+ *  overlapping cluster, order by work type and stack them, offsetting each upper block so
+ *  the one beneath still shows a thin strip at the top. */
+function layoutTimeBlocks(blocks: Omit<TypeBlock, "stackLevel" | "z">[]): TypeBlock[] {
+  const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+  const result: TypeBlock[] = [];
+  let cluster: Omit<TypeBlock, "stackLevel" | "z">[] = [];
+  let clusterEnd = -1;
+  function flush() {
+    if (cluster.length === 0) return;
+    const ordered = [...cluster].sort(
+      (a, b) => (TYPE_STACK_Z[a.type] ?? 0) - (TYPE_STACK_Z[b.type] ?? 0),
+    );
+    ordered.forEach((b, i) => result.push({ ...b, stackLevel: i, z: i + 1 }));
+    cluster = [];
+    clusterEnd = -1;
+  }
+  for (const b of sorted) {
+    if (cluster.length > 0 && b.startMin >= clusterEnd) flush();
+    cluster.push(b);
+    clusterEnd = Math.max(clusterEnd, b.endMin);
+  }
+  flush();
+  return result;
+}
+
+function fmtTimeRange(startMin: number, endMin: number): string {
+  const s = minutesToTime(((startMin % 1440) + 1440) % 1440);
+  const e = minutesToTime(((endMin % 1440) + 1440) % 1440);
+  return `${formatTimeDisplay(s)} – ${formatTimeDisplay(e)}`;
+}
+
+interface WeekTypeViewProps {
+  weekDates: string[];
+  events: CalendarEvent[];
+  today: string;
+  workingDays: DayOfWeek[] | null;
+  holidays: Map<string, string>;
+  /** Site general-task window (minutes from midnight) — sizes the General rectangle. */
+  generalStartMin: number | null;
+  generalEndMin: number | null;
+  onSlotClick: (date: string, time: string, x: number, y: number) => void;
+  onTypeClick: (group: DayTypeGroup, date: string) => void;
+}
+
+function WeekTypeView({
+  weekDates,
+  events,
+  today,
+  workingDays,
+  holidays,
+  generalStartMin,
+  generalEndMin,
+  onSlotClick,
+  onTypeClick,
+}: WeekTypeViewProps) {
+  function isWorkingDate(date: string): boolean {
+    return workingDays === null || workingDays.includes(dayOfWeekOf(date));
+  }
+
+  // Build type blocks per day. An overnight window is split into an evening part (this day,
+  // until midnight) and a morning part (the next day's column) so each day shows its portion.
+  const dateSet = new Set(weekDates);
+  const rawByDay = new Map<string, Omit<TypeBlock, "stackLevel" | "z">[]>();
+  const pushBlock = (date: string, b: Omit<TypeBlock, "stackLevel" | "z">) => {
+    const list = rawByDay.get(date) ?? [];
+    list.push(b);
+    rawByDay.set(date, list);
+  };
+  for (const dateStr of weekDates) {
+    const groups = groupDayByType(events.filter((e) => e.date === dateStr));
+    for (const g of groups) {
+      let startMin: number;
+      let endMin: number;
+      if (g.type === "GENERAL_TASK" && generalStartMin != null && generalEndMin != null) {
+        startMin = generalStartMin;
+        endMin = generalEndMin;
+      } else {
+        startMin = Math.min(...g.events.map((e) => timeToMinutes(e.startTime)));
+        endMin = Math.max(...g.events.map((e) => timeToMinutes(e.endTime)));
+      }
+      if (endMin <= startMin) {
+        // Overnight: evening part (start → midnight) here; morning part (midnight → end) next day.
+        pushBlock(dateStr, { ...g, startMin, endMin: 24 * 60, overnight: true });
+        const nextDate = formatDate(new Date(new Date(`${dateStr}T00:00:00`).getTime() + 86400000));
+        if (dateSet.has(nextDate)) {
+          pushBlock(nextDate, { ...g, startMin: 0, endMin, overnight: true });
+        }
+      } else {
+        pushBlock(dateStr, { ...g, startMin, endMin, overnight: false });
+      }
+    }
+  }
+
+  const blocksByDay = new Map<string, TypeBlock[]>();
+  let minStart = 8 * 60;
+  let maxEnd = 18 * 60;
+  for (const dateStr of weekDates) {
+    const laid = layoutTimeBlocks(rawByDay.get(dateStr) ?? []);
+    blocksByDay.set(dateStr, laid);
+    for (const b of laid) {
+      minStart = Math.min(minStart, b.startMin);
+      maxEnd = Math.max(maxEnd, b.endMin);
+    }
+  }
+  const gridStart = Math.max(0, Math.floor(minStart / 60));
+  const gridEnd = Math.min(24, Math.max(gridStart + 1, Math.ceil(maxEnd / 60)));
+  const hours = Array.from({ length: gridEnd - gridStart }, (_, i) => gridStart + i);
+  const pxPerMin = SLOT_HEIGHT / 60;
+  const gridHeight = (gridEnd - gridStart) * SLOT_HEIGHT;
+
+  function hourLabel(h: number): string {
+    return h === 0 ? "12 AM" : h === 12 ? "12 PM" : h > 12 ? `${h - 12} PM` : `${h} AM`;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col">
+      {/* Day header row (with public-holiday marking) */}
+      <div className="flex border-b border-grey-200 bg-surface">
+        <div className="w-16 shrink-0 border-r border-grey-200" />
+        {weekDates.map((dateStr) => {
+          const { day, date } = formatDisplayDate(dateStr);
+          const isToday = dateStr === today;
+          const working = isWorkingDate(dateStr);
+          const holidayName = holidays.get(dateStr);
+          return (
+            <div
+              key={dateStr}
+              title={holidayName}
+              className={cn(
+                "flex flex-1 flex-col items-center py-2 text-center",
+                isToday && "bg-primary/5",
+                holidayName ? "bg-rose-50" : !working && "bg-grey-100/70",
+              )}
+            >
+              <span className={cn("text-xs font-medium", isToday ? "text-ink" : "text-grey-500")}>{day}</span>
+              <span
+                className={cn(
+                  "mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold",
+                  isToday ? "bg-primary text-white" : working ? "text-on-surface" : "text-grey-400",
+                )}
+              >
+                {date}
+              </span>
+              {holidayName ? (
+                <span className="mt-1 max-w-full truncate rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-600" title={holidayName}>
+                  {holidayName}
+                </span>
+              ) : (
+                !working && (
+                  <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-grey-400">off</span>
+                )
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Time grid */}
+      <div className="overflow-y-auto" style={{ maxHeight: "560px" }}>
+        <div className="relative flex">
+          {/* Hour labels */}
+          <div className="w-16 shrink-0 border-r border-grey-200">
+            {hours.map((h) => (
+              <div key={h} className="relative flex items-start justify-end pr-2" style={{ height: `${SLOT_HEIGHT}px` }}>
+                <span className="relative -top-2 text-xs text-grey-400">{hourLabel(h)}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Day columns */}
+          <div className="relative flex flex-1">
+            {weekDates.map((dateStr) => {
+              const isToday = dateStr === today;
+              const working = isWorkingDate(dateStr);
+              const holidayName = holidays.get(dateStr);
+              const blocks = blocksByDay.get(dateStr) ?? [];
+              return (
+                <div
+                  key={dateStr}
+                  className={cn(
+                    "relative flex-1 border-r border-grey-200 last:border-r-0",
+                    isToday && "bg-primary/[0.02]",
+                    holidayName ? "bg-rose-50/40" : !working && "bg-grey-100/50",
+                  )}
+                  style={{ height: `${gridHeight}px` }}
+                >
+                  {/* Hour lines */}
+                  {hours.map((h) => (
+                    <div
+                      key={h}
+                      className="absolute left-0 right-0 border-t border-grey-200/70"
+                      style={{ top: `${(h - gridStart) * SLOT_HEIGHT}px` }}
+                    />
+                  ))}
+
+                  {/* Clickable 30-min slots (quick add) */}
+                  {hours.map((h) =>
+                    [0, 30].map((m) => {
+                      const slotTime = minutesToTime((h * 60 + m) % (24 * 60));
+                      return (
+                        <div
+                          key={`${h}-${m}`}
+                          className="absolute left-0 right-0 cursor-pointer transition-colors hover:bg-primary/5"
+                          style={{
+                            top: `${(h - gridStart) * SLOT_HEIGHT + (m === 30 ? SLOT_HEIGHT / 2 : 0)}px`,
+                            height: `${SLOT_HEIGHT / 2}px`,
+                          }}
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            onSlotClick(dateStr, slotTime, rect.left + rect.width / 2, rect.top);
+                          }}
+                        />
+                      );
+                    }),
+                  )}
+
+                  {/* Work-type rectangles — layered on top of each other (not side by side) */}
+                  {blocks.map((b) => {
+                    const rawTop = (b.startMin - gridStart * 60) * pxPerMin;
+                    const rawHeight = (b.endMin - b.startMin) * pxPerMin;
+                    // Upper layers are pushed down (bottoms stay aligned) so lower ones peek.
+                    const top = rawTop + b.stackLevel * STACK_OFFSET;
+                    const height = Math.max(rawHeight - b.stackLevel * STACK_OFFSET, 20);
+                    const range = fmtTimeRange(b.startMin, b.endMin);
+                    return (
+                      <button
+                        key={`${b.type}_${b.startMin}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTypeClick(b, dateStr);
+                        }}
+                        className={cn(
+                          "group absolute overflow-hidden rounded-lg p-1.5 text-left text-white shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                          b.stackLevel > 0 && "ring-1 ring-white/60",
+                        )}
+                        style={{
+                          top: `${top}px`,
+                          height: `${height}px`,
+                          left: "3px",
+                          width: "calc(100% - 6px)",
+                          backgroundColor: b.hex,
+                          zIndex: b.z,
+                        }}
+                        title={`${WORK_TYPE_LABELS[b.type as WorkType] ?? b.type} · ${range}${b.overnight ? " (overnight)" : ""}`}
+                      >
+                        <p className="flex items-center gap-1 truncate text-xs font-semibold leading-tight">
+                          {b.overnight && <MoonStar size={11} className="shrink-0" aria-hidden="true" />}
+                          <span className="truncate">
+                            {WORK_TYPE_LABELS[b.type as WorkType] ?? b.type}
+                            {b.events.length > 1 ? ` ×${b.events.length}` : ""}
+                          </span>
+                        </p>
+                        {height > 34 && <p className="truncate text-[11px] opacity-80">{range}</p>}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1339,6 +1670,13 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [editOccurrence, setEditOccurrence] = useState<TaskOccurrence | null>(null);
+  // Calendar work-type rectangle → details for that type on that day.
+  const [typeDetail, setTypeDetail] = useState<{
+    type: string;
+    hex: string;
+    date: string;
+    occurrences: TaskOccurrence[];
+  } | null>(null);
   const [pendingToggle, setPendingToggle] = useState<{
     taskId: string;
     status: "ACTIVE" | "INACTIVE";
@@ -1450,6 +1788,19 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const occurrencesQuery = useOccurrences(range);
   const siteTasksQuery = useSiteTasks(managing ? range : undefined);
   const statusCountsQuery = useSiteTaskStatusCounts(managing ? range : undefined);
+  // Australian public holidays across the visible span.
+  const holidayYears = useMemo(
+    () => Array.from(new Set([Number(range.from.slice(0, 4)), Number(range.to.slice(0, 4))])),
+    [range],
+  );
+  const holidays = usePublicHolidays(holidayYears);
+  // Site general-task window (minutes) — sizes the General rectangle in the week view.
+  const generalStartMin = selectedSite?.generalTaskStartTime
+    ? timeToMinutes(selectedSite.generalTaskStartTime.slice(0, 5))
+    : null;
+  const generalEndMin = selectedSite?.generalTaskEndTime
+    ? timeToMinutes(selectedSite.generalTaskEndTime.slice(0, 5))
+    : null;
   const setTaskStatusMutation = useSetTaskStatus();
   const restoreTaskMutation = useRestoreTask();
 
@@ -1869,7 +2220,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           onChange={(e) => {
             if (e.target.value) setCurrentDate(new Date(e.target.value + "T00:00:00"));
           }}
-          className="h-9 rounded-xl border border-grey-200 bg-surface px-2.5 text-xs font-medium text-on-surface outline-none transition-colors hover:border-grey-300 focus-visible:ring-2 focus-visible:ring-primary"
+          className={cn(TOOLBAR_CONTROL, "hover:border-grey-300")}
         />
 
         {/* Site selector — hidden when the Operations header supplies its own. */}
@@ -1897,7 +2248,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
               value={taskStatusFilter}
               onChange={(e) => setTaskStatusFilter(e.target.value as typeof taskStatusFilter)}
               aria-label="Task status filter"
-              className="rounded-xl border border-grey-200 bg-surface px-3 py-1.5 text-xs font-medium text-on-surface outline-none transition-colors hover:bg-grey-100 focus-visible:ring-2 focus-visible:ring-primary"
+              className={TOOLBAR_CONTROL}
             >
               <option value="ACTIVE">Active tasks{statusCounts ? ` (${statusCounts.ACTIVE})` : ""}</option>
               <option value="INACTIVE">Inactive{statusCounts ? ` (${statusCounts.INACTIVE})` : ""}</option>
@@ -1919,7 +2270,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
                 type="button"
                 onClick={() => setScopeView("date")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  SEGMENT_BTN,
                   scopeView === "date" ? "bg-primary text-white" : "text-on-surface hover:bg-grey-100",
                 )}
               >
@@ -1929,7 +2280,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
                 type="button"
                 onClick={() => setScopeView("day")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  SEGMENT_BTN,
                   scopeView === "day" ? "bg-primary text-white" : "text-on-surface hover:bg-grey-100",
                 )}
               >
@@ -1943,7 +2294,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
                 type="button"
                 onClick={() => setCalendarMode("week")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  SEGMENT_BTN,
                   calendarMode === "week"
                     ? "bg-primary text-white"
                     : "text-on-surface hover:bg-grey-100",
@@ -1955,7 +2306,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
                 type="button"
                 onClick={() => setCalendarMode("month")}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  SEGMENT_BTN,
                   calendarMode === "month"
                     ? "bg-primary text-white"
                     : "text-on-surface hover:bg-grey-100",
@@ -1970,7 +2321,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
               type="button"
               onClick={() => setMainView("calendar")}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                SEGMENT_BTN,
                 mainView === "calendar"
                   ? "bg-primary text-white"
                   : "text-on-surface hover:bg-grey-100",
@@ -1982,7 +2333,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
               type="button"
               onClick={() => setMainView("scope")}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                SEGMENT_BTN,
                 mainView === "scope"
                   ? "bg-primary text-white"
                   : "text-on-surface hover:bg-grey-100",
@@ -2002,7 +2353,11 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           today={today}
           workingDays={workingDays}
           dayView={scopeView === "day"}
-          isLoading={occurrencesQuery.isLoading}
+          holidays={holidays}
+          isLoading={
+            siteTasksQuery.isLoading ||
+            (dayScope ? dayOccurrencesQuery.isLoading : occurrencesQuery.isLoading)
+          }
           onOccurrenceClick={(occurrence) => setInfoOccurrence(occurrence)}
           siteId={managing ? siteFilter : undefined}
           floors={managing ? floors : undefined}
@@ -2038,19 +2393,23 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           onDeleteArea={(area) => setDeleteTarget({ kind: "area", area })}
         />
       ) : viewMode === "week" ? (
-        <WeekView
+        <WeekTypeView
           weekDates={weekDates}
           events={events}
           today={today}
           workingDays={workingDays}
+          holidays={holidays}
+          generalStartMin={generalStartMin}
+          generalEndMin={generalEndMin}
           onSlotClick={handleSlotClick}
-          onEventClick={handleEventClick}
-          onDeleteEvent={handleDeleteEvent}
-          onDragStart={handleEventDragStart}
-          onDrop={handleSlotDrop}
-          onDragOver={handleDragOver}
-          onResizeStart={handleResizeStart}
-          draggingId={draggingId}
+          onTypeClick={(group, date) =>
+            setTypeDetail({
+              type: group.type,
+              hex: group.hex,
+              date,
+              occurrences: group.events.map((e) => e.raw).filter(Boolean) as TaskOccurrence[],
+            })
+          }
         />
       ) : (
         <MonthView
@@ -2059,8 +2418,27 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           events={events}
           today={today}
           workingDays={workingDays}
+          holidays={holidays}
           onDayClick={(date, x, y) => handleSlotClick(date, "09:00", x, y)}
-          onEventClick={handleEventClick}
+          onTypeClick={(group, date) =>
+            setTypeDetail({
+              type: group.type,
+              hex: group.hex,
+              date,
+              occurrences: group.events.map((e) => e.raw).filter(Boolean) as TaskOccurrence[],
+            })
+          }
+        />
+      )}
+
+      {/* Work-type day details (from a calendar rectangle) */}
+      {typeDetail && (
+        <TypeDetailsModal
+          type={typeDetail.type}
+          date={typeDetail.date}
+          hex={typeDetail.hex}
+          occurrences={typeDetail.occurrences}
+          onClose={() => setTypeDetail(null)}
         />
       )}
 

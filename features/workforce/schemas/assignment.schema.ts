@@ -107,6 +107,9 @@ export const TaskOccurrenceSchema = z.object({
     .default([]),
   recurring: z.boolean(),
   overridden: z.boolean(),
+  recurrenceType: RecurrenceTypeSchema.nullish(),
+  recurrenceInterval: z.number().nullish(),
+  recurrenceDays: z.array(DayOfWeekSchema).default([]),
 });
 export const TaskOccurrenceListSchema = z.array(TaskOccurrenceSchema);
 export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;

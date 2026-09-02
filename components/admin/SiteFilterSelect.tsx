@@ -67,7 +67,7 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
           "flex w-full items-center gap-2 rounded-xl border bg-surface text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60",
           isField
             ? "px-3 py-2.5 text-sm shadow-sm border-grey-300"
-            : "min-w-[10rem] max-w-[15rem] px-3 py-2 text-xs font-medium border-grey-200 hover:border-grey-300 hover:bg-grey-100",
+            : "h-9 min-w-[10rem] max-w-[15rem] px-3 text-xs font-medium border-grey-200 hover:border-grey-300 hover:bg-grey-100",
         )}
       >
         <Building2 size={isField ? 16 : 14} className="shrink-0 text-grey-400" aria-hidden="true" />
