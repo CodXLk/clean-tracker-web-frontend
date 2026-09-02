@@ -42,6 +42,13 @@ const DAY_SHORT: Record<string, string> = {
 };
 
 function recurrenceSummary(a: Assignment): string {
+  // General (and working-day "Other") tasks without a custom rule repeat on the site's working days.
+  if (a.assignmentType === "GENERAL_TASK" && !a.generalUseRecurrence) {
+    return "Repeats on the site's working days";
+  }
+  if (a.assignmentType === "OTHER" && a.otherRepeatWorkingDays && !a.otherUseRecurrence) {
+    return "Repeats on the site's working days";
+  }
   if (!a.recurring || !a.recurrenceType) return "One-off — does not repeat";
   const type = RECURRENCE_TYPE_LABELS[a.recurrenceType];
   const n = a.recurrenceInterval ?? 1;

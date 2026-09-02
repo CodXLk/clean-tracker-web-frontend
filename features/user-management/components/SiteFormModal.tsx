@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Nfc, Loader2 } from "lucide-react";
+import { Nfc, Loader2, Clock, ArrowRight, MoonStar } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { TimeField } from "@/components/shared/TimeField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
@@ -37,6 +38,21 @@ interface SiteFormModalProps {
   site?: Site | null;
 }
 
+/** Duration + overnight flag for a general-task window (end earlier than start = next day). */
+function windowInfo(start?: string, end?: string): { overnight: boolean; duration: string } | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let s = sh * 60 + sm;
+  let e = eh * 60 + em;
+  const overnight = e <= s;
+  if (overnight) e += 24 * 60;
+  const mins = e - s;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return { overnight, duration: `${h}h${m ? ` ${m}m` : ""}` };
+}
+
 const EMPTY: SiteFormInput = {
   clientCompanyId: "",
   clientId: "",
@@ -58,6 +74,7 @@ const EMPTY: SiteFormInput = {
   generalTaskEndTime: "",
   requiredCertificates: [],
   clientSiteManagementEnabled: false,
+  worksOnPublicHolidays: false,
   cleaningTemplates: [],
 };
 
@@ -133,6 +150,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             generalTaskEndTime: (site.generalTaskEndTime ?? "").slice(0, 5),
             requiredCertificates: site.requiredCertificates ?? [],
             clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
+            worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
               profileIndexes: t.profileIndexes ?? [],
@@ -470,25 +488,80 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           </span>
         </label>
 
+        <label className="flex items-start gap-3 rounded-lg border border-grey-200 p-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-grey-300"
+            {...register("worksOnPublicHolidays")}
+          />
+          <span>
+            <span className="block text-sm font-medium text-on-surface">Works on public holidays</span>
+            <span className="block text-xs text-grey-500">
+              When off, recurring scheduled tasks skip public holidays for this site. You can still
+              add tasks manually on a holiday. Turn on for sites that operate on holidays.
+            </span>
+          </span>
+        </label>
+
         <div className="flex flex-col gap-3">
-          <span className="text-sm font-medium text-on-surface">General task service time</span>
+          <span className="flex items-center gap-1.5 text-sm font-medium text-on-surface">
+            <Clock size={15} className="text-grey-500" aria-hidden="true" />
+            General task service time
+          </span>
           <p className="text-xs text-grey-500">
-            Optional default start &amp; end time for general tasks. Used to pre-fill the start time
-            when adding a general assignment for this site.
+            Optional default window for general tasks. Set an end earlier than the start for an
+            overnight window (e.g. 10:00 PM → 6:00 AM next day). Pre-fills the start time and sizes
+            general-task blocks on the calendar.
           </p>
-          <div className="grid grid-cols-2 gap-3">
-            <TextField
-              label="General task start"
-              type="time"
-              error={errors.generalTaskStartTime?.message}
-              {...register("generalTaskStartTime")}
-            />
-            <TextField
-              label="General task end"
-              type="time"
-              error={errors.generalTaskEndTime?.message}
-              {...register("generalTaskEndTime")}
-            />
+          <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Controller
+                  control={control}
+                  name="generalTaskStartTime"
+                  render={({ field }) => (
+                    <TimeField
+                      label="Start"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.generalTaskStartTime?.message}
+                    />
+                  )}
+                />
+              </div>
+              <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
+              <div className="flex-1">
+                <Controller
+                  control={control}
+                  name="generalTaskEndTime"
+                  render={({ field }) => (
+                    <TimeField
+                      label="End"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.generalTaskEndTime?.message}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+            {(() => {
+              const info = windowInfo(watch("generalTaskStartTime"), watch("generalTaskEndTime"));
+              if (!info) return null;
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-ink">
+                    {info.duration}
+                  </span>
+                  {info.overnight && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-600">
+                      <MoonStar size={12} aria-hidden="true" />
+                      Overnight — ends next day
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
