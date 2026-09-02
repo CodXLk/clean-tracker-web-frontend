@@ -113,6 +113,9 @@ export type TaskOccurrence = z.infer<typeof TaskOccurrenceSchema>;
 
 // Mirrors backend SiteTaskSummaryResponse — every task at a site plus the next date it
 // occurs after the visible week (null = no upcoming occurrence within the lookahead).
+export const AssignmentTaskStatusSchema = z.enum(["ACTIVE", "INACTIVE", "DELETED"]);
+export type AssignmentTaskStatus = z.infer<typeof AssignmentTaskStatusSchema>;
+
 export const SiteTaskSummarySchema = z.object({
   taskId: z.string().uuid(),
   assignmentId: z.string().uuid(),
@@ -125,9 +128,21 @@ export const SiteTaskSummarySchema = z.object({
   orderIndex: z.number().default(0),
   nextDate: z.string().nullish(),
   recurrenceLabel: z.string().nullish(),
+  recurrenceType: RecurrenceTypeSchema.nullish(),
+  recurrenceInterval: z.number().nullish(),
+  recurrenceDays: z.array(DayOfWeekSchema).default([]),
+  status: AssignmentTaskStatusSchema.default("ACTIVE"),
 });
 export const SiteTaskSummaryListSchema = z.array(SiteTaskSummarySchema);
 export type SiteTaskSummary = z.infer<typeof SiteTaskSummarySchema>;
+
+/** Task counts per lifecycle status at a site, for the filter badges. */
+export const SiteTaskStatusCountsSchema = z.object({
+  ACTIVE: z.number().default(0),
+  INACTIVE: z.number().default(0),
+  DELETED: z.number().default(0),
+});
+export type SiteTaskStatusCounts = z.infer<typeof SiteTaskStatusCountsSchema>;
 
 /** Backend AssignmentResponse (returned by create/update/detail). */
 export const AssignmentSchema = z.object({
@@ -175,6 +190,9 @@ export const AssignmentSchema = z.object({
       monthlyWeekday: DayOfWeekSchema.nullable().optional(),
       cleaners: z.array(AssignmentCleanerSchema),
       supervisors: z.array(AssignmentCleanerSchema).default([]),
+      profiles: z
+        .array(z.object({ id: z.string().uuid(), label: z.string().nullish() }))
+        .default([]),
       items: z
         .array(
           z.object({
@@ -211,6 +229,9 @@ export const DEFAULT_TASK_DURATION_MINUTES = 30;
  * carries what changes per task — enabling the "quick add many" flow.
  */
 export const GroupTaskFormSchema = z.object({
+  /** Present when editing an existing assignment — keeps the task (and its completion
+   *  history/overrides) in place instead of deleting and recreating it. */
+  id: z.string().uuid().optional(),
   name: z.string().min(2, "Task name must be at least 2 characters").max(150, "Name is too long"),
   /** Minutes; empty input maps to undefined (optional per spec). */
   durationMinutes: z
@@ -257,6 +278,8 @@ export const AssignmentFormSchema = z
     /** Optional work shift; empty means a full-day window. */
     shiftId: z.string().uuid().optional().or(z.literal("")),
     date: z.string().min(1, "Date is required"),
+    /** Optional series end — bounds a scope-view one-off to a single date. */
+    seriesEndDate: z.string().nullable().optional(),
     startTime: z.string().min(1, "Expected start time is required"),
     /** Purchase-order reference — required for Work Order assignments. */
     poId: z.string().max(100, "PO ID is too long").optional().or(z.literal("")),
@@ -369,27 +392,8 @@ export const AssignmentFormSchema = z
       }
     });
 
-    // Cleaner / profile requirements. A site with cleaner profiles drives
-    // assignment via responsible slots (profileIds); legacy sites use cleanerIds.
-    if (val.assignPerTask) {
-      val.groups.forEach((group, gi) => {
-        group.tasks.forEach((task, ti) => {
-          if (task.cleanerIds.length === 0 && task.profileIds.length === 0) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Assign at least one cleaner or profile to this task",
-              path: ["groups", gi, "tasks", ti, "cleanerIds"],
-            });
-          }
-        });
-      });
-    } else if (val.cleanerIds.length === 0 && val.profileIds.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Select at least one cleaner or profile",
-        path: ["cleanerIds"],
-      });
-    }
+    // Cleaner / profile assignment is optional: when a task has no cleaner and no profile
+    // slot selected it belongs to ALL of the site's cleaner slots (resolved on the backend).
   });
 
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
@@ -402,6 +406,7 @@ export function assignmentToFormInput(a: Assignment): AssignmentFormInput {
     areaIds: [t.areaId],
     tasks: [
       {
+        id: t.id,
         name: t.name,
         durationMinutes: t.durationMinutes ?? undefined,
         description: t.description ?? "",
@@ -444,6 +449,86 @@ export function assignmentToFormInput(a: Assignment): AssignmentFormInput {
   };
 }
 
+/** Build a CREATE form seeded from one existing task (scope-view task-row "+").
+ *  Loads the task's details; `oneOff` drops all recurrence (date-view), otherwise the
+ *  source task/assignment recurrence is kept (day-view "same as loaded task"). */
+export function taskToCreateFormInput(
+  a: Assignment,
+  taskId: string,
+  opts: { oneOff: boolean; date: string },
+): AssignmentFormInput | null {
+  const full = assignmentToFormInput(a);
+  const group = full.groups.find((g) => g.tasks.some((t) => t.id === taskId));
+  const task = group?.tasks.find((t) => t.id === taskId);
+  const raw = a.tasks.find((t) => t.id === taskId);
+  if (!group || !task || !raw) return null;
+
+  // Carry the source task's responsibility. Profile slots are the preferred unit (the
+  // backend derives cleaners from them); fall back to direct cleaners when it has no slots.
+  const profileIds = raw.profiles.map((p) => p.id);
+  const cleanerIds = profileIds.length > 0 ? [] : raw.cleaners.map((c) => c.id);
+  const supervisorIds = raw.supervisors.map((s) => s.id);
+
+  const newTask: GroupTaskFormInput = {
+    ...task,
+    id: undefined, // strip id → create a new task, not edit the source
+    cleanerIds,
+    profileIds,
+    items: [], // a scope-view add is just the task — no expected items
+    ...(opts.oneOff
+      ? {
+          recurrenceType: undefined,
+          recurrenceInterval: undefined,
+          daysOfWeek: [],
+          dayOfMonth: undefined,
+          weekOfMonth: undefined,
+          monthlyWeekday: undefined,
+        }
+      : {}),
+  };
+  const oneGroup: LocationGroupFormInput = {
+    floorId: group.floorId,
+    areaIds: group.areaIds,
+    tasks: [newTask],
+  };
+
+  const shared = {
+    groups: [oneGroup],
+    date: opts.date,
+    assignPerTask: false,
+    cleanerIds,
+    profileIds,
+    supervisorIds,
+  };
+
+  if (opts.oneOff) {
+    // Keep the source task's work type but produce exactly one occurrence on the clicked
+    // date: seriesEndDate == startDate is a single day for working-day/one-time types, and
+    // a DAILY(×1) rule bounded the same way is a single day for recurrence-based types.
+    const usesRecurrence =
+      full.workType === "PERIODICAL_TASK" ||
+      (full.workType === "OTHER" && full.otherUseRecurrence) ||
+      (full.workType === "GENERAL_TASK" && full.generalUseRecurrence);
+    return {
+      ...full,
+      ...shared,
+      seriesEndDate: opts.date,
+      ...(usesRecurrence
+        ? {
+            recurrenceType: "DAILY" as const,
+            recurrenceCount: 1,
+            daysOfWeek: [],
+            monthlyMode: "DAY_OF_MONTH" as const,
+            dayOfMonth: undefined,
+            weekOfMonth: undefined,
+            monthlyWeekday: undefined,
+          }
+        : {}),
+    };
+  }
+  return { ...full, ...shared };
+}
+
 /** All tasks across all groups, flattened — used for totals/end-time. */
 export function allTasksOf(input: Pick<AssignmentFormInput, "groups">): GroupTaskFormInput[] {
   return input.groups.flatMap((g) => g.tasks);
@@ -465,10 +550,12 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
       : {}),
     ...(input.templateName?.trim() ? { templateName: input.templateName.trim() } : {}),
     startDate: input.date,
+    ...(input.seriesEndDate ? { seriesEndDate: input.seriesEndDate } : {}),
     startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
     tasks: input.groups.flatMap((group) =>
       group.tasks.flatMap((task) =>
         group.areaIds.map((areaId) => ({
+          ...(task.id ? { id: task.id } : {}),
           name: task.name.trim(),
           ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
           floorId: group.floorId,

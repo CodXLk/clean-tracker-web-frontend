@@ -38,7 +38,10 @@ export function Hero() {
                         <QuoteButton />
                         <div className="flex flex-col gap-1">
                             <p className="text-sm text-white/70">Speak with our team:</p>
-                            <a href={BUSINESS.phoneHref} className="text-3xl font-medium tracking-tight text-brand-2 hover:underline">
+                            <a
+                                href={BUSINESS.phoneHref}
+                                className="w-fit rounded-full bg-white px-4 py-1.5 text-3xl font-medium tracking-tight text-brand-2 shadow-sm hover:bg-white/90"
+                            >
                                 {BUSINESS.phone}
                             </a>
                         </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, GripVertical, Plus, Pencil, Repeat, Trash2 } from "lucide-react";
+import { Building2, GripVertical, Plus, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
-import type { SiteTaskSummary, TaskOccurrence, WorkType } from "@/features/workforce/schemas/assignment.schema";
+import type { SiteTaskSummary, TaskOccurrence, WorkType, AssignmentTaskStatus, RecurrenceType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
@@ -24,6 +24,38 @@ function formatDateShort(iso: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatWeekdayLong(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+}
+
+const DAY_SHORT: Record<DayOfWeek, string> = {
+  MONDAY: "Mon",
+  TUESDAY: "Tue",
+  WEDNESDAY: "Wed",
+  THURSDAY: "Thu",
+  FRIDAY: "Fri",
+  SATURDAY: "Sat",
+  SUNDAY: "Sun",
+};
+
+/** Human recurrence text for the day-view pattern row, e.g. "Every Mon" or "Every 2 weeks · Mon". */
+function recurrenceDescription(row: {
+  recurrenceType?: RecurrenceType | null;
+  recurrenceInterval?: number | null;
+  recurrenceDays?: DayOfWeek[];
+}): string | null {
+  const type = row.recurrenceType;
+  if (!type) return null;
+  const n = row.recurrenceInterval && row.recurrenceInterval > 0 ? row.recurrenceInterval : 1;
+  if (type === "WEEKLY") {
+    const days = (row.recurrenceDays ?? []).map((d) => DAY_SHORT[d]).join(", ");
+    if (n === 1) return days ? `Every ${days}` : "Weekly";
+    return days ? `Every ${n} weeks · ${days}` : `Every ${n} weeks`;
+  }
+  if (type === "DAILY") return n === 1 ? "Daily" : `Every ${n} days`;
+  return n === 1 ? "Monthly" : `Every ${n} months`;
 }
 
 const JS_DAY_TO_JAVA: DayOfWeek[] = [
@@ -63,15 +95,35 @@ interface TaskRow {
   taskId: string;
   name: string;
   assignmentType: WorkType;
+  /** Source assignment (managed mode) — lets the task-row "+" load this task's details. */
+  assignmentId?: string;
   hex: string;
   /** Admin-defined order of the task within its area. */
   orderIndex: number;
   /** Short per-task recurrence label (managed mode, when the task overrides the assignment rule). */
   recurrenceLabel?: string | null;
+  /** Effective recurrence (task or assignment rule) — drives the day-view pattern. */
+  recurrenceType?: RecurrenceType | null;
+  recurrenceInterval?: number | null;
+  recurrenceDays?: DayOfWeek[];
   /** date → occurrences of this task on that date. */
   byDate: Map<string, TaskOccurrence[]>;
+  /** weekday → the nearest occurrence on that weekday (day view, across weeks). */
+  byWeekday: Map<DayOfWeek, TaskOccurrence[]>;
   /** Next occurrence date after the visible week (managed all-tasks mode). */
   nextDate?: string | null;
+  /** Lifecycle status (managed mode). */
+  status?: AssignmentTaskStatus;
+}
+
+/** Nearest occurrence on each weekday (day view maps the recurrence pattern to Mon–Sun). */
+function weekdayMapFromDates(byDate: Map<string, TaskOccurrence[]>): Map<DayOfWeek, TaskOccurrence[]> {
+  const byWeekday = new Map<DayOfWeek, TaskOccurrence[]>();
+  for (const d of [...byDate.keys()].sort()) {
+    const wd = dayOfWeekOf(d);
+    if (!byWeekday.has(wd)) byWeekday.set(wd, byDate.get(d)!);
+  }
+  return byWeekday;
 }
 
 function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): TaskRow {
@@ -84,6 +136,7 @@ function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): 
       hex: occurrenceHex(occurrence),
       orderIndex: occurrence.orderIndex,
       byDate: new Map<string, TaskOccurrence[]>(),
+      byWeekday: new Map<DayOfWeek, TaskOccurrence[]>(),
     };
   const list = r.byDate.get(occurrence.date) ?? [];
   list.push(occurrence);
@@ -108,7 +161,9 @@ function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
   }
   const result = new Map<string, TaskRow[]>();
   for (const [areaId, tasks] of byArea) {
-    result.set(areaId, [...tasks.values()].sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name)));
+    const rows = [...tasks.values()];
+    for (const r of rows) r.byWeekday = weekdayMapFromDates(r.byDate);
+    result.set(areaId, rows.sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name)));
   }
   return result;
 }
@@ -118,6 +173,13 @@ function rowsByArea(occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
  * week cells from occurrences and carrying each task's next date. Rows are grouped by area
  * and ordered by category (work order → periodical → general → other), then by name.
  */
+function occCount(m?: Map<string, TaskOccurrence[]>): number {
+  if (!m) return 0;
+  let n = 0;
+  for (const list of m.values()) n += list.length;
+  return n;
+}
+
 function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]): Map<string, TaskRow[]> {
   const occByTask = new Map<string, Map<string, TaskOccurrence[]>>();
   for (const o of occurrences) {
@@ -128,22 +190,64 @@ function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]
     m.set(o.date, list);
   }
   const byArea = new Map<string, TaskRow[]>();
+  // Merge same-named tasks in an area onto one row, so an added occurrence (created as a new
+  // one-off task with the same name) shows in that task's cell instead of a duplicate row.
+  const rowByKey = new Map<string, TaskRow>();
+  const primaryCount = new Map<string, number>();
   for (const t of siteTasks) {
     const areaId = t.areaId ?? "";
-    const rows = byArea.get(areaId) ?? [];
-    byArea.set(areaId, rows);
-    rows.push({
-      taskId: t.taskId,
-      name: t.name,
-      assignmentType: t.assignmentType,
-      hex: TYPE_HEX[t.assignmentType] ?? "#0B585A",
-      orderIndex: t.orderIndex,
-      recurrenceLabel: t.recurrenceLabel ?? null,
-      byDate: occByTask.get(t.taskId) ?? new Map<string, TaskOccurrence[]>(),
-      nextDate: t.nextDate ?? null,
-    });
+    const key = `${areaId}::${t.name.trim().toLowerCase()}`;
+    const taskOcc = occByTask.get(t.taskId);
+    const count = occCount(taskOcc);
+    const existing = rowByKey.get(key);
+    if (!existing) {
+      const byDate = new Map<string, TaskOccurrence[]>();
+      if (taskOcc) for (const [d, list] of taskOcc) byDate.set(d, [...list]);
+      const row: TaskRow = {
+        taskId: t.taskId,
+        name: t.name,
+        assignmentType: t.assignmentType,
+        assignmentId: t.assignmentId,
+        hex: TYPE_HEX[t.assignmentType] ?? "#0B585A",
+        orderIndex: t.orderIndex,
+        recurrenceLabel: t.recurrenceLabel ?? null,
+        recurrenceType: t.recurrenceType ?? null,
+        recurrenceInterval: t.recurrenceInterval ?? null,
+        recurrenceDays: t.recurrenceDays ?? [],
+        byDate,
+        byWeekday: new Map<DayOfWeek, TaskOccurrence[]>(),
+        nextDate: t.nextDate ?? null,
+        status: t.status,
+      };
+      rowByKey.set(key, row);
+      primaryCount.set(key, count);
+      const rows = byArea.get(areaId) ?? [];
+      byArea.set(areaId, rows);
+      rows.push(row);
+    } else {
+      if (taskOcc) {
+        for (const [d, list] of taskOcc) {
+          existing.byDate.set(d, [...(existing.byDate.get(d) ?? []), ...list]);
+        }
+      }
+      if (t.nextDate && (!existing.nextDate || t.nextDate < existing.nextDate)) {
+        existing.nextDate = t.nextDate;
+      }
+      // The task with more occurrences in view is the "real" one; it drives the row's actions.
+      if (count > (primaryCount.get(key) ?? 0)) {
+        existing.taskId = t.taskId;
+        existing.assignmentId = t.assignmentId;
+        existing.assignmentType = t.assignmentType;
+        existing.hex = TYPE_HEX[t.assignmentType] ?? existing.hex;
+        existing.recurrenceLabel = t.recurrenceLabel ?? existing.recurrenceLabel ?? null;
+        existing.status = t.status;
+        primaryCount.set(key, count);
+      }
+      existing.orderIndex = Math.min(existing.orderIndex, t.orderIndex);
+    }
   }
   for (const rows of byArea.values()) {
+    for (const r of rows) r.byWeekday = weekdayMapFromDates(r.byDate);
     rows.sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name));
   }
   return byArea;
@@ -217,6 +321,17 @@ export interface AddAssignmentTarget {
   date: string;
   /** Day-view quick add: prefill the New Assignment with this task's name. */
   taskName?: string;
+  /**
+   * Scope-view constraint for the create modal:
+   * - ONE_OFF: date-view cell → single date, no recurrence.
+   * - DAY_WEEKLY: day-view cell → repeats weekly (or monthly) on that weekday.
+   * - TASK_INHERIT: day-view task-row → load the task and keep its recurrence.
+   * - undefined: area "Assign" button → full recurrence options (unchanged).
+   */
+  mode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
+  /** Task-row add: load this existing task's details into the create form. */
+  sourceAssignmentId?: string;
+  sourceTaskId?: string;
 }
 
 interface WeekScheduleGridProps {
@@ -250,6 +365,10 @@ interface WeekScheduleGridProps {
   canReorderTasks?: boolean;
   onReorderTasks?: (areaId: string, orderedTaskIds: string[]) => void;
   onAddAssignment?: (target: AddAssignmentTarget) => void;
+  /** Toggle a task active/inactive (managed mode). */
+  onToggleTaskStatus?: (taskId: string, status: "ACTIVE" | "INACTIVE") => void;
+  /** Restore a soft-deleted task back to active (managed mode). */
+  onRestoreTask?: (taskId: string) => void;
   onAddFloor?: () => void;
   onEditFloor?: (floor: Floor) => void;
   onDeleteFloor?: (floor: Floor) => void;
@@ -286,6 +405,8 @@ export function WeekScheduleGrid({
   canReorderTasks = false,
   onReorderTasks,
   onAddAssignment,
+  onToggleTaskStatus,
+  onRestoreTask,
   onAddFloor,
   onEditFloor,
   onDeleteFloor,
@@ -507,12 +628,84 @@ export function WeekScheduleGrid({
     floorId?: string;
     areaId?: string;
   }) {
-    // A task with no occurrence in the visible week: highlight the whole row and show its
+    const status = row.status ?? "ACTIVE";
+    const isDeleted = status === "DELETED";
+    const isInactive = status === "INACTIVE";
+    // Non-active tasks are dimmed (and deleted ones struck through) so hidden work is obvious
+    // when the "Inactive"/"All" filter is applied.
+    const nameMuted = isDeleted || isInactive;
+
+    const statusToggle =
+      floorId && areaId && !isDeleted && onToggleTaskStatus ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={status === "ACTIVE"}
+          aria-label={status === "ACTIVE" ? `Deactivate ${row.name}` : `Activate ${row.name}`}
+          title={status === "ACTIVE" ? "Active — click to make inactive" : "Inactive — click to activate"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleTaskStatus(row.taskId, status === "ACTIVE" ? "INACTIVE" : "ACTIVE");
+          }}
+          className={cn(
+            "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            status === "ACTIVE" ? "bg-success" : "bg-grey-300",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block h-3 w-3 rounded-full bg-white shadow transition-transform",
+              status === "ACTIVE" ? "translate-x-3.5" : "translate-x-0.5",
+            )}
+          />
+        </button>
+      ) : null;
+
+    const statusPill =
+      isInactive || isDeleted ? (
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            isDeleted ? "bg-error/10 text-error" : "bg-grey-200 text-grey-600",
+          )}
+        >
+          {isDeleted ? "Deleted" : "Inactive"}
+        </span>
+      ) : null;
+
+    const restoreControl =
+      floorId && areaId && isDeleted && onRestoreTask ? (
+        <button
+          type="button"
+          title={`Restore ${row.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRestoreTask(row.taskId);
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          <RotateCcw size={10} aria-hidden="true" />
+          Restore
+        </button>
+      ) : null;
+
+    const statusControl = (
+      <>
+        {statusToggle}
+        {statusPill}
+        {restoreControl}
+      </>
+    );
+
+    // A task with no occurrence in the visible window: highlight the whole row and show its
     // next available date + work type instead of the day cells.
-    if (managed && row.byDate.size === 0) {
+    if (managed && (dayView ? row.byWeekday.size === 0 : row.byDate.size === 0)) {
+      const recurDesc = recurrenceDescription(row);
       const label = row.nextDate
-        ? `Next available · ${formatDateShort(row.nextDate)}`
-        : "No upcoming date";
+        ? `${recurDesc ? `${recurDesc} · ` : ""}Next available · ${formatDateShort(row.nextDate)}`
+        : recurDesc
+          ? `${recurDesc} · No upcoming date`
+          : "No upcoming date";
       return (
         <div
           className="grid border-b border-grey-200"
@@ -524,9 +717,17 @@ export function WeekScheduleGrid({
               style={{ backgroundColor: row.hex }}
               aria-hidden="true"
             />
-            <span className="truncate text-sm text-on-surface" title={row.name}>
+            <span
+              className={cn(
+                "truncate text-sm",
+                nameMuted ? "text-grey-500" : "text-on-surface",
+                isDeleted && "line-through",
+              )}
+              title={row.name}
+            >
               {row.name}
             </span>
+            {statusControl}
             {row.recurrenceLabel && (
               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
                 <Repeat size={9} aria-hidden="true" />
@@ -567,9 +768,17 @@ export function WeekScheduleGrid({
             style={{ backgroundColor: row.hex }}
             aria-hidden="true"
           />
-          <span className="truncate text-sm text-on-surface" title={row.name}>
+          <span
+            className={cn(
+              "truncate text-sm",
+              nameMuted ? "text-grey-500" : "text-on-surface",
+              isDeleted && "line-through",
+            )}
+            title={row.name}
+          >
             {row.name}
           </span>
+          {statusControl}
           {row.recurrenceLabel && (
             <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
               <Repeat size={9} aria-hidden="true" />
@@ -578,13 +787,17 @@ export function WeekScheduleGrid({
           )}
         </div>
         {weekDates.map((dateStr) => {
-          const cellOccurrences = row.byDate.get(dateStr) ?? [];
+          const cellOccurrences = dayView
+            ? row.byWeekday.get(dayOfWeekOf(dateStr)) ?? []
+            : row.byDate.get(dateStr) ?? [];
           const first = cellOccurrences[0];
           const working = isWorkingDate(dateStr);
+          const recurDesc = recurrenceDescription(row);
+          const times = cellOccurrences.map((o) => formatTimeShort(o.startTime.slice(0, 5))).join(", ");
           const label = first
-            ? `${row.name} — ${cellOccurrences
-                .map((o) => formatTimeShort(o.startTime.slice(0, 5)))
-                .join(", ")}`
+            ? dayView
+              ? `${row.name}${recurDesc ? ` · ${recurDesc}` : ""}${times ? ` — ${times}` : ""}`
+              : `${row.name}${recurDesc ? ` · ${recurDesc}` : ""}${row.nextDate ? ` · Next available ${formatDateShort(row.nextDate)}` : ""}${times ? ` — ${times}` : ""}`
             : undefined;
           // Unique, named cleaners assigned across this cell's occurrences
           // (skip unnamed/placeholder entries so empty slots show no badge).
@@ -612,11 +825,6 @@ export function WeekScheduleGrid({
                   className="absolute inset-1 flex flex-col items-center justify-center gap-0.5 rounded-md px-1 text-center text-white shadow-sm transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
                   style={{ backgroundColor: occurrenceHex(first) }}
                 >
-                  {dayView && row.recurrenceLabel && (
-                    <span className="text-[9px] font-semibold uppercase leading-none tracking-wide">
-                      {row.recurrenceLabel}
-                    </span>
-                  )}
                   {cleaners.length > 0 ? (
                     <span className="flex items-center">
                       {cleaners.slice(0, 3).map((c) => (
@@ -640,12 +848,22 @@ export function WeekScheduleGrid({
                   )}
                 </button>
               ) : (
-                dayView && floorId && areaId && onAddAssignment && (
+                floorId && areaId && onAddAssignment && (
                   <button
                     type="button"
-                    aria-label={`Add ${row.name} on this day`}
-                    title="Add this task to this day"
-                    onClick={() => onAddAssignment({ floorId, areaId, date: dateStr, taskName: row.name })}
+                    aria-label={dayView ? `Add ${row.name} on ${formatWeekdayLong(dateStr)}` : `Add ${row.name} on this date`}
+                    title={dayView ? `Add this task on ${formatWeekdayLong(dateStr)}` : "Add this task to this date"}
+                    onClick={() =>
+                      onAddAssignment({
+                        floorId,
+                        areaId,
+                        date: dateStr,
+                        taskName: row.name,
+                        mode: dayView ? "TASK_INHERIT" : "ONE_OFF",
+                        sourceAssignmentId: row.assignmentId,
+                        sourceTaskId: row.taskId,
+                      })
+                    }
                     className="absolute inset-1 flex items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-primary/10 hover:text-primary group-hover/trow:opacity-70 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <Plus size={14} aria-hidden="true" />
@@ -943,13 +1161,14 @@ export function WeekScheduleGrid({
                                     >
                                       <button
                                         type="button"
-                                        aria-label={`Add assignment in ${area.name} on ${dateStr}`}
-                                        title={`Add assignment on ${dateStr}`}
+                                        aria-label={dayView ? `Add assignment in ${area.name} on ${formatWeekdayLong(dateStr)}` : `Add assignment in ${area.name} on ${dateStr}`}
+                                        title={dayView ? `Add assignment on ${formatWeekdayLong(dateStr)}` : `Add assignment on ${dateStr}`}
                                         onClick={() =>
                                           onAddAssignment?.({
                                             floorId: floor.id,
                                             areaId: area.id,
                                             date: dateStr,
+                                            mode: dayView ? "DAY_WEEKLY" : "ONE_OFF",
                                           })
                                         }
                                         className="flex h-5 w-5 items-center justify-center rounded-md text-ink opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
