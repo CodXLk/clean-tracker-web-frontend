@@ -2,6 +2,8 @@
 export const ENDPOINTS = {
   auth: {
     login:          "/auth/login",
+    selectRole:     "/auth/select-role",
+    refresh:        "/auth/refresh",
     logout:         "/auth/logout",
     me:             "/auth/me",
     accountSetup:   "/auth/account-setup",
@@ -14,6 +16,7 @@ export const ENDPOINTS = {
     list:        "/users",
     create:      "/users",
     byId:        (id: string) => `/users/${id}`,
+    roles:       (id: string) => `/users/${id}/roles`,
     detail:      (id: string) => `/users/${id}/detail`,
     resendSetup: (id: string) => `/users/${id}/resend-setup`,
     photo:       (id: string) => `/users/${id}/photo`,
@@ -207,6 +210,9 @@ export const ENDPOINTS = {
 export const BACKEND = {
   auth: {
     login:          "/api/v1/auth/login",
+    selectRole:     "/api/v1/auth/select-role",
+    refresh:        "/api/v1/auth/refresh",
+    logout:         "/api/v1/auth/logout",
     me:             "/api/v1/auth/me",
     accountSetup:   "/api/v1/auth/account-setup",
     forgotPassword: "/api/v1/auth/forgot-password",
@@ -218,6 +224,7 @@ export const BACKEND = {
     list:        "/api/v1/users",
     create:      "/api/v1/users",
     byId:        (id: string) => `/api/v1/users/${id}`,
+    roles:       (id: string) => `/api/v1/users/${id}/roles`,
     detail:      (id: string) => `/api/v1/users/${id}/detail`,
     resendSetup: (id: string) => `/api/v1/users/${id}/resend-setup`,
     photo:       (id: string) => `/api/v1/users/${id}/photo`,

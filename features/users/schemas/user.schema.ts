@@ -34,6 +34,8 @@ export const UserSchema = z.object({
   email: z.string().email(),
   phoneNumber: z.string().nullable().optional(),
   role: RoleSchema,
+  // All roles the user may operate as. Optional for backward compatibility with older payloads.
+  roles: z.array(RoleSchema).optional().default([]),
   companyId: z.string().uuid().nullable().optional(),
   dateOfBirth: z.string().nullable().optional(),
   active: z.boolean(),
@@ -63,7 +65,12 @@ export const CreateUserSchema = z.object({
   email: z.string().email("A valid email is required"),
   phoneNumber: optionalAuPhoneSchema,
   dateOfBirth: z.string().optional().or(z.literal("")),
-  role: RoleSchema,
+  roles: z.array(RoleSchema).min(1, "Select at least one role"),
+});
+
+// Replace the set of roles assigned to an existing user.
+export const UpdateUserRolesSchema = z.object({
+  roles: z.array(RoleSchema).min(1, "Select at least one role"),
 });
 
 export const UpdateUserSchema = z.object({
@@ -76,6 +83,7 @@ export const UpdateUserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+export type UpdateUserRolesInput = z.infer<typeof UpdateUserRolesSchema>;
 
 // Mirrors backend CleanerSiteSummaryResponse (used for cleaner/supervisor assigned sites).
 export const AssignedSiteSummarySchema = z.object({

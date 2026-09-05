@@ -9,7 +9,7 @@ import { CreateUserModal } from "./CreateUserModal";
 import { UserDetailModal } from "./UserDetailModal";
 import { EditUserModal } from "./EditUserModal";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
-import { ROLE_LABELS, type User } from "@/features/users/schemas/user.schema";
+import { ROLES, ROLE_LABELS, type Role, type User } from "@/features/users/schemas/user.schema";
 import { creatableRoles } from "@/features/users/lib/permissions";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -28,36 +28,81 @@ function StatusPill({ user }: { user: User }) {
   return <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">Active</span>;
 }
 
+function RoleBadges({ user }: { user: User }) {
+  const roles = user.roles?.length ? user.roles : [user.role];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {roles.map((role) => (
+        <span
+          key={role}
+          className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+        >
+          {ROLE_LABELS[role]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Roles shown in the Users tab and the filter — every internal role (clients are managed elsewhere).
+const FILTERABLE_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT");
+
 export function UserManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<User | null>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
   const me = useMe();
   const usersQuery = useUsers();
   const deactivate = useDeactivateUser();
   const resend = useResendSetup();
 
   const allowedRoles = useMemo(() => creatableRoles(me.data?.role), [me.data?.role]);
-  // Cleaner accounts are managed exclusively from the Cleaner Management tab.
-  const users = useMemo(() => usersQuery.data?.filter((u) => u.role !== "CLEANER"), [usersQuery.data]);
+  // Show every internal user (clients are provisioned and managed via Client Management),
+  // optionally narrowed by the selected role filter (matched against all assigned roles).
+  const users = useMemo(() => {
+    const list = usersQuery.data?.filter((u) => u.role !== "CLIENT") ?? [];
+    if (roleFilter === "ALL") return list;
+    return list.filter((u) => (u.roles?.length ? u.roles : [u.role]).includes(roleFilter));
+  }, [usersQuery.data, roleFilter]);
 
   return (
     <div className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-grey-500">Manage staff, client service managers and client contacts</p>
+            <p className="text-sm text-grey-500">Manage all internal staff — admins, managers, supervisors and cleaners</p>
           </div>
-          {allowedRoles.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
-            >
-              <UserPlus size={18} aria-hidden="true" />
-              Invite user
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor="roleFilter" className="text-sm font-medium text-grey-600">
+                Role
+              </label>
+              <select
+                id="roleFilter"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as Role | "ALL")}
+                className="h-10 rounded-full border border-grey-300 bg-white px-4 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="ALL">All roles</option>
+                {FILTERABLE_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {allowedRoles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setModalOpen(true)}
+                className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
+              >
+                <UserPlus size={18} aria-hidden="true" />
+                Invite user
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
@@ -89,7 +134,9 @@ export function UserManagement() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-grey-700">{user.email}</td>
-                      <td className="px-5 py-3.5 text-grey-700">{ROLE_LABELS[user.role]}</td>
+                      <td className="px-5 py-3.5">
+                        <RoleBadges user={user} />
+                      </td>
                       <td className="px-5 py-3.5">
                         <StatusPill user={user} />
                       </td>
@@ -129,7 +176,7 @@ export function UserManagement() {
       </div>
 
       {allowedRoles.length > 0 && (
-        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} excludeRoleNames={["CLEANER"]} />
+        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} allowedRoleNames={allowedRoles} />
       )}
 
       <UserDetailModal open={detailUser !== null} onClose={() => setDetailUser(null)} user={detailUser} />

@@ -11,6 +11,7 @@ import {
   LogOut,
   Pencil,
   Bell,
+  Repeat,
   Star,
   CalendarCheck,
 } from "lucide-react";
@@ -73,6 +74,9 @@ export default function ProfilePage() {
   const router = useRouter();
   const logout = useLogout();
   const me = useMe();
+
+  // Users assigned more than one role can switch the active role without re-entering credentials.
+  const canSwitchRole = (me.data?.roles?.length ?? 0) > 1;
 
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const accountCreatedDate = me.data?.createdAt
@@ -199,6 +203,19 @@ export default function ProfilePage() {
                   );
                 })}
 
+                {canSwitchRole && (
+                  <button
+                    onClick={() => router.push("/select-role")}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Repeat size={18} className="text-grey-700" />
+                      <span className="text-sm font-medium text-on-surface">Switch role</span>
+                    </div>
+                    <ChevronRight size={16} className="text-grey-500" />
+                  </button>
+                )}
+
                 <button
                   onClick={handleSignOutClick}
                   disabled={logout.isPending}
@@ -296,6 +313,19 @@ export default function ProfilePage() {
                   </button>
                 );
               })}
+
+              {canSwitchRole && (
+                <button
+                  onClick={() => router.push("/select-role")}
+                  className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm text-left transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <Repeat size={18} className="text-grey-700" />
+                    <span className="text-sm font-medium text-on-surface">Switch role</span>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </button>
+              )}
             </div>
 
             {/* Sign out */}

@@ -5,6 +5,7 @@ import { landingPath, roleFromToken, isSupervisorRouteAllowed } from "@/lib/auth
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
+const SELECT_ROLE_PATH = "/select-role";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -22,7 +23,20 @@ export function proxy(request: NextRequest) {
   if (token) {
     const role = roleFromToken(token);
 
-    // Already-authenticated users hitting an auth page go to their role's home.
+    // A token with no active-role claim is a "pending" token: the user authenticated but has
+    // multiple roles and hasn't chosen one yet. Keep them on the role-selection screen until
+    // they activate a role — they must not reach any protected area with an unresolved role.
+    const pendingRoleSelection = role === null;
+    if (pendingRoleSelection) {
+      if (pathname === SELECT_ROLE_PATH) return NextResponse.next();
+      if (isProtected || isAuthPage) {
+        return NextResponse.redirect(new URL(SELECT_ROLE_PATH, request.url));
+      }
+      return NextResponse.next();
+    }
+
+    // Already-authenticated users hitting an auth page go to their role's home. The role-selection
+    // screen stays reachable so a multi-role user can switch roles after logging in.
     if (isAuthPage) {
       return NextResponse.redirect(new URL(landingPath(role), request.url));
     }

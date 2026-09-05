@@ -26,9 +26,15 @@ export function LoginForm() {
   function onSubmit(values: LoginInput) {
     login.mutate(values, {
       onSuccess: (data) => {
-        const role = data.user.role;
         const callback = searchParams.get("callbackUrl");
-        router.replace(callback || landingPath(role));
+        if (data.requiresRoleSelection) {
+          const target = callback
+            ? `/select-role?callbackUrl=${encodeURIComponent(callback)}`
+            : "/select-role";
+          router.replace(target);
+          return;
+        }
+        router.replace(callback || landingPath(data.user.role));
       },
     });
   }

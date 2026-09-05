@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callBackend } from "@/lib/api/backend";
 import { BACKEND } from "@/lib/api/endpoints";
-import { AUTH_COOKIE } from "@/lib/constants";
+import { setAuthCookies } from "@/lib/auth/cookies";
 
 interface LoginData {
   accessToken: string;
   tokenType: string;
   expiresIn: number;
-  user: { id: string; firstName: string; lastName?: string; email: string; role: string };
+  refreshToken?: string | null;
+  refreshExpiresIn?: number | null;
+  user: { id: string; firstName: string; lastName?: string; email: string; role: string; roles?: string[] };
+  requiresRoleSelection?: boolean;
+  availableRoles?: string[];
 }
 
 export async function POST(request: NextRequest) {
@@ -25,21 +29,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message }, { status: result.status || 401 });
     }
 
-    const { accessToken, expiresIn, user } = envelope.data;
+    const { accessToken, expiresIn, refreshToken, refreshExpiresIn, user, requiresRoleSelection, availableRoles } =
+      envelope.data;
 
-    // Return non-sensitive display info; the token is only ever set in an HTTP-only cookie.
+    // Return non-sensitive display info; tokens are only ever set in HTTP-only cookies.
+    // When role selection is required the cookie holds a "pending" token (no refresh token yet)
+    // that only permits /auth/select-role and /auth/me until a role is activated.
     const res = NextResponse.json(
-      { user: { id: user.id, name: [user.firstName, user.lastName].filter(Boolean).join(" "), role: user.role } },
+      {
+        user: { id: user.id, name: [user.firstName, user.lastName].filter(Boolean).join(" "), role: user.role },
+        requiresRoleSelection: !!requiresRoleSelection,
+        availableRoles: availableRoles ?? [],
+      },
       { status: 200 },
     );
 
-    res.cookies.set(AUTH_COOKIE, accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: Math.max(60, Math.floor((expiresIn || 86_400_000) / 1000)),
-    });
+    setAuthCookies(res, { accessToken, expiresIn, refreshToken, refreshExpiresIn });
 
     return res;
   } catch {
