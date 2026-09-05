@@ -16,15 +16,20 @@ interface CreateUserModalProps {
   /** When set, the role is locked to this value and the role selector is hidden —
    *  used by Cleaner Management to always create CLEANER accounts. */
   fixedRole?: Role;
-  /** Role names to omit from the dropdown when `fixedRole` is not set (e.g. the
-   *  general Users invite flow never offers Cleaner). */
+  /** Role names to omit from the checkboxes when `fixedRole` is not set (e.g. hide a role
+   *  the current context should never assign). */
   excludeRoleNames?: Role[];
+  /** When set, only these role names are offered (whitelist) — typically the roles the current
+   *  user is permitted to create. Combined with `excludeRoleNames`. */
+  allowedRoleNames?: Role[];
 }
 
-export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: CreateUserModalProps) {
+export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, allowedRoleNames }: CreateUserModalProps) {
   const createUser = useCreateUser();
   const rolesQuery = useRoles();
-  const roleOptions = (rolesQuery.data ?? []).filter((role) => !excludeRoleNames?.includes(role.name));
+  const roleOptions = (rolesQuery.data ?? [])
+    .filter((role) => !excludeRoleNames?.includes(role.name))
+    .filter((role) => !allowedRoleNames || allowedRoleNames.includes(role.name));
 
   const {
     register,
@@ -40,7 +45,7 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: 
       email: "",
       phoneNumber: "",
       dateOfBirth: "",
-      ...(fixedRole ? { role: fixedRole } : {}),
+      roles: fixedRole ? [fixedRole] : [],
     },
   });
 
@@ -67,31 +72,48 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames }: 
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         {!fixedRole && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="role" className="text-sm font-medium text-on-surface">
-              Role<span className="ml-0.5 text-error">*</span>
-            </label>
-            <select
-              id="role"
-              className="h-11 w-full rounded-xl border border-grey-300 bg-white px-3.5 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              defaultValue=""
-              disabled={rolesQuery.isLoading}
-              {...register("role")}
-            >
-              <option value="" disabled>
-                {rolesQuery.isLoading ? "Loading roles…" : "Select a role"}
-              </option>
-              {roleOptions.map((role) => (
-                <option key={role.name} value={role.name}>
-                  {role.label}
-                </option>
-              ))}
-            </select>
-            {rolesQuery.isError && (
-              <p className="text-xs font-medium text-error">Failed to load roles. Please try again.</p>
+          <Controller
+            control={control}
+            name="roles"
+            render={({ field }) => (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm font-medium text-on-surface">
+                  Roles<span className="ml-0.5 text-error">*</span>
+                </legend>
+                <p className="-mt-1 mb-1 text-xs text-body-2">Assign one or more roles this person can operate as.</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {roleOptions.map((role) => {
+                    const checked = (field.value ?? []).includes(role.name);
+                    return (
+                      <label
+                        key={role.name}
+                        className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-grey-300 px-3.5 py-2.5 text-sm text-on-surface transition-colors hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
+                          value={role.name}
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(field.value ?? []);
+                            if (e.target.checked) next.add(role.name);
+                            else next.delete(role.name);
+                            field.onChange(Array.from(next));
+                          }}
+                        />
+                        {role.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {rolesQuery.isLoading && <p className="text-xs text-body-2">Loading roles…</p>}
+                {rolesQuery.isError && (
+                  <p className="text-xs font-medium text-error">Failed to load roles. Please try again.</p>
+                )}
+                {errors.roles?.message && <p className="text-xs font-medium text-error">{errors.roles.message}</p>}
+              </fieldset>
             )}
-            {errors.role?.message && <p className="text-xs font-medium text-error">{errors.role.message}</p>}
-          </div>
+          />
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

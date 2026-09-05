@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
@@ -15,6 +16,8 @@ import type {
 
 interface LoginResult {
   user: { id: string; name: string; role: string };
+  requiresRoleSelection: boolean;
+  availableRoles: string[];
 }
 
 export function useLogin() {
@@ -24,7 +27,31 @@ export function useLogin() {
       const { data } = await clientApi.post(ENDPOINTS.auth.login, input);
       return data as LoginResult;
     },
-    onSuccess: (data) => setUser(data.user),
+    // Only mark the session authenticated once a role is active. Multi-role users stay
+    // "pending" until they pick a role via useSelectRole.
+    onSuccess: (data) => {
+      if (!data.requiresRoleSelection) setUser(data.user);
+    },
+  });
+}
+
+interface SelectRoleResult {
+  user: { id: string; name: string; role: string };
+}
+
+export function useSelectRole() {
+  const setUser = useAuthStore((s) => s.setUser);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (role: string): Promise<SelectRoleResult> => {
+      const { data } = await clientApi.post(ENDPOINTS.auth.selectRole, { role });
+      return data as SelectRoleResult;
+    },
+    onSuccess: (data) => {
+      setUser(data.user);
+      // The active role changed, so any role-scoped cached data (incl. /me) must be refetched.
+      queryClient.invalidateQueries();
+    },
   });
 }
 

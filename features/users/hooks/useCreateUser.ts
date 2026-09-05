@@ -12,7 +12,7 @@ async function createUser(input: CreateUserInput): Promise<User> {
   const payload: Record<string, unknown> = {
     firstName: input.firstName,
     email: input.email,
-    role: input.role,
+    roles: input.roles,
   };
   if (input.lastName) payload.lastName = input.lastName;
   if (input.phoneNumber) payload.phoneNumber = input.phoneNumber;
