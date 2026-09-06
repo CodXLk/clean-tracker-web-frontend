@@ -4,12 +4,14 @@ import type { Role } from "@/features/users/schemas/user.schema";
 // CLIENT is deliberately excluded from every entry: client users are only ever
 // provisioned via Client Management, never manually invited from this form.
 const CREATABLE_ROLES: Record<Role, Role[]> = {
-  SUPER_ADMIN: ["COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER"],
-  COMPANY_ADMIN: ["CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER"],
-  CLIENT_SERVICE_MANAGER: ["SUPERVISOR", "CLEANER"],
+  SUPER_ADMIN: ["COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER", "OUTSOURCE_SUPERVISOR", "OUTSOURCE_CLEANER"],
+  COMPANY_ADMIN: ["CLIENT_SERVICE_MANAGER", "SUPERVISOR", "CLEANER", "OUTSOURCE_SUPERVISOR", "OUTSOURCE_CLEANER"],
+  CLIENT_SERVICE_MANAGER: ["SUPERVISOR", "CLEANER", "OUTSOURCE_SUPERVISOR", "OUTSOURCE_CLEANER"],
   CLIENT: [],
   SUPERVISOR: [],
   CLEANER: [],
+  OUTSOURCE_SUPERVISOR: [],
+  OUTSOURCE_CLEANER: [],
 };
 
 export function creatableRoles(role: Role | undefined): Role[] {

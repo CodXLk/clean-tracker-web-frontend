@@ -16,6 +16,19 @@ export const DAY_OF_WEEK_VALUES = [
 export const DayOfWeekSchema = z.enum(DAY_OF_WEEK_VALUES);
 export type DayOfWeek = z.infer<typeof DayOfWeekSchema>;
 
+// Mirrors backend GeneralTaskTimeMode enum.
+export const GENERAL_TASK_TIME_MODE_VALUES = ["SINGLE", "PER_DAY"] as const;
+export const GeneralTaskTimeModeSchema = z.enum(GENERAL_TASK_TIME_MODE_VALUES);
+export type GeneralTaskTimeMode = z.infer<typeof GeneralTaskTimeModeSchema>;
+
+// One per-day General-task service window — mirrors backend GeneralTaskDayTimeResponse.
+export const GeneralTaskDayTimeSchema = z.object({
+  dayOfWeek: DayOfWeekSchema,
+  startTime: z.string(), // HH:mm[:ss]
+  endTime: z.string(),
+});
+export type GeneralTaskDayTime = z.infer<typeof GeneralTaskDayTimeSchema>;
+
 // Mirrors backend SiteType enum.
 export const SITE_TYPE_VALUES = [
   "GENERAL",
@@ -40,6 +53,17 @@ export const SITE_TYPE_LABELS: Record<SiteType, string> = {
   RESTAURANT: "Restaurant",
 };
 
+// A General-task shift assigned to a cleaner slot — mirrors backend AssignedShift.
+export const AssignedShiftSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  dayOfWeek: DayOfWeekSchema.nullable().optional(),
+  startTime: z.string(),
+  endTime: z.string(),
+  crossesMidnight: z.boolean(),
+});
+export type AssignedShift = z.infer<typeof AssignedShiftSchema>;
+
 // One cleaner slot (profile) on a site — mirrors backend SiteCleanerProfileResponse.
 export const SiteCleanerProfileSchema = z.object({
   id: z.string().uuid(),
@@ -48,6 +72,7 @@ export const SiteCleanerProfileSchema = z.object({
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
   taskCount: z.number().nullable().optional(),
+  shifts: z.array(AssignedShiftSchema).default([]),
 });
 export type SiteCleanerProfile = z.infer<typeof SiteCleanerProfileSchema>;
 
@@ -92,8 +117,10 @@ export const SiteSchema = z.object({
   startDate: z.string().nullable().optional(), // ISO date (yyyy-MM-dd)
   endDate: z.string().nullable().optional(),
   workingDays: z.array(DayOfWeekSchema).default([]),
+  generalTaskTimeMode: GeneralTaskTimeModeSchema.default("SINGLE"),
   generalTaskStartTime: z.string().nullable().optional(),
   generalTaskEndTime: z.string().nullable().optional(),
+  generalTaskDayTimes: z.array(GeneralTaskDayTimeSchema).default([]),
   requiredCertificates: z.array(CertificateTypeSchema).default([]),
   clientSiteManagementEnabled: z.boolean().optional().default(false),
   worksOnPublicHolidays: z.boolean().optional().default(false),
@@ -133,8 +160,16 @@ export const SiteFormSchema = z
     startDate: z.string().optional().or(z.literal("")),
     endDate: z.string().optional().or(z.literal("")),
     workingDays: z.array(DayOfWeekSchema),
+    generalTaskTimeMode: GeneralTaskTimeModeSchema,
     generalTaskStartTime: z.string().optional().or(z.literal("")),
     generalTaskEndTime: z.string().optional().or(z.literal("")),
+    generalTaskDayTimes: z.array(
+      z.object({
+        dayOfWeek: DayOfWeekSchema,
+        startTime: z.string().optional().or(z.literal("")),
+        endTime: z.string().optional().or(z.literal("")),
+      }),
+    ),
     requiredCertificates: z.array(CertificateTypeSchema),
     clientSiteManagementEnabled: z.boolean().optional(),
     worksOnPublicHolidays: z.boolean().optional(),
@@ -157,11 +192,25 @@ export const SiteFormSchema = z
     // Only reject when a start is given without an end, or vice versa.
     const gStart = val.generalTaskStartTime as string | undefined;
     const gEnd = val.generalTaskEndTime as string | undefined;
-    if (Boolean(gStart) !== Boolean(gEnd)) {
+    if (val.generalTaskTimeMode !== "PER_DAY" && Boolean(gStart) !== Boolean(gEnd)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Set both a start and end time (or leave both empty)",
         path: [gStart ? "generalTaskEndTime" : "generalTaskStartTime"],
+      });
+    }
+    // In PER_DAY mode, every configured day must have both a start and end time.
+    if (val.generalTaskTimeMode === "PER_DAY") {
+      (val.generalTaskDayTimes ?? []).forEach((d, i) => {
+        const hasStart = Boolean(d.startTime);
+        const hasEnd = Boolean(d.endTime);
+        if (hasStart !== hasEnd) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Set both a start and end time for this day",
+            path: ["generalTaskDayTimes", i, hasStart ? "endTime" : "startTime"],
+          });
+        }
       });
     }
   });

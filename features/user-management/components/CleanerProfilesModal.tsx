@@ -12,13 +12,29 @@ import {
   useAddCleanerProfile,
   useRemoveCleanerProfile,
   useEligibleSiteCleaners,
+  useAssignProfileShifts,
   type ProfileAssignmentInput,
 } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
 import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import type { Site, SiteCleanerProfile } from "@/features/user-management/schemas/site.schema";
+import type { Site, SiteCleanerProfile, DayOfWeek } from "@/features/user-management/schemas/site.schema";
 
 const UNASSIGNED = "";
+
+const DAY_ABBR: Record<DayOfWeek, string> = {
+  MONDAY: "Mon",
+  TUESDAY: "Tue",
+  WEDNESDAY: "Wed",
+  THURSDAY: "Thu",
+  FRIDAY: "Fri",
+  SATURDAY: "Sat",
+  SUNDAY: "Sun",
+};
+
+function hhmm(value: string): string {
+  return value.slice(0, 5);
+}
 
 type View = "assign" | "add" | "remove";
 
@@ -62,10 +78,15 @@ export function CleanerProfilesModal({
   const assign = useAssignCleanerProfiles();
   const addProfile = useAddCleanerProfile();
   const removeProfile = useRemoveCleanerProfile();
+  const shiftsQuery = useSiteShifts(open ? site?.id : undefined);
+  const siteShifts = shiftsQuery.data ?? [];
+  const assignShifts = useAssignProfileShifts();
 
   const [view, setView] = useState<View>("assign");
   // profileId -> selected cleanerId ("" = unassigned)
   const [selections, setSelections] = useState<Record<string, string>>({});
+  // profileId -> selected shift ids
+  const [shiftSel, setShiftSel] = useState<Record<string, string[]>>({});
   // Add view: whether to copy an existing slot's scope, and which slot to copy from.
   const [copyEnabled, setCopyEnabled] = useState(false);
   const [copySourceId, setCopySourceId] = useState<string>("");
@@ -81,17 +102,22 @@ export function CleanerProfilesModal({
 
   // Sync local selections when the profiles load / modal opens / slots change.
   const loadedKey = useMemo(
-    () => profiles.map((p) => `${p.id}:${p.cleanerId ?? ""}`).join("|"),
+    () =>
+      profiles
+        .map((p) => `${p.id}:${p.cleanerId ?? ""}:${(p.shifts ?? []).map((s) => s.id).join(",")}`)
+        .join("|"),
     [profiles],
   );
   const [syncedKey, setSyncedKey] = useState<string | null>(null);
   if (open && !profilesQuery.isLoading && loadedKey !== syncedKey) {
     setSyncedKey(loadedKey);
     setSelections(Object.fromEntries(profiles.map((p) => [p.id, p.cleanerId ?? UNASSIGNED])));
+    setShiftSel(Object.fromEntries(profiles.map((p) => [p.id, (p.shifts ?? []).map((s) => s.id)])));
   }
   if (!open && syncedKey !== null) {
     setSyncedKey(null);
     setSelections({});
+    setShiftSel({});
     setView("assign");
     setCopyEnabled(false);
     setCopySourceId("");
@@ -99,6 +125,7 @@ export function CleanerProfilesModal({
     assign.reset();
     addProfile.reset();
     removeProfile.reset();
+    assignShifts.reset();
   }
 
   const cleanerOptions: SelectOption[] = useMemo(
@@ -144,11 +171,38 @@ export function CleanerProfilesModal({
 
   function handleSave() {
     if (!site || duplicateCleaner) return;
+    const siteId = site.id;
     const payload: ProfileAssignmentInput[] = profiles.map((p) => ({
       profileId: p.id,
       cleanerId: selections[p.id] ? selections[p.id] : null,
     }));
-    assign.mutate({ siteId: site.id, profiles: payload }, { onSuccess: onClose });
+    // Slots whose assigned shift set changed need a follow-up persist call.
+    const shiftUpdates = profiles.filter((p) => {
+      const before = (p.shifts ?? []).map((s) => s.id).slice().sort().join(",");
+      const after = (shiftSel[p.id] ?? []).slice().sort().join(",");
+      return before !== after;
+    });
+    assign.mutate(
+      { siteId, profiles: payload },
+      {
+        onSuccess: async () => {
+          try {
+            await Promise.all(
+              shiftUpdates.map((p) =>
+                assignShifts.mutateAsync({
+                  siteId,
+                  profileId: p.id,
+                  shiftIds: shiftSel[p.id] ?? [],
+                }),
+              ),
+            );
+            onClose();
+          } catch {
+            // Error surfaced via assignShifts.isError below.
+          }
+        },
+      },
+    );
   }
 
   function handleAdd() {
@@ -446,18 +500,56 @@ export function CleanerProfilesModal({
                       hasConflict ? "This cleaner is already assigned to another slot." : undefined
                     }
                   />
+                  {siteShifts.length > 0 && (
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      <span className="text-[11px] font-medium text-grey-500">General shifts</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {siteShifts.map((s) => {
+                          const selected = (shiftSel[p.id] ?? []).includes(s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() =>
+                                setShiftSel((prev) => {
+                                  const cur = prev[p.id] ?? [];
+                                  return {
+                                    ...prev,
+                                    [p.id]: selected
+                                      ? cur.filter((x) => x !== s.id)
+                                      : [...cur, s.id],
+                                  };
+                                })
+                              }
+                              className={
+                                selected
+                                  ? "rounded-full border border-teal-500 bg-teal-50 px-2.5 py-1 text-[11px] font-medium text-teal-700"
+                                  : "rounded-full border border-grey-200 px-2.5 py-1 text-[11px] font-medium text-grey-600 hover:bg-grey-50"
+                              }
+                            >
+                              {s.name} · {s.dayOfWeek ? DAY_ABBR[s.dayOfWeek] : "All"}{" "}
+                              {hhmm(s.startTime)}–{hhmm(s.endTime)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
           {assign.isError && <p className="text-sm text-error">{getErrorMessage(assign.error)}</p>}
+          {assignShifts.isError && (
+            <p className="text-sm text-error">{getErrorMessage(assignShifts.error)}</p>
+          )}
 
           <div className="mt-1 flex justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              disabled={assign.isPending}
+              disabled={assign.isPending || assignShifts.isPending}
               className="rounded-full border border-grey-300 px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
             >
               Cancel
@@ -466,12 +558,12 @@ export function CleanerProfilesModal({
               type="button"
               variant="teal"
               onClick={handleSave}
-              disabled={assign.isPending || duplicateCleaner}
+              disabled={assign.isPending || assignShifts.isPending || duplicateCleaner}
               className="w-auto px-6"
             >
               <span className="inline-flex items-center gap-2">
                 <UserCog size={16} aria-hidden="true" />
-                {assign.isPending ? "Saving…" : "Save slots"}
+                {assign.isPending || assignShifts.isPending ? "Saving…" : "Save slots"}
               </span>
             </PillButton>
           </div>

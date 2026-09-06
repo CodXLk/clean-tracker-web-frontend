@@ -138,6 +138,32 @@ export function useAssignCleanerProfiles() {
   });
 }
 
+/** Replaces the General-task shifts assigned to one cleaner slot. */
+export function useAssignProfileShifts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      siteId,
+      profileId,
+      shiftIds,
+    }: {
+      siteId: string;
+      profileId: string;
+      shiftIds: string[];
+    }) => {
+      const { data } = await clientApi.put(
+        ENDPOINTS.sites.cleanerProfileShifts(siteId, profileId),
+        { shiftIds },
+      );
+      return SiteCleanerProfileSchema.parse(data);
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: siteAssignmentKeys.cleanerProfiles(siteId) });
+      queryClient.invalidateQueries({ queryKey: siteKeys.all });
+    },
+  });
+}
+
 /** Adds one cleaner slot, optionally copying an existing slot's task scope onto the new one. */
 export function useAddCleanerProfile() {
   const queryClient = useQueryClient();

@@ -53,6 +53,8 @@ export const ENDPOINTS = {
     cleanerProfiles: (id: string) => `/sites/${id}/cleaner-profiles`,
     addCleanerProfile: (id: string) => `/sites/${id}/cleaner-profiles/add`,
     removeCleanerProfile: (id: string, profileId: string) => `/sites/${id}/cleaner-profiles/${profileId}`,
+    cleanerProfileShifts: (id: string, profileId: string) =>
+      `/sites/${id}/cleaner-profiles/${profileId}/shifts`,
     supervisorProfiles: (id: string) => `/sites/${id}/supervisor-profiles`,
     addSupervisorProfile: (id: string) => `/sites/${id}/supervisor-profiles/add`,
     removeSupervisorProfile: (id: string, profileId: string) => `/sites/${id}/supervisor-profiles/${profileId}`,
@@ -76,6 +78,16 @@ export const ENDPOINTS = {
     list:   "/outsource-projects",
     create: "/outsource-projects",
     byId:   (id: string) => `/outsource-projects/${id}`,
+    eligibleCleaners: "/outsource-projects/eligible-cleaners",
+    eligibleSupervisors: "/outsource-projects/eligible-supervisors",
+    cleanerProfiles: (id: string) => `/outsource-projects/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/outsource-projects/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) =>
+      `/outsource-projects/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/outsource-projects/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/outsource-projects/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) =>
+      `/outsource-projects/${id}/supervisor-profiles/${profileId}`,
   },
   floors: {
     list:   "/floors",
@@ -262,6 +274,8 @@ export const BACKEND = {
     cleanerProfiles: (id: string) => `/api/v1/sites/${id}/cleaner-profiles`,
     addCleanerProfile: (id: string) => `/api/v1/sites/${id}/cleaner-profiles/add`,
     removeCleanerProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/cleaner-profiles/${profileId}`,
+    cleanerProfileShifts: (id: string, profileId: string) =>
+      `/api/v1/sites/${id}/cleaner-profiles/${profileId}/shifts`,
     supervisorProfiles: (id: string) => `/api/v1/sites/${id}/supervisor-profiles`,
     addSupervisorProfile: (id: string) => `/api/v1/sites/${id}/supervisor-profiles/add`,
     removeSupervisorProfile: (id: string, profileId: string) => `/api/v1/sites/${id}/supervisor-profiles/${profileId}`,
@@ -285,6 +299,16 @@ export const BACKEND = {
     list:   "/api/v1/outsource-projects",
     create: "/api/v1/outsource-projects",
     byId:   (id: string) => `/api/v1/outsource-projects/${id}`,
+    eligibleCleaners: "/api/v1/outsource-projects/eligible-cleaners",
+    eligibleSupervisors: "/api/v1/outsource-projects/eligible-supervisors",
+    cleanerProfiles: (id: string) => `/api/v1/outsource-projects/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/api/v1/outsource-projects/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) =>
+      `/api/v1/outsource-projects/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/api/v1/outsource-projects/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/api/v1/outsource-projects/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) =>
+      `/api/v1/outsource-projects/${id}/supervisor-profiles/${profileId}`,
   },
   floors: {
     list:   "/api/v1/floors",

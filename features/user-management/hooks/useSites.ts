@@ -30,8 +30,19 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   if (input.startDate) payload.startDate = input.startDate;
   if (input.endDate) payload.endDate = input.endDate;
   payload.workingDays = input.workingDays ?? [];
-  if (input.generalTaskStartTime) payload.generalTaskStartTime = input.generalTaskStartTime;
-  if (input.generalTaskEndTime) payload.generalTaskEndTime = input.generalTaskEndTime;
+  const timeMode = input.generalTaskTimeMode ?? "SINGLE";
+  payload.generalTaskTimeMode = timeMode;
+  if (timeMode === "PER_DAY") {
+    // Only send days (that are working days) with a complete start+end window.
+    const working = new Set(input.workingDays ?? []);
+    payload.generalTaskDayTimes = (input.generalTaskDayTimes ?? [])
+      .filter((d) => d.startTime && d.endTime && working.has(d.dayOfWeek))
+      .map((d) => ({ dayOfWeek: d.dayOfWeek, startTime: d.startTime, endTime: d.endTime }));
+  } else {
+    payload.generalTaskDayTimes = [];
+    if (input.generalTaskStartTime) payload.generalTaskStartTime = input.generalTaskStartTime;
+    if (input.generalTaskEndTime) payload.generalTaskEndTime = input.generalTaskEndTime;
+  }
   payload.requiredCertificates = input.requiredCertificates ?? [];
   payload.clientSiteManagementEnabled = input.clientSiteManagementEnabled ?? false;
   payload.worksOnPublicHolidays = input.worksOnPublicHolidays ?? false;

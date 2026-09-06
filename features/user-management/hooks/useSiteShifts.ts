@@ -25,7 +25,8 @@ export function useCreateShift() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ siteId, input }: { siteId: string; input: ShiftFormInput }) => {
-      await clientApi.post(ENDPOINTS.sites.shifts(siteId), input);
+      const body = { ...input, dayOfWeek: input.dayOfWeek ? input.dayOfWeek : null };
+      await clientApi.post(ENDPOINTS.sites.shifts(siteId), body);
     },
     onSuccess: (_data, { siteId }) =>
       queryClient.invalidateQueries({ queryKey: shiftKeys.bySite(siteId) }),
@@ -36,7 +37,8 @@ export function useUpdateShift() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ shiftId, input }: { siteId: string; shiftId: string; input: Partial<ShiftFormInput> }) => {
-      await clientApi.put(ENDPOINTS.shifts.byId(shiftId), input);
+      const body = { ...input, dayOfWeek: input.dayOfWeek ? input.dayOfWeek : null };
+      await clientApi.put(ENDPOINTS.shifts.byId(shiftId), body);
     },
     onSuccess: (_data, { siteId }) =>
       queryClient.invalidateQueries({ queryKey: shiftKeys.bySite(siteId) }),

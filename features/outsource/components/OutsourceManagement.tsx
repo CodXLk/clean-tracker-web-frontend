@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Handshake, Plus, Trash2, Building2, CalendarRange, Mail } from "lucide-react";
+import { Handshake, Plus, Trash2, Building2, CalendarRange, Users, UserCog } from "lucide-react";
 import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
@@ -15,6 +15,7 @@ import {
   type OutsourceProject,
 } from "@/features/outsource/schemas/outsourceProject.schema";
 import { OutsourceProjectModal } from "./OutsourceProjectModal";
+import { OutsourceProfilesModal } from "./OutsourceProfilesModal";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -29,6 +30,7 @@ export function OutsourceManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<OutsourceProject | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [manage, setManage] = useState<{ project: OutsourceProject; kind: "cleaner" | "supervisor" } | null>(null);
 
   const projects = projectsQuery.data ?? [];
 
@@ -51,9 +53,9 @@ export function OutsourceManagement() {
             Outsource Management
           </h1>
           <p className="text-sm text-grey-500">
-            Outsource a whole site, selected floors/areas, or specific tasks. Each project creates an
-            outsource cleaner and supervisor login (credentials emailed) and attaches them to the
-            covered tasks.
+            Outsource a whole site, selected floors/areas, or specific tasks. Each project maintains
+            outsource cleaner and supervisor slots you assign staff to; assigned staff are attached
+            to the covered tasks.
           </p>
         </div>
         <PillButton
@@ -137,15 +139,23 @@ export function OutsourceManagement() {
                 {formatDate(p.startDate)} → {formatDate(p.endDate)}
               </div>
 
-              <div className="flex flex-col gap-1 rounded-xl bg-grey-50 px-3 py-2 text-xs text-grey-600">
-                <span className="inline-flex items-center gap-1.5">
-                  <Mail size={12} aria-hidden="true" />
-                  Cleaner: {p.cleanerEmail ?? "—"}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Mail size={12} aria-hidden="true" />
-                  Supervisor: {p.supervisorEmail ?? "—"}
-                </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setManage({ project: p, kind: "cleaner" })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
+                >
+                  <Users size={14} aria-hidden="true" />
+                  Cleaners ({p.cleanerProfiles.filter((s) => s.cleanerId).length}/{p.numberOfOutsourceCleaners})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManage({ project: p, kind: "supervisor" })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
+                >
+                  <UserCog size={14} aria-hidden="true" />
+                  Supervisors ({p.supervisorProfiles.filter((s) => s.supervisorId).length}/{p.numberOfOutsourceSupervisors})
+                </button>
               </div>
             </article>
           ))}
@@ -158,9 +168,16 @@ export function OutsourceManagement() {
         onCreated={(name) =>
           setBanner({
             kind: "success",
-            text: `Outsource project for ${name} created. Login details were emailed to the cleaner and supervisor.`,
+            text: `Outsource project for ${name} created. Assign outsource cleaners and supervisors to its slots.`,
           })
         }
+      />
+
+      <OutsourceProfilesModal
+        open={!!manage}
+        onClose={() => setManage(null)}
+        project={manage?.project ?? null}
+        kind={manage?.kind ?? "cleaner"}
       />
 
       <ConfirmDialog
@@ -168,7 +185,7 @@ export function OutsourceManagement() {
         title="Remove outsource project"
         description={
           pendingDelete
-            ? `Remove "${pendingDelete.companyName}"? Its outsource cleaner and supervisor will be detached from all tasks and their logins deactivated.`
+            ? `Remove "${pendingDelete.companyName}"? Its outsource cleaners and supervisors will be detached from all covered tasks.`
             : ""
         }
         confirmLabel="Remove"

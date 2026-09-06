@@ -95,6 +95,7 @@ export const TaskOccurrenceSchema = z.object({
   supervisorProfiles: z
     .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
     .default([]),
+  outsourceCleanerIds: z.array(z.string().uuid()).default([]),
   items: z
     .array(
       z.object({

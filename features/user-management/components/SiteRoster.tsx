@@ -13,6 +13,8 @@ import {
   useAssignCleanerProfiles,
   useAssignSupervisorProfiles,
 } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
+import { OutsourceProfilesModal } from "@/features/outsource/components/OutsourceProfilesModal";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 interface RosterEntry {
@@ -43,6 +45,7 @@ export function SiteRoster({
 
   const [cleanersOpen, setCleanersOpen] = useState(false);
   const [supervisorsOpen, setSupervisorsOpen] = useState(false);
+  const [outsourceManage, setOutsourceManage] = useState<"cleaner" | "supervisor" | null>(null);
   // A pending unassign awaiting confirmation — the actual removal runs task cleanup
   // and notifications on the backend, so it must be intentional.
   const [removing, setRemoving] = useState<{
@@ -59,6 +62,16 @@ export function SiteRoster({
   const supervisorProfiles = useMemo(
     () => [...(supervisorProfilesQuery.data ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [supervisorProfilesQuery.data],
+  );
+
+  const { project: outsourceProject } = useSiteOutsourceProject(siteId);
+  const outsourceCleaners = useMemo(
+    () => [...(outsourceProject?.cleanerProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
+    [outsourceProject],
+  );
+  const outsourceSupervisors = useMemo(
+    () => [...(outsourceProject?.supervisorProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
+    [outsourceProject],
   );
 
   if (!site) return null;
@@ -142,6 +155,44 @@ export function SiteRoster({
       />
       </div>
 
+      {outsourceProject && (
+        <div className="mt-5 border-t border-line pt-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-body-2">
+            Outsourced — {outsourceProject.companyName}
+          </p>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+            <RosterGroup
+              title="Outsource cleaners"
+              icon={Users}
+              canManage
+              isLoading={false}
+              emptyLabel="No outsource cleaner slots."
+              entries={outsourceCleaners.map((p) => ({
+                id: p.id,
+                label: p.label || `Outsource Cleaner ${p.profileIndex}`,
+                personName: p.cleanerName ?? null,
+              }))}
+              onManage={() => setOutsourceManage("cleaner")}
+              onRemoveRequest={() => setOutsourceManage("cleaner")}
+            />
+            <RosterGroup
+              title="Outsource supervisors"
+              icon={UserCog}
+              canManage
+              isLoading={false}
+              emptyLabel="No outsource supervisor slots."
+              entries={outsourceSupervisors.map((p) => ({
+                id: p.id,
+                label: p.label || `Outsource Supervisor ${p.profileIndex}`,
+                personName: p.supervisorName ?? null,
+              }))}
+              onManage={() => setOutsourceManage("supervisor")}
+              onRemoveRequest={() => setOutsourceManage("supervisor")}
+            />
+          </div>
+        </div>
+      )}
+
       <CleanerProfilesModal
         open={cleanersOpen}
         onClose={() => setCleanersOpen(false)}
@@ -152,6 +203,13 @@ export function SiteRoster({
         open={supervisorsOpen}
         onClose={() => setSupervisorsOpen(false)}
         site={site}
+      />
+
+      <OutsourceProfilesModal
+        open={outsourceManage !== null}
+        onClose={() => setOutsourceManage(null)}
+        project={outsourceProject}
+        kind={outsourceManage ?? "cleaner"}
       />
 
       <ConfirmDialog

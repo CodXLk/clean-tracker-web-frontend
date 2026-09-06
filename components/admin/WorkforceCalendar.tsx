@@ -1651,8 +1651,8 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const [calendarMode, setCalendarMode] = useState<"week" | "month">("week");
   // Scope view sub-mode: dated week grid vs weekday (Mon–Sun) recurrence grid.
   const [scopeView, setScopeView] = useState<"date" | "day">("date");
-  // Scope view task lifecycle filter (soft-deleted tasks are hidden by default).
-  const [taskStatusFilter, setTaskStatusFilter] = useState<"ACTIVE" | "INACTIVE" | "DELETED" | "ALL">("ACTIVE");
+  // Scope view task lifecycle filter (defaults to all statuses).
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"ACTIVE" | "INACTIVE" | "DELETED" | "ALL">("ALL");
   const viewMode: "week" | "month" | "schedule" =
     mainView === "scope" ? "schedule" : calendarMode;
   const [currentDate, setCurrentDate] = useState<Date>(new Date());

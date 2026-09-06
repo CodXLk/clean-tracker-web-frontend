@@ -12,6 +12,26 @@ export const OUTSOURCE_SCOPE_LABELS: Record<OutsourceScopeType, string> = {
   TASKS: "Selected tasks",
 };
 
+// One outsource cleaner slot — mirrors backend OutsourceCleanerProfileResponse.
+export const OutsourceCleanerProfileSchema = z.object({
+  id: z.string().uuid(),
+  profileIndex: z.number(),
+  label: z.string(),
+  cleanerId: z.string().uuid().nullable().optional(),
+  cleanerName: z.string().nullable().optional(),
+});
+export type OutsourceCleanerProfile = z.infer<typeof OutsourceCleanerProfileSchema>;
+
+// One outsource supervisor slot — mirrors backend OutsourceSupervisorProfileResponse.
+export const OutsourceSupervisorProfileSchema = z.object({
+  id: z.string().uuid(),
+  profileIndex: z.number(),
+  label: z.string(),
+  supervisorId: z.string().uuid().nullable().optional(),
+  supervisorName: z.string().nullable().optional(),
+});
+export type OutsourceSupervisorProfile = z.infer<typeof OutsourceSupervisorProfileSchema>;
+
 // Mirrors backend OutsourceProjectResponse.
 export const OutsourceProjectSchema = z.object({
   id: z.string().uuid(),
@@ -26,12 +46,10 @@ export const OutsourceProjectSchema = z.object({
   taskIds: z.array(z.string().uuid()).default([]),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
-  cleanerId: z.string().uuid().nullable().optional(),
-  cleanerName: z.string().nullable().optional(),
-  cleanerEmail: z.string().nullable().optional(),
-  supervisorId: z.string().uuid().nullable().optional(),
-  supervisorName: z.string().nullable().optional(),
-  supervisorEmail: z.string().nullable().optional(),
+  numberOfOutsourceCleaners: z.number().default(0),
+  numberOfOutsourceSupervisors: z.number().default(0),
+  cleanerProfiles: z.array(OutsourceCleanerProfileSchema).default([]),
+  supervisorProfiles: z.array(OutsourceSupervisorProfileSchema).default([]),
   taskCount: z.number().default(0),
   active: z.boolean().default(true),
   createdAt: z.string().nullable().optional(),
@@ -52,6 +70,6 @@ export interface CreateOutsourceProjectInput {
   taskIds?: string[];
   startDate: string;
   endDate: string;
-  cleanerEmail: string;
-  supervisorEmail: string;
+  numberOfOutsourceCleaners?: number;
+  numberOfOutsourceSupervisors?: number;
 }

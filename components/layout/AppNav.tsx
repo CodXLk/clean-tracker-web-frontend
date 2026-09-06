@@ -10,7 +10,6 @@ import {
   ClipboardList,
   ContactRound,
   Footprints,
-  Handshake,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -68,7 +67,6 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
-  { label: "Outsource Management", href: "/admin/outsource-management", icon: Handshake },
   {
     label: "Client Management",
     icon: ContactRound,
@@ -166,7 +164,6 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/inventory", "Inventory"],
   ["/admin/item-requests", "Item Requests"],
   ["/admin/client-site-management", "Client Site Management"],
-  ["/admin/outsource-management", "Outsource Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],
   ["/dashboard/tasks", "Tasks"],
