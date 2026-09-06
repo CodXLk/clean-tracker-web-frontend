@@ -15,8 +15,10 @@ import {
   ListChecks,
   LogOut,
   MessageSquare,
+  MoreVertical,
   Package,
   PackageCheck,
+  Repeat,
   User,
   Users,
   UsersRound,
@@ -92,9 +94,9 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && CLEANER_HREFS.has(item.href),
 );
 
-/** Super admins don't need the cleaner-facing Home page, but do need Tasks and
- *  Inspections since those are surfaced in the Admin Panel. */
-const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard"]);
+/** Super admins don't need the cleaner-facing Home page or the cleaner Tasks tab (task
+ *  completion is a cleaner activity); Inspections stay since they're surfaced in the Admin Panel. */
+const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/dashboard/tasks"]);
 const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
 );
@@ -124,8 +126,11 @@ const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = NAV_ITEMS.filter(
 );
 
 /** Everyone who isn't a client (e.g. company admin) sees the full admin nav, including the
- *  Client Site Management view (management sees every site there). */
-const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS;
+ *  Client Site Management view (management sees every site there). The cleaner Tasks tab is
+ *  excluded — task completion is a cleaner-only activity. */
+const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
+  (item) => item.href !== "/dashboard/tasks",
+);
 
 /** The nav items visible to the current user, based on role. */
 function useVisibleNavItems(): NavItemConfig[] {
@@ -331,15 +336,26 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const me = useMe();
   const logout = useLogout();
   const items = useVisibleNavItems();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const fullName = me.data
     ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ")
     : "…";
   const initial = (me.data?.firstName ?? "?").charAt(0).toUpperCase();
+  const canSwitchRole = (me.data?.roles?.length ?? 0) > 1;
 
   function handleLogout() {
     logout.mutate(undefined, { onSettled: () => router.replace("/login") });
   }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   return (
     <div className="flex h-full flex-col border-r border-line bg-white">
@@ -403,16 +419,70 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
             <p className="truncate text-sm font-medium text-ink">{fullName}</p>
             <p className="text-xs text-body-2">{me.data ? ROLE_LABELS[me.data.role] : ""}</p>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={logout.isPending}
-            aria-label="Sign out"
-            title="Sign out"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-body-2 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40 disabled:opacity-50"
-          >
-            <LogOut size={16} aria-hidden="true" />
-          </button>
+          {canSwitchRole ? (
+            <div className="relative">
+              {menuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    aria-hidden="true"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute bottom-full right-0 z-50 mb-2 w-48 overflow-hidden rounded-xl border border-line bg-white py-1 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        router.push("/select-role");
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-ink transition-colors hover:bg-surface-muted"
+                    >
+                      <Repeat size={15} aria-hidden="true" className="shrink-0" />
+                      Switch role
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        handleLogout();
+                      }}
+                      disabled={logout.isPending}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:opacity-60"
+                    >
+                      <LogOut size={15} aria-hidden="true" className="shrink-0" />
+                      {logout.isPending ? "Signing out…" : "Sign out"}
+                    </button>
+                  </div>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label="Account menu"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-body-2 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40"
+              >
+                <MoreVertical size={16} aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={logout.isPending}
+              aria-label="Sign out"
+              title="Sign out"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-body-2 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-2/40 disabled:opacity-50"
+            >
+              <LogOut size={16} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Handshake, Plus, Trash2, Building2, CalendarRange, Users, UserCog } from "lucide-react";
-import { PillButton } from "@/components/shared/PillButton";
+import { useMemo, useState } from "react";
+import { Plus, Eye, Pencil, Trash2, Users, UserCog, UserPlus } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { SearchInput } from "@/components/shared/SearchInput";
+import { RowMenu } from "@/features/user-management/components/RowMenu";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { CreateUserModal } from "@/features/users/components/CreateUserModal";
+import type { Role } from "@/features/users/schemas/user.schema";
 import {
   useOutsourceProjects,
   useDeleteOutsourceProject,
@@ -16,6 +20,7 @@ import {
 } from "@/features/outsource/schemas/outsourceProject.schema";
 import { OutsourceProjectModal } from "./OutsourceProjectModal";
 import { OutsourceProfilesModal } from "./OutsourceProfilesModal";
+import { OutsourceProjectDetailModal } from "./OutsourceProjectDetailModal";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -27,12 +32,27 @@ export function OutsourceManagement() {
   const projectsQuery = useOutsourceProjects();
   const deleteProject = useDeleteOutsourceProject();
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [staffRole, setStaffRole] = useState<Role | null>(null);
+  const [editProject, setEditProject] = useState<OutsourceProject | null>(null);
+  const [viewProject, setViewProject] = useState<OutsourceProject | null>(null);
   const [pendingDelete, setPendingDelete] = useState<OutsourceProject | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [manage, setManage] = useState<{ project: OutsourceProject; kind: "cleaner" | "supervisor" } | null>(null);
 
-  const projects = projectsQuery.data ?? [];
+  const projects = useMemo(() => {
+    const list = projectsQuery.data ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((p) =>
+      [p.companyName, p.contactPersonName, p.siteName]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [projectsQuery.data, search]);
 
   function confirmDelete() {
     if (!pendingDelete) return;
@@ -45,39 +65,49 @@ export function OutsourceManagement() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-on-surface">
-            <Handshake className="h-6 w-6 text-[#ED5F25]" />
-            Outsource Management
-          </h1>
-          <p className="text-sm text-grey-500">
-            Outsource a whole site, selected floors/areas, or specific tasks. Each project maintains
-            outsource cleaner and supervisor slots you assign staff to; assigned staff are attached
-            to the covered tasks.
-          </p>
-        </div>
-        <PillButton
-          type="button"
-          variant="teal"
-          onClick={() => {
-            setBanner(null);
-            setModalOpen(true);
-          }}
-          className="w-auto shrink-0 px-5"
-        >
-          <span className="inline-flex items-center gap-2">
-            <Plus size={16} aria-hidden="true" />
+    <>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search outsource projects…"
+          className="w-full sm:max-w-xs"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStaffRole("OUTSOURCE_CLEANER")}
+            className="inline-flex items-center gap-2 rounded-full border border-grey-300 px-4 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+          >
+            <UserPlus size={16} aria-hidden="true" />
+            Add outsource cleaner
+          </button>
+          <button
+            type="button"
+            onClick={() => setStaffRole("OUTSOURCE_SUPERVISOR")}
+            className="inline-flex items-center gap-2 rounded-full border border-grey-300 px-4 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+          >
+            <UserPlus size={16} aria-hidden="true" />
+            Add outsource supervisor
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBanner(null);
+              setCreateOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
+          >
+            <Plus size={18} aria-hidden="true" />
             New outsource project
-          </span>
-        </PillButton>
-      </header>
+          </button>
+        </div>
+      </div>
 
       {banner && (
         <p
           role="status"
-          className={`rounded-lg px-3 py-2 text-sm font-medium ${
+          className={`mb-4 rounded-lg px-3 py-2 text-sm font-medium ${
             banner.kind === "success" ? "bg-success/10 text-success" : "bg-error/10 text-error"
           }`}
         >
@@ -85,92 +115,131 @@ export function OutsourceManagement() {
         </p>
       )}
 
-      {projectsQuery.isLoading ? (
-        <div className="flex justify-center py-16">
-          <LoadingSpinner />
-        </div>
-      ) : projectsQuery.isError ? (
-        <p className="rounded-xl bg-error/10 px-3 py-2 text-sm text-error">
-          {getErrorMessage(projectsQuery.error)}
-        </p>
-      ) : projects.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-grey-300 p-10 text-center text-sm text-grey-500">
-          No outsource projects yet. Create one to hand off cleaning work to an external provider.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {projects.map((p) => (
-            <article
-              key={p.id}
-              className="flex flex-col gap-3 rounded-2xl border border-grey-200 bg-surface p-4"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col">
-                  <span className="text-base font-semibold text-on-surface">{p.companyName}</span>
-                  {p.contactPersonName && (
-                    <span className="text-xs text-grey-500">{p.contactPersonName}</span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPendingDelete(p)}
-                  aria-label={`Remove ${p.companyName}`}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-400 transition-colors hover:bg-error/10 hover:text-error"
-                >
-                  <Trash2 size={16} aria-hidden="true" />
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 font-medium text-ink">
-                  <Building2 size={12} aria-hidden="true" />
-                  {p.siteName ?? "Site"}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-1 font-medium text-teal-700">
-                  {OUTSOURCE_SCOPE_LABELS[p.scopeType]}
-                </span>
-                <span className="rounded-full bg-grey-100 px-2 py-1 font-medium text-grey-600">
-                  {p.taskCount} task{p.taskCount === 1 ? "" : "s"}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-xs text-grey-500">
-                <CalendarRange size={14} aria-hidden="true" />
-                {formatDate(p.startDate)} → {formatDate(p.endDate)}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setManage({ project: p, kind: "cleaner" })}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
-                >
-                  <Users size={14} aria-hidden="true" />
-                  Cleaners ({p.cleanerProfiles.filter((s) => s.cleanerId).length}/{p.numberOfOutsourceCleaners})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setManage({ project: p, kind: "supervisor" })}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
-                >
-                  <UserCog size={14} aria-hidden="true" />
-                  Supervisors ({p.supervisorProfiles.filter((s) => s.supervisorId).length}/{p.numberOfOutsourceSupervisors})
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+      <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+        {projectsQuery.isLoading ? (
+          <div className="flex justify-center py-16">
+            <LoadingSpinner />
+          </div>
+        ) : projectsQuery.isError ? (
+          <div className="p-6 text-sm font-medium text-error">
+            {getErrorMessage(projectsQuery.error)}
+          </div>
+        ) : projects.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-grey-300 text-xs uppercase tracking-wide text-grey-500">
+                  <th className="px-5 py-3 font-medium">Company</th>
+                  <th className="px-5 py-3 font-medium">Site</th>
+                  <th className="px-5 py-3 font-medium">Scope</th>
+                  <th className="px-5 py-3 font-medium">Period</th>
+                  <th className="px-5 py-3 font-medium">Cleaners</th>
+                  <th className="px-5 py-3 font-medium">Supervisors</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map((p) => (
+                  <tr key={p.id} className="border-b border-grey-100 last:border-0">
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-on-surface">{p.companyName}</span>
+                        {p.contactPersonName && (
+                          <span className="text-xs text-grey-500">{p.contactPersonName}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-grey-700">{p.siteName ?? "—"}</td>
+                    <td className="px-5 py-3.5 text-grey-700">
+                      {OUTSOURCE_SCOPE_LABELS[p.scopeType]}
+                    </td>
+                    <td className="px-5 py-3.5 text-grey-700">
+                      {formatDate(p.startDate)} → {formatDate(p.endDate)}
+                    </td>
+                    <td className="px-5 py-3.5 text-grey-700">
+                      {p.cleanerProfiles.filter((s) => s.cleanerId).length}/{p.numberOfOutsourceCleaners}
+                    </td>
+                    <td className="px-5 py-3.5 text-grey-700">
+                      {p.supervisorProfiles.filter((s) => s.supervisorId).length}/{p.numberOfOutsourceSupervisors}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex justify-end">
+                        <RowMenu
+                          label={`Actions for ${p.companyName}`}
+                          items={[
+                            { label: "View details", icon: Eye, onClick: () => setViewProject(p) },
+                            {
+                              label: "Edit project",
+                              icon: Pencil,
+                              onClick: () => {
+                                setBanner(null);
+                                setEditProject(p);
+                              },
+                            },
+                            {
+                              label: "Assign cleaners",
+                              icon: Users,
+                              onClick: () => setManage({ project: p, kind: "cleaner" }),
+                            },
+                            {
+                              label: "Assign supervisors",
+                              icon: UserCog,
+                              onClick: () => setManage({ project: p, kind: "supervisor" }),
+                            },
+                            {
+                              label: "Remove",
+                              icon: Trash2,
+                              destructive: true,
+                              onClick: () => setPendingDelete(p),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="No outsource projects yet"
+            description="Create one to hand off cleaning work to an external provider."
+          />
+        )}
+      </div>
 
       <OutsourceProjectModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
         onCreated={(name) =>
           setBanner({
             kind: "success",
             text: `Outsource project for ${name} created. Assign outsource cleaners and supervisors to its slots.`,
           })
         }
+      />
+
+      {staffRole && (
+        <CreateUserModal
+          open={!!staffRole}
+          onClose={() => setStaffRole(null)}
+          fixedRole={staffRole}
+        />
+      )}
+
+      <OutsourceProjectModal
+        key={editProject?.id ?? "edit"}
+        open={!!editProject}
+        project={editProject}
+        onClose={() => setEditProject(null)}
+        onUpdated={(name) => setBanner({ kind: "success", text: `${name} updated.` })}
+      />
+
+      <OutsourceProjectDetailModal
+        open={!!viewProject}
+        onClose={() => setViewProject(null)}
+        project={viewProject}
       />
 
       <OutsourceProfilesModal
@@ -197,6 +266,6 @@ export function OutsourceManagement() {
           setPendingDelete(null);
         }}
       />
-    </div>
+    </>
   );
 }

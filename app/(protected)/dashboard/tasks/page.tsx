@@ -16,6 +16,9 @@ import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
+import { useTaskViewStore } from "@/features/tasks/store/taskView.store";
+import { TaskViewToggle } from "@/features/tasks/components/TaskViewToggle";
+import { TaskListView } from "@/features/tasks/components/TaskListView";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import {
   assignmentTypeLabel,
@@ -54,6 +57,8 @@ export default function TasksPage() {
   const setHeaderAction = useUIStore((s) => s.setHeaderAction);
   const activeFloor = useTaskFiltersStore((s) => s.activeFloor);
   const setActiveFloor = useTaskFiltersStore((s) => s.setActiveFloor);
+  const view = useTaskViewStore((s) => s.view);
+  const setView = useTaskViewStore((s) => s.setView);
 
   // Surface the calendar trigger in the shared header bar instead of the page
   // body — cleared on unmount so it doesn't linger on other pages.
@@ -167,28 +172,41 @@ export default function TasksPage() {
                   <p className="rounded-xl bg-grey-50 p-4 text-sm text-grey-500">No floor-based tasks today.</p>
                 ) : (
                   <>
-                    <div className="border-b border-grey-200 pb-3">
-                      <FilterTabs
-                        options={floors.map((f) => f.name)}
-                        value={selectedFloor ?? floors[0].name}
-                        onChange={setActiveFloor}
-                      />
+                    <div className="flex items-center justify-between gap-3 border-b border-grey-200 pb-3">
+                      <div className="min-w-0 flex-1 overflow-x-auto">
+                        <FilterTabs
+                          options={floors.map((f) => f.name)}
+                          value={selectedFloor ?? floors[0].name}
+                          onChange={setActiveFloor}
+                        />
+                      </div>
+                      <TaskViewToggle value={view} onChange={setView} className="shrink-0" />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-                      {areas.map((item) => (
-                        <Link
-                          key={item.areaId}
-                          href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
-                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-grey-200 bg-grey-50 p-3 text-center transition-shadow hover:shadow-md"
-                        >
-                          <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
-                          </span>
-                          <span className="text-xs text-on-surface">{item.area}</span>
-                        </Link>
-                      ))}
-                    </div>
+                    {view === "cards" ? (
+                      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                        {areas.map((item) => (
+                          <Link
+                            key={item.areaId}
+                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+                            className="flex flex-col items-center justify-center gap-1 rounded-xl border border-grey-200 bg-grey-50 p-3 text-center transition-shadow hover:shadow-md"
+                          >
+                            <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
+                              {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
+                            </span>
+                            <span className="text-xs text-on-surface">{item.area}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        <TaskListView
+                          occurrences={occurrences}
+                          selectedFloor={selectedFloor}
+                          canComplete={!isAdmin}
+                        />
+                      </div>
+                    )}
                   </>
                 )}
               </section>
@@ -257,28 +275,39 @@ export default function TasksPage() {
                   </p>
                 ) : (
                   <>
-                    <div className="border-b border-grey-300 pb-3">
-                      <FilterTabs
-                        options={floors.map((f) => f.name)}
-                        value={selectedFloor ?? floors[0].name}
-                        onChange={setActiveFloor}
-                      />
+                    <div className="flex items-center justify-between gap-3 border-b border-grey-300 pb-3">
+                      <div className="min-w-0 flex-1 overflow-x-auto">
+                        <FilterTabs
+                          options={floors.map((f) => f.name)}
+                          value={selectedFloor ?? floors[0].name}
+                          onChange={setActiveFloor}
+                        />
+                      </div>
+                      <TaskViewToggle value={view} onChange={setView} className="shrink-0" />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      {areas.map((item) => (
-                        <Link
-                          key={item.areaId}
-                          href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
-                          className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
-                        >
-                          <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
-                          </span>
-                          <span className="text-xs text-on-surface">{item.area}</span>
-                        </Link>
-                      ))}
-                    </div>
+                    {view === "cards" ? (
+                      <div className="grid grid-cols-3 gap-4">
+                        {areas.map((item) => (
+                          <Link
+                            key={item.areaId}
+                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+                            className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
+                          >
+                            <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
+                              {String(item.completed).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
+                            </span>
+                            <span className="text-xs text-on-surface">{item.area}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <TaskListView
+                        occurrences={occurrences}
+                        selectedFloor={selectedFloor}
+                        canComplete={!isAdmin}
+                      />
+                    )}
                   </>
                 )}
               </section>

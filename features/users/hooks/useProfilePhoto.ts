@@ -49,3 +49,14 @@ export function useUploadUserPhoto() {
     onSuccess: () => invalidate(queryClient),
   });
 }
+
+/** Remove a specific user's avatar (management). */
+export function useDeleteUserPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      await clientApi.delete(ENDPOINTS.users.photo(userId));
+    },
+    onSuccess: () => invalidate(queryClient),
+  });
+}

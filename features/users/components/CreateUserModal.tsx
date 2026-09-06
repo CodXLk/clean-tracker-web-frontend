@@ -1,14 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
-import { CreateUserSchema, type CreateUserInput, type Role } from "@/features/users/schemas/user.schema";
+import {
+  CreateUserSchema,
+  ROLE_LABELS,
+  type CreateUserInput,
+  type Role,
+} from "@/features/users/schemas/user.schema";
 import { useCreateUser, getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { useUploadUserPhoto } from "@/features/users/hooks/useProfilePhoto";
 import { useRoles } from "@/features/users/hooks/useRoles";
+import { AvatarUploadField } from "./AvatarUploadField";
 
 interface CreateUserModalProps {
   open: boolean;
@@ -26,10 +34,14 @@ interface CreateUserModalProps {
 
 export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, allowedRoleNames }: CreateUserModalProps) {
   const createUser = useCreateUser();
+  const uploadPhoto = useUploadUserPhoto();
   const rolesQuery = useRoles();
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const roleOptions = (rolesQuery.data ?? [])
     .filter((role) => !excludeRoleNames?.includes(role.name))
     .filter((role) => !allowedRoleNames || allowedRoleNames.includes(role.name));
+
+  const roleLabel = fixedRole ? ROLE_LABELS[fixedRole] : null;
 
   const {
     register,
@@ -51,26 +63,53 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
 
   function close() {
     reset();
+    setPhotoFile(null);
     createUser.reset();
+    uploadPhoto.reset();
     onClose();
   }
 
-  function onSubmit(values: CreateUserInput) {
-    createUser.mutate(values, { onSuccess: close });
+  async function onSubmit(values: CreateUserInput) {
+    let created;
+    try {
+      created = await createUser.mutateAsync(values);
+    } catch {
+      return; // surfaced via createUser.error
+    }
+    if (photoFile) {
+      // The photo is uploaded once the account exists; a failure here shouldn't lose the account.
+      try {
+        await uploadPhoto.mutateAsync({ userId: created.id, file: photoFile });
+      } catch {
+        return; // surfaced via uploadPhoto.error; keep the modal open so the user can retry
+      }
+    }
+    close();
   }
+
+  const busy = createUser.isPending || uploadPhoto.isPending;
 
   return (
     <Modal
       open={open}
       onClose={close}
-      title={fixedRole ? "Add a new cleaner" : "Invite a user"}
+      title={roleLabel ? `Add a new ${roleLabel}` : "Invite a user"}
       description={
-        fixedRole
-          ? "They will receive an email with a temporary password and a setup link to join as a Cleaner."
+        roleLabel
+          ? `They will receive an email with a temporary password and a setup link to join as ${roleLabel}.`
           : "They will receive an email with a temporary password and a setup link."
       }
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+        <div className="flex justify-center">
+          <AvatarUploadField
+            file={photoFile}
+            onSelect={setPhotoFile}
+            onRemove={() => setPhotoFile(null)}
+            busy={busy}
+          />
+        </div>
+
         {!fixedRole && (
           <Controller
             control={control}
@@ -142,6 +181,11 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
             {getErrorMessage(createUser.error)}
           </p>
         )}
+        {uploadPhoto.isError && (
+          <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+            The account was created but the photo upload failed: {getErrorMessage(uploadPhoto.error)}
+          </p>
+        )}
 
         <div className="mt-2 flex gap-3">
           <button
@@ -151,8 +195,8 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
           >
             Cancel
           </button>
-          <PillButton type="submit" variant="teal" className="h-11 flex-1" disabled={createUser.isPending}>
-            {createUser.isPending ? "Inviting…" : "Send invite"}
+          <PillButton type="submit" variant="teal" className="h-11 flex-1" disabled={busy}>
+            {busy ? "Inviting…" : "Send invite"}
           </PillButton>
         </div>
       </form>

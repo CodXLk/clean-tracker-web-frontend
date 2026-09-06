@@ -10,6 +10,7 @@ import {
   OutsourceCleanerProfileSchema,
   OutsourceSupervisorProfileSchema,
   type CreateOutsourceProjectInput,
+  type UpdateOutsourceProjectInput,
   type OutsourceProject,
   type OutsourceCleanerProfile,
   type OutsourceSupervisorProfile,
@@ -53,6 +54,17 @@ export function useCreateOutsourceProject() {
   return useMutation({
     mutationFn: async (input: CreateOutsourceProjectInput) => {
       const { data } = await clientApi.post(ENDPOINTS.outsourceProjects.create, input);
+      return OutsourceProjectSchema.parse(data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: outsourceKeys.all }),
+  });
+}
+
+export function useUpdateOutsourceProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateOutsourceProjectInput }) => {
+      const { data } = await clientApi.put(ENDPOINTS.outsourceProjects.byId(id), input);
       return OutsourceProjectSchema.parse(data);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: outsourceKeys.all }),

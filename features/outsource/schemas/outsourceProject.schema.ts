@@ -73,3 +73,18 @@ export interface CreateOutsourceProjectInput {
   numberOfOutsourceCleaners?: number;
   numberOfOutsourceSupervisors?: number;
 }
+
+// Outbound update payload — matches UpdateOutsourceProjectRequest (site is fixed).
+export interface UpdateOutsourceProjectInput {
+  companyName: string;
+  contactPersonName?: string;
+  contactNumber?: string;
+  scopeType: OutsourceScopeType;
+  floorIds?: string[];
+  areaIds?: string[];
+  taskIds?: string[];
+  startDate: string;
+  endDate: string;
+  numberOfOutsourceCleaners?: number;
+  numberOfOutsourceSupervisors?: number;
+}
