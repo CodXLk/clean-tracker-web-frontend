@@ -12,9 +12,13 @@ import { useFloors } from "@/features/user-management/hooks/useFloors";
 import { useAreas } from "@/features/user-management/hooks/useAreas";
 import { useOccurrences } from "@/features/workforce/hooks/useAssignments";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import { useCreateOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
+import {
+  useCreateOutsourceProject,
+  useUpdateOutsourceProject,
+} from "@/features/outsource/hooks/useOutsourceProjects";
 import {
   OUTSOURCE_SCOPE_LABELS,
+  type OutsourceProject,
   type OutsourceScopeType,
 } from "@/features/outsource/schemas/outsourceProject.schema";
 
@@ -36,25 +40,44 @@ function addDays(d: Date, days: number): Date {
 interface OutsourceProjectModalProps {
   open: boolean;
   onClose: () => void;
+  /** When provided the modal edits this project instead of creating a new one. */
+  project?: OutsourceProject | null;
   onCreated?: (companyName: string) => void;
+  onUpdated?: (companyName: string) => void;
 }
 
-export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourceProjectModalProps) {
+export function OutsourceProjectModal({
+  open,
+  onClose,
+  project,
+  onCreated,
+  onUpdated,
+}: OutsourceProjectModalProps) {
+  const isEdit = !!project;
   const create = useCreateOutsourceProject();
+  const update = useUpdateOutsourceProject();
 
-  const [companyName, setCompanyName] = useState("");
-  const [contactPersonName, setContactPersonName] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
-  const [siteId, setSiteId] = useState("");
-  const [scopeType, setScopeType] = useState<OutsourceScopeType>("SITE");
-  const [floorIds, setFloorIds] = useState<string[]>([]);
-  const [areaIds, setAreaIds] = useState<string[]>([]);
-  const [taskIds, setTaskIds] = useState<string[]>([]);
-  const [startDate, setStartDate] = useState(toISODate(new Date()));
-  const [endDate, setEndDate] = useState("");
-  const [numberOfOutsourceCleaners, setNumberOfOutsourceCleaners] = useState(1);
-  const [numberOfOutsourceSupervisors, setNumberOfOutsourceSupervisors] = useState(1);
+  const [companyName, setCompanyName] = useState(project?.companyName ?? "");
+  const [contactPersonName, setContactPersonName] = useState(project?.contactPersonName ?? "");
+  const [contactNumber, setContactNumber] = useState(project?.contactNumber ?? "");
+  const [siteId, setSiteId] = useState(project?.siteId ?? "");
+  const [scopeType, setScopeType] = useState<OutsourceScopeType>(project?.scopeType ?? "SITE");
+  const [floorIds, setFloorIds] = useState<string[]>(project?.floorIds ?? []);
+  const [areaIds, setAreaIds] = useState<string[]>(project?.areaIds ?? []);
+  const [taskIds, setTaskIds] = useState<string[]>(project?.taskIds ?? []);
+  const [startDate, setStartDate] = useState(project?.startDate ?? toISODate(new Date()));
+  const [endDate, setEndDate] = useState(project?.endDate ?? "");
+  const [numberOfOutsourceCleaners, setNumberOfOutsourceCleaners] = useState(
+    project?.numberOfOutsourceCleaners ?? 1,
+  );
+  const [numberOfOutsourceSupervisors, setNumberOfOutsourceSupervisors] = useState(
+    project?.numberOfOutsourceSupervisors ?? 1,
+  );
   const [formError, setFormError] = useState<string | null>(null);
+
+  const pending = isEdit ? update.isPending : create.isPending;
+  const mutationError = isEdit ? update.error : create.error;
+  const isError = isEdit ? update.isError : create.isError;
 
   const sitesQuery = useSites();
   const floorsQuery = useFloors(siteId || undefined);
@@ -127,7 +150,7 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
   }
 
   function handleClose() {
-    if (create.isPending) return;
+    if (pending) return;
     resetAll();
     onClose();
   }
@@ -151,24 +174,39 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
       return;
     }
     setFormError(null);
+
+    const payload = {
+      companyName: companyName.trim(),
+      contactPersonName: contactPersonName.trim() || undefined,
+      contactNumber: contactNumber.trim() || undefined,
+      scopeType,
+      floorIds: scopeType === "FLOORS" ? floorIds : undefined,
+      areaIds: scopeType === "AREAS" ? areaIds : undefined,
+      taskIds: scopeType === "TASKS" ? taskIds : undefined,
+      startDate,
+      endDate,
+      numberOfOutsourceCleaners,
+      numberOfOutsourceSupervisors,
+    };
+    const name = companyName.trim();
+
+    if (isEdit && project) {
+      update.mutate(
+        { id: project.id, input: payload },
+        {
+          onSuccess: () => {
+            onUpdated?.(name);
+            onClose();
+          },
+        },
+      );
+      return;
+    }
+
     create.mutate(
-      {
-        companyName: companyName.trim(),
-        contactPersonName: contactPersonName.trim() || undefined,
-        contactNumber: contactNumber.trim() || undefined,
-        siteId,
-        scopeType,
-        floorIds: scopeType === "FLOORS" ? floorIds : undefined,
-        areaIds: scopeType === "AREAS" ? areaIds : undefined,
-        taskIds: scopeType === "TASKS" ? taskIds : undefined,
-        startDate,
-        endDate,
-        numberOfOutsourceCleaners,
-        numberOfOutsourceSupervisors,
-      },
+      { ...payload, siteId },
       {
         onSuccess: () => {
-          const name = companyName.trim();
           resetAll();
           onCreated?.(name);
           onClose();
@@ -181,7 +219,7 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
     <Modal
       open={open}
       onClose={handleClose}
-      title="New outsource project"
+      title={isEdit ? "Edit outsource project" : "New outsource project"}
       description="Outsource a site, floors, areas or specific tasks to an external provider."
     >
       <div className="flex flex-col gap-4">
@@ -211,12 +249,14 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
             options={siteOptions}
             value={siteId}
             onChange={(value) => {
+              if (isEdit) return;
               setSiteId(value);
               resetSiteDependent();
             }}
             placeholder="Select a site"
             searchPlaceholder="Search sites…"
             emptyMessage="No sites"
+            disabled={isEdit}
           />
         </div>
 
@@ -290,7 +330,7 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
         <div className="rounded-xl border border-grey-200 bg-grey-50 p-3">
           <p className="mb-2 text-xs text-grey-500">
             Set how many outsource cleaner and supervisor slots this project has. Assign the actual
-            outsource staff to those slots after creating the project.
+            outsource staff to those slots from the project's actions.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <TextField
@@ -312,15 +352,15 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
           </div>
         </div>
 
-        {(formError || create.isError) && (
-          <p className="text-sm text-error">{formError ?? getErrorMessage(create.error)}</p>
+        {(formError || isError) && (
+          <p className="text-sm text-error">{formError ?? getErrorMessage(mutationError)}</p>
         )}
 
         <div className="mt-1 flex justify-end gap-2">
           <button
             type="button"
             onClick={handleClose}
-            disabled={create.isPending}
+            disabled={pending}
             className="rounded-full border border-grey-300 px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
           >
             Cancel
@@ -329,12 +369,18 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
             type="button"
             variant="teal"
             onClick={handleSubmit}
-            disabled={create.isPending}
+            disabled={pending}
             className="w-auto px-6"
           >
             <span className="inline-flex items-center gap-2">
               <Handshake size={16} aria-hidden="true" />
-              {create.isPending ? "Creating…" : "Create project"}
+              {isEdit
+                ? pending
+                  ? "Saving…"
+                  : "Save changes"
+                : pending
+                  ? "Creating…"
+                  : "Create project"}
             </span>
           </PillButton>
         </div>

@@ -9,8 +9,10 @@ import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
 import { UpdateUserSchema, type UpdateUserInput, type User, type Role } from "@/features/users/schemas/user.schema";
 import { useUpdateUser, useUpdateUserRoles } from "@/features/users/hooks/useUserActions";
+import { useUploadUserPhoto, useDeleteUserPhoto } from "@/features/users/hooks/useProfilePhoto";
 import { useRoles } from "@/features/users/hooks/useRoles";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { AvatarUploadField } from "./AvatarUploadField";
 
 interface EditUserModalProps {
   open: boolean;
@@ -21,8 +23,11 @@ interface EditUserModalProps {
 export function EditUserModal({ open, onClose, user }: EditUserModalProps) {
   const update = useUpdateUser();
   const updateRoles = useUpdateUserRoles();
+  const uploadPhoto = useUploadUserPhoto();
+  const deletePhoto = useDeleteUserPhoto();
   const rolesQuery = useRoles();
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const {
     register,
@@ -46,8 +51,12 @@ export function EditUserModal({ open, onClose, user }: EditUserModalProps) {
     // Sync the role checkboxes to the user being edited when the modal opens.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedRoles((user.roles?.length ? user.roles : [user.role]) as Role[]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPhotoFile(null);
     update.reset();
     updateRoles.reset();
+    uploadPhoto.reset();
+    deletePhoto.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user]);
 
@@ -78,6 +87,18 @@ export function EditUserModal({ open, onClose, user }: EditUserModalProps) {
     updateRoles.mutate({ id: user.id, roles: selectedRoles });
   }
 
+  function handleSelectPhoto(file: File) {
+    if (!user) return;
+    setPhotoFile(file);
+    uploadPhoto.mutate({ userId: user.id, file });
+  }
+
+  function handleRemovePhoto() {
+    if (!user) return;
+    setPhotoFile(null);
+    if (user.hasPhoto) deletePhoto.mutate(user.id);
+  }
+
   // Roles the assignable-roles endpoint doesn't offer (e.g. SUPER_ADMIN/CLIENT) but the user
   // already holds — kept visible and checked so saving never silently drops them.
   const optionNames = (rolesQuery.data ?? []).map((r) => r.name);
@@ -86,6 +107,24 @@ export function EditUserModal({ open, onClose, user }: EditUserModalProps) {
   return (
     <Modal open={open} onClose={close} title="Edit details" description="Update the person's name, phone and date of birth.">
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+        <div className="flex justify-center">
+          <AvatarUploadField
+            file={photoFile}
+            onSelect={handleSelectPhoto}
+            onRemove={handleRemovePhoto}
+            userId={user?.id}
+            hasPhoto={user?.hasPhoto}
+            version={user?.updatedAt}
+            firstName={user?.firstName}
+            lastName={user?.lastName}
+            busy={uploadPhoto.isPending || deletePhoto.isPending}
+          />
+        </div>
+        {(uploadPhoto.isError || deletePhoto.isError) && (
+          <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+            {getErrorMessage(uploadPhoto.error ?? deletePhoto.error)}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField label="First name" error={errors.firstName?.message} {...register("firstName")} />
           <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />

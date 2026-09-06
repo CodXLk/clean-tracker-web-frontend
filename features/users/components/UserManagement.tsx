@@ -44,8 +44,9 @@ function RoleBadges({ user }: { user: User }) {
   );
 }
 
-// Roles shown in the Users tab and the filter — every internal role (clients are managed elsewhere).
-const FILTERABLE_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT");
+// Roles shown in the Users tab and the filter — internal roles only (clients are managed
+// elsewhere, and Super Admin accounts are never surfaced here).
+const FILTERABLE_ROLES: Role[] = ROLES.filter((r) => r !== "CLIENT" && r !== "SUPER_ADMIN");
 
 export function UserManagement() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -58,10 +59,14 @@ export function UserManagement() {
   const resend = useResendSetup();
 
   const allowedRoles = useMemo(() => creatableRoles(me.data?.role), [me.data?.role]);
-  // Show every internal user (clients are provisioned and managed via Client Management),
-  // optionally narrowed by the selected role filter (matched against all assigned roles).
+  // Show every internal user except Super Admins and clients (clients are provisioned and
+  // managed via Client Management), optionally narrowed by the selected role filter.
   const users = useMemo(() => {
-    const list = usersQuery.data?.filter((u) => u.role !== "CLIENT") ?? [];
+    const list =
+      usersQuery.data?.filter((u) => {
+        const roles = u.roles?.length ? u.roles : [u.role];
+        return u.role !== "CLIENT" && !roles.includes("SUPER_ADMIN");
+      }) ?? [];
     if (roleFilter === "ALL") return list;
     return list.filter((u) => (u.roles?.length ? u.roles : [u.role]).includes(roleFilter));
   }, [usersQuery.data, roleFilter]);
