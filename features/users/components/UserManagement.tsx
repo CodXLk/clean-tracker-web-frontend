@@ -9,7 +9,7 @@ import { CreateUserModal } from "./CreateUserModal";
 import { UserDetailModal } from "./UserDetailModal";
 import { EditUserModal } from "./EditUserModal";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
-import { ROLES, ROLE_LABELS, type Role, type User } from "@/features/users/schemas/user.schema";
+import { ROLES, ROLE_LABELS, ROLE_BADGE_CLASSES, type Role, type User } from "@/features/users/schemas/user.schema";
 import { creatableRoles } from "@/features/users/lib/permissions";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -35,7 +35,7 @@ function RoleBadges({ user }: { user: User }) {
       {roles.map((role) => (
         <span
           key={role}
-          className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_BADGE_CLASSES[role]}`}
         >
           {ROLE_LABELS[role]}
         </span>

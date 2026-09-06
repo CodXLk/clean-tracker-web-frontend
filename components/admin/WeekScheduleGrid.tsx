@@ -820,6 +820,9 @@ export function WeekScheduleGrid({
                 new Map(cellOccurrences.flatMap((o) => o.cleaners).map((c) => [c.id, c])).values(),
               ).filter((c) => (c.firstName?.trim() || c.lastName?.trim()))
             : [];
+          // Cleaners assigned via an outsource project — styled distinctly.
+          const outsourceIds = new Set(cellOccurrences.flatMap((o) => o.outsourceCleanerIds ?? []));
+          const hasOutsource = cleaners.some((c) => outsourceIds.has(c.id));
           return (
             <div
               key={dateStr}
@@ -833,10 +836,13 @@ export function WeekScheduleGrid({
               {first ? (
                 <button
                   type="button"
-                  title={label}
-                  aria-label={label}
+                  title={hasOutsource ? `${label} · Outsourced` : label}
+                  aria-label={hasOutsource ? `${label} (outsourced)` : label}
                   onClick={() => onOccurrenceClick?.(first)}
-                  className="absolute inset-1 flex flex-col items-center justify-center gap-0.5 rounded-md px-1 text-center text-white shadow-sm transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+                  className={cn(
+                    "absolute inset-1 flex flex-col items-center justify-center gap-0.5 rounded-md px-1 text-center text-white shadow-sm transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                    hasOutsource && "ring-2 ring-[#ED5F25] ring-offset-1",
+                  )}
                   style={{ backgroundColor: occurrenceHex(first) }}
                 >
                   {cleaners.length > 0 ? (
@@ -846,7 +852,10 @@ export function WeekScheduleGrid({
                           key={c.id}
                           name={cleanerName(c)}
                           size={18}
-                          className="-ml-1.5 ring-2 ring-white first:ml-0"
+                          className={cn(
+                            "-ml-1.5 ring-2 first:ml-0",
+                            outsourceIds.has(c.id) ? "ring-[#ED5F25]" : "ring-white",
+                          )}
                         />
                       ))}
                       {cleaners.length > 3 && (

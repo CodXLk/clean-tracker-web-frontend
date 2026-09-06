@@ -20,8 +20,10 @@ import {
   SiteFormSchema,
   SITE_TYPE_LABELS,
   SITE_TYPE_VALUES,
+  DAY_OF_WEEK_VALUES,
   type Site,
   type SiteFormInput,
+  type DayOfWeek,
 } from "@/features/user-management/schemas/site.schema";
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
@@ -53,6 +55,16 @@ function windowInfo(start?: string, end?: string): { overnight: boolean; duratio
   return { overnight, duration: `${h}h${m ? ` ${m}m` : ""}` };
 }
 
+const DAY_LABELS: Record<DayOfWeek, string> = {
+  MONDAY: "Monday",
+  TUESDAY: "Tuesday",
+  WEDNESDAY: "Wednesday",
+  THURSDAY: "Thursday",
+  FRIDAY: "Friday",
+  SATURDAY: "Saturday",
+  SUNDAY: "Sunday",
+};
+
 const EMPTY: SiteFormInput = {
   clientCompanyId: "",
   clientId: "",
@@ -70,8 +82,10 @@ const EMPTY: SiteFormInput = {
   startDate: "",
   endDate: "",
   workingDays: [],
+  generalTaskTimeMode: "SINGLE",
   generalTaskStartTime: "",
   generalTaskEndTime: "",
+  generalTaskDayTimes: [],
   requiredCertificates: [],
   clientSiteManagementEnabled: false,
   worksOnPublicHolidays: false,
@@ -146,8 +160,14 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             startDate: site.startDate ?? "",
             endDate: site.endDate ?? "",
             workingDays: site.workingDays ?? [],
+            generalTaskTimeMode: site.generalTaskTimeMode ?? "SINGLE",
             generalTaskStartTime: (site.generalTaskStartTime ?? "").slice(0, 5),
             generalTaskEndTime: (site.generalTaskEndTime ?? "").slice(0, 5),
+            generalTaskDayTimes: (site.generalTaskDayTimes ?? []).map((d) => ({
+              dayOfWeek: d.dayOfWeek,
+              startTime: (d.startTime ?? "").slice(0, 5),
+              endTime: (d.endTime ?? "").slice(0, 5),
+            })),
             requiredCertificates: site.requiredCertificates ?? [],
             clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
             worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
@@ -509,60 +529,159 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             General task service time
           </span>
           <p className="text-xs text-grey-500">
-            Optional default window for general tasks. Set an end earlier than the start for an
-            overnight window (e.g. 10:00 PM → 6:00 AM next day). Pre-fills the start time and sizes
-            general-task blocks on the calendar.
+            The window the client allows for general cleaning. Use one window for all working days,
+            or set a different window per day. Set an end earlier than the start for an overnight
+            window (e.g. 10:00 PM → 6:00 AM next day).
           </p>
-          <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <Controller
-                  control={control}
-                  name="generalTaskStartTime"
-                  render={({ field }) => (
-                    <TimeField
-                      label="Start"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.generalTaskStartTime?.message}
-                    />
-                  )}
-                />
+
+          <Controller
+            control={control}
+            name="generalTaskTimeMode"
+            render={({ field }) => (
+              <div className="inline-flex w-fit rounded-full border border-grey-200 p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => field.onChange("SINGLE")}
+                  className={
+                    field.value !== "PER_DAY"
+                      ? "rounded-full bg-primary px-3 py-1.5 text-on-primary"
+                      : "rounded-full px-3 py-1.5 text-grey-500 hover:text-on-surface"
+                  }
+                >
+                  Same time for all days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => field.onChange("PER_DAY")}
+                  className={
+                    field.value === "PER_DAY"
+                      ? "rounded-full bg-primary px-3 py-1.5 text-on-primary"
+                      : "rounded-full px-3 py-1.5 text-grey-500 hover:text-on-surface"
+                  }
+                >
+                  Different time per day
+                </button>
               </div>
-              <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
-              <div className="flex-1">
-                <Controller
-                  control={control}
-                  name="generalTaskEndTime"
-                  render={({ field }) => (
-                    <TimeField
-                      label="End"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.generalTaskEndTime?.message}
-                    />
-                  )}
-                />
-              </div>
-            </div>
-            {(() => {
-              const info = windowInfo(watch("generalTaskStartTime"), watch("generalTaskEndTime"));
-              if (!info) return null;
+            )}
+          />
+
+          {watch("generalTaskTimeMode") === "PER_DAY" ? (
+            (() => {
+              const working = watch("workingDays") ?? [];
+              const orderedDays = DAY_OF_WEEK_VALUES.filter((d) => working.includes(d));
+              if (orderedDays.length === 0) {
+                return (
+                  <p className="rounded-xl border border-dashed border-grey-200 px-3 py-4 text-center text-xs text-grey-500">
+                    Select working days above to set a time for each day.
+                  </p>
+                );
+              }
+              const dayTimes = watch("generalTaskDayTimes") ?? [];
+              const setDay = (day: DayOfWeek, patch: { startTime?: string; endTime?: string }) => {
+                const exists = dayTimes.some((x) => x.dayOfWeek === day);
+                const next = exists
+                  ? dayTimes.map((x) => (x.dayOfWeek === day ? { ...x, ...patch } : x))
+                  : [...dayTimes, { dayOfWeek: day, startTime: "", endTime: "", ...patch }];
+                setValue("generalTaskDayTimes", next, { shouldValidate: true });
+              };
               return (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-ink">
-                    {info.duration}
-                  </span>
-                  {info.overnight && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-600">
-                      <MoonStar size={12} aria-hidden="true" />
-                      Overnight — ends next day
-                    </span>
-                  )}
+                <div className="flex flex-col gap-2">
+                  {orderedDays.map((day) => {
+                    const entry = dayTimes.find((x) => x.dayOfWeek === day);
+                    const info = windowInfo(entry?.startTime, entry?.endTime);
+                    return (
+                      <div key={day} className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
+                        <div className="flex items-end gap-2">
+                          <span className="mb-3 w-20 shrink-0 text-sm font-medium text-on-surface">
+                            {DAY_LABELS[day]}
+                          </span>
+                          <div className="flex-1">
+                            <TimeField
+                              label="Start"
+                              value={entry?.startTime ?? ""}
+                              onChange={(v) => setDay(day, { startTime: v })}
+                            />
+                          </div>
+                          <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
+                          <div className="flex-1">
+                            <TimeField
+                              label="End"
+                              value={entry?.endTime ?? ""}
+                              onChange={(v) => setDay(day, { endTime: v })}
+                            />
+                          </div>
+                        </div>
+                        {info && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-ink">
+                              {info.duration}
+                            </span>
+                            {info.overnight && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-600">
+                                <MoonStar size={12} aria-hidden="true" />
+                                Overnight — ends next day
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            })()}
-          </div>
+            })()
+          ) : (
+            <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Controller
+                    control={control}
+                    name="generalTaskStartTime"
+                    render={({ field }) => (
+                      <TimeField
+                        label="Start"
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={errors.generalTaskStartTime?.message}
+                      />
+                    )}
+                  />
+                </div>
+                <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
+                <div className="flex-1">
+                  <Controller
+                    control={control}
+                    name="generalTaskEndTime"
+                    render={({ field }) => (
+                      <TimeField
+                        label="End"
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={errors.generalTaskEndTime?.message}
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+              {(() => {
+                const info = windowInfo(watch("generalTaskStartTime"), watch("generalTaskEndTime"));
+                if (!info) return null;
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-ink">
+                      {info.duration}
+                    </span>
+                    {info.overnight && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-600">
+                        <MoonStar size={12} aria-hidden="true" />
+                        Overnight — ends next day
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {watch("siteType") === "HOTEL" && (

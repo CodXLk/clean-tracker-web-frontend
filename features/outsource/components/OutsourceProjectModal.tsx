@@ -52,8 +52,8 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
   const [taskIds, setTaskIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(toISODate(new Date()));
   const [endDate, setEndDate] = useState("");
-  const [cleanerEmail, setCleanerEmail] = useState("");
-  const [supervisorEmail, setSupervisorEmail] = useState("");
+  const [numberOfOutsourceCleaners, setNumberOfOutsourceCleaners] = useState(1);
+  const [numberOfOutsourceSupervisors, setNumberOfOutsourceSupervisors] = useState(1);
   const [formError, setFormError] = useState<string | null>(null);
 
   const sitesQuery = useSites();
@@ -120,8 +120,8 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
     resetSiteDependent();
     setStartDate(toISODate(new Date()));
     setEndDate("");
-    setCleanerEmail("");
-    setSupervisorEmail("");
+    setNumberOfOutsourceCleaners(1);
+    setNumberOfOutsourceSupervisors(1);
     setFormError(null);
     create.reset();
   }
@@ -141,12 +141,6 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
     if (scopeType === "FLOORS" && floorIds.length === 0) return "Select at least one floor.";
     if (scopeType === "AREAS" && areaIds.length === 0) return "Select at least one area.";
     if (scopeType === "TASKS" && taskIds.length === 0) return "Select at least one task.";
-    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRe.test(cleanerEmail.trim())) return "Enter a valid outsource cleaner email.";
-    if (!emailRe.test(supervisorEmail.trim())) return "Enter a valid outsource supervisor email.";
-    if (cleanerEmail.trim().toLowerCase() === supervisorEmail.trim().toLowerCase()) {
-      return "Cleaner and supervisor must use different emails.";
-    }
     return null;
   }
 
@@ -169,8 +163,8 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
         taskIds: scopeType === "TASKS" ? taskIds : undefined,
         startDate,
         endDate,
-        cleanerEmail: cleanerEmail.trim(),
-        supervisorEmail: supervisorEmail.trim(),
+        numberOfOutsourceCleaners,
+        numberOfOutsourceSupervisors,
       },
       {
         onSuccess: () => {
@@ -295,23 +289,25 @@ export function OutsourceProjectModal({ open, onClose, onCreated }: OutsourcePro
 
         <div className="rounded-xl border border-grey-200 bg-grey-50 p-3">
           <p className="mb-2 text-xs text-grey-500">
-            An outsource cleaner and supervisor account will be created and emailed login details.
-            We don&apos;t manage the actual people — names default from the project.
+            Set how many outsource cleaner and supervisor slots this project has. Assign the actual
+            outsource staff to those slots after creating the project.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <TextField
-              label="Outsource cleaner email"
-              type="email"
-              required
-              value={cleanerEmail}
-              onChange={(e) => setCleanerEmail(e.target.value)}
+              label="Outsource cleaner slots"
+              type="number"
+              min={0}
+              max={100}
+              value={String(numberOfOutsourceCleaners)}
+              onChange={(e) => setNumberOfOutsourceCleaners(Math.max(0, Number(e.target.value) || 0))}
             />
             <TextField
-              label="Outsource supervisor email"
-              type="email"
-              required
-              value={supervisorEmail}
-              onChange={(e) => setSupervisorEmail(e.target.value)}
+              label="Outsource supervisor slots"
+              type="number"
+              min={0}
+              max={100}
+              value={String(numberOfOutsourceSupervisors)}
+              onChange={(e) => setNumberOfOutsourceSupervisors(Math.max(0, Number(e.target.value) || 0))}
             />
           </div>
         </div>

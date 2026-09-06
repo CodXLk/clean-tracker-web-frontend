@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   UserCog,
   Briefcase,
+  Handshake,
   type LucideIcon,
 } from "lucide-react";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -26,6 +27,8 @@ const ROLE_META: Record<Role, { description: string; Icon: LucideIcon }> = {
   CLIENT: { description: "View your sites and requests", Icon: Briefcase },
   SUPERVISOR: { description: "Oversee cleaners and inspect work", Icon: UserCog },
   CLEANER: { description: "Complete your assigned tasks", Icon: Brush },
+  OUTSOURCE_SUPERVISOR: { description: "Oversee outsourced cleaning work", Icon: Handshake },
+  OUTSOURCE_CLEANER: { description: "Complete outsourced cleaning tasks", Icon: Handshake },
 };
 
 export function RoleSelection() {

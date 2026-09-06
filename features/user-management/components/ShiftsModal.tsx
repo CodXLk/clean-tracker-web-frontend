@@ -19,6 +19,10 @@ import {
   type Shift,
   type ShiftFormInput,
 } from "@/features/user-management/schemas/shift.schema";
+import {
+  DAY_OF_WEEK_VALUES,
+  type DayOfWeek,
+} from "@/features/user-management/schemas/site.schema";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 interface ShiftsModalProps {
@@ -27,7 +31,17 @@ interface ShiftsModalProps {
   site: Site | null;
 }
 
-const EMPTY_SHIFT: ShiftFormInput = { name: "", startTime: "", endTime: "", isDefault: false };
+const EMPTY_SHIFT: ShiftFormInput = { name: "", startTime: "", endTime: "", dayOfWeek: "", isDefault: false };
+
+const DAY_LABELS: Record<DayOfWeek, string> = {
+  MONDAY: "Monday",
+  TUESDAY: "Tuesday",
+  WEDNESDAY: "Wednesday",
+  THURSDAY: "Thursday",
+  FRIDAY: "Friday",
+  SATURDAY: "Saturday",
+  SUNDAY: "Sunday",
+};
 
 function hhmm(value: string): string {
   return value.slice(0, 5);
@@ -61,13 +75,20 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
   }, [open, site?.id, reset]);
 
   const shifts = shiftsQuery.data ?? [];
+  const dayOptions = DAY_OF_WEEK_VALUES.filter((d) => (site?.workingDays ?? []).includes(d));
   const submitting = createShift.isPending || updateShift.isPending;
   const busy = submitting || setDefault.isPending || deleteShift.isPending;
 
   function startEdit(shift: Shift) {
     setLocalError(null);
     setEditingId(shift.id);
-    reset({ name: shift.name, startTime: hhmm(shift.startTime), endTime: hhmm(shift.endTime), isDefault: false });
+    reset({
+      name: shift.name,
+      startTime: hhmm(shift.startTime),
+      endTime: hhmm(shift.endTime),
+      dayOfWeek: shift.dayOfWeek ?? "",
+      isDefault: false,
+    });
   }
 
   function cancelEdit() {
@@ -120,6 +141,9 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-on-surface">
                     <Clock className="h-4 w-4 text-grey-400" /> {shift.name}
+                    <span className="inline-flex items-center rounded-full bg-grey-100 px-2 py-0.5 text-xs font-medium text-grey-600">
+                      {shift.dayOfWeek ? DAY_LABELS[shift.dayOfWeek] : "All days"}
+                    </span>
                     {shift.isDefault && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-ink">
                         <Star className="h-3 w-3" /> Default
@@ -181,6 +205,23 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
             <TextField label="Start time" type="time" error={errors.startTime?.message} {...register("startTime")} />
             <TextField label="End time" type="time" error={errors.endTime?.message} {...register("endTime")} />
           </div>
+          <label className="flex flex-col gap-1 text-sm text-on-surface">
+            <span className="font-medium">Applies to</span>
+            <select
+              className="rounded-xl border border-grey-200 bg-surface px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none"
+              {...register("dayOfWeek")}
+            >
+              <option value="">All working days</option>
+              {(dayOptions.length > 0 ? dayOptions : DAY_OF_WEEK_VALUES).map((d) => (
+                <option key={d} value={d}>
+                  {DAY_LABELS[d]}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-grey-500">
+              Shift times must fall within the site&apos;s general task window for the selected day(s).
+            </span>
+          </label>
           <p className="text-xs text-grey-500">
             Set an end time earlier than the start (e.g. 22:00 – 06:00) for an overnight shift.
           </p>

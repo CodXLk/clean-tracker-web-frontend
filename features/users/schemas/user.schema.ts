@@ -12,6 +12,8 @@ export const ROLES = [
   "CLIENT",
   "SUPERVISOR",
   "CLEANER",
+  "OUTSOURCE_SUPERVISOR",
+  "OUTSOURCE_CLEANER",
 ] as const;
 
 export const RoleSchema = z.enum(ROLES);
@@ -24,6 +26,20 @@ export const ROLE_LABELS: Record<Role, string> = {
   CLIENT: "Client",
   SUPERVISOR: "Supervisor",
   CLEANER: "Cleaner",
+  OUTSOURCE_SUPERVISOR: "Outsource Supervisor",
+  OUTSOURCE_CLEANER: "Outsource Cleaner",
+};
+
+// Distinct badge colours per role so roles are visually distinguishable at a glance.
+export const ROLE_BADGE_CLASSES: Record<Role, string> = {
+  SUPER_ADMIN: "bg-purple-100 text-purple-700",
+  COMPANY_ADMIN: "bg-blue-100 text-blue-700",
+  CLIENT_SERVICE_MANAGER: "bg-teal-100 text-teal-700",
+  CLIENT: "bg-amber-100 text-amber-700",
+  SUPERVISOR: "bg-indigo-100 text-indigo-700",
+  CLEANER: "bg-emerald-100 text-emerald-700",
+  OUTSOURCE_SUPERVISOR: "bg-orange-100 text-orange-700",
+  OUTSOURCE_CLEANER: "bg-lime-100 text-lime-700",
 };
 
 // Mirrors backend UserResponse.
