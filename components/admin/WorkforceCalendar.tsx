@@ -65,6 +65,8 @@ export interface CalendarEvent {
   templateName: string | null;
   /** True when this block represents multiple tasks of one assignment (read-only). */
   grouped?: boolean;
+  /** True when the task has outsource cleaners assigned — highlights the name cell. */
+  outsourced?: boolean;
   /** Underlying per-task events when grouped (length > 1). */
   members?: CalendarEvent[];
   /** Assigned cleaner slots (profiles) and who fills them. */
@@ -319,6 +321,7 @@ function mapOccurrenceToEvent(occurrence: TaskOccurrence): CalendarEvent {
     cleanerProfiles: occurrence.cleanerProfiles,
     supervisorProfiles: occurrence.supervisorProfiles,
     items: occurrence.items,
+    outsourced: (occurrence.outsourceCleanerProfiles?.length ?? 0) > 0,
     raw: occurrence,
   };
 }
@@ -357,6 +360,7 @@ function groupDayEvents(dayEvents: CalendarEvent[]): CalendarEvent[] {
       startTime: members[0].startTime,
       endTime,
       grouped: true,
+      outsourced: members.some((m) => m.outsourced),
       members,
     });
   }
@@ -1089,7 +1093,14 @@ function WeekView({
                       >
                         <p className="flex items-center gap-1 text-xs font-semibold leading-tight truncate">
                           {ev.recurring && <Repeat size={10} className="shrink-0" aria-hidden="true" />}
-                          <span className="truncate">{ev.title}</span>
+                          <span
+                            className={cn(
+                              "truncate",
+                              ev.outsourced && "rounded bg-amber-100 px-1 text-amber-900",
+                            )}
+                          >
+                            {ev.title}
+                          </span>
                         </p>
                         {height > 40 && (
                           <p className="text-xs opacity-80 truncate">{ev.subtitle}</p>

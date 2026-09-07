@@ -73,6 +73,7 @@ export const ENDPOINTS = {
   shifts: {
     byId:    (id: string) => `/shifts/${id}`,
     default: (id: string) => `/shifts/${id}/default`,
+    cleaners: (id: string) => `/shifts/${id}/cleaners`,
   },
   outsourceProjects: {
     list:   "/outsource-projects",
@@ -294,6 +295,7 @@ export const BACKEND = {
   shifts: {
     byId:    (id: string) => `/api/v1/shifts/${id}`,
     default: (id: string) => `/api/v1/shifts/${id}/default`,
+    cleaners: (id: string) => `/api/v1/shifts/${id}/cleaners`,
   },
   outsourceProjects: {
     list:   "/api/v1/outsource-projects",

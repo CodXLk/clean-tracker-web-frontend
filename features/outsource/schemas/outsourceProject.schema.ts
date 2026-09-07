@@ -12,6 +12,16 @@ export const OUTSOURCE_SCOPE_LABELS: Record<OutsourceScopeType, string> = {
   TASKS: "Selected tasks",
 };
 
+// One shift an outsource slot works — mirrors backend OutsourceCleanerProfileResponse.AssignedShift.
+export const OutsourceAssignedShiftSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  dayOfWeek: z.string().nullable().optional(),
+  startTime: z.string(),
+  endTime: z.string(),
+  crossesMidnight: z.boolean().default(false),
+});
+
 // One outsource cleaner slot — mirrors backend OutsourceCleanerProfileResponse.
 export const OutsourceCleanerProfileSchema = z.object({
   id: z.string().uuid(),
@@ -19,6 +29,7 @@ export const OutsourceCleanerProfileSchema = z.object({
   label: z.string(),
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
+  shifts: z.array(OutsourceAssignedShiftSchema).default([]),
 });
 export type OutsourceCleanerProfile = z.infer<typeof OutsourceCleanerProfileSchema>;
 
@@ -64,10 +75,6 @@ export interface CreateOutsourceProjectInput {
   contactPersonName?: string;
   contactNumber?: string;
   siteId: string;
-  scopeType: OutsourceScopeType;
-  floorIds?: string[];
-  areaIds?: string[];
-  taskIds?: string[];
   startDate: string;
   endDate: string;
   numberOfOutsourceCleaners?: number;
@@ -79,10 +86,6 @@ export interface UpdateOutsourceProjectInput {
   companyName: string;
   contactPersonName?: string;
   contactNumber?: string;
-  scopeType: OutsourceScopeType;
-  floorIds?: string[];
-  areaIds?: string[];
-  taskIds?: string[];
   startDate: string;
   endDate: string;
   numberOfOutsourceCleaners?: number;

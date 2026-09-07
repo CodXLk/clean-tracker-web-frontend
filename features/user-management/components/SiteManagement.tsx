@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Plus, Pencil, Trash2, UserCog, Users, Clock, CalendarClock } from "lucide-react";
+import { ExternalLink, Plus, Pencil, Trash2, Clock, CalendarClock } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { DataTable, type Column } from "./DataTable";
@@ -9,8 +9,6 @@ import { RowMenu } from "./RowMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
-import { CleanerProfilesModal } from "./CleanerProfilesModal";
-import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
 import { ShiftsModal } from "./ShiftsModal";
 import { SupervisorScheduleModal } from "./SupervisorScheduleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
@@ -29,8 +27,6 @@ export function SiteManagement() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
   const [deleting, setDeleting] = useState<Site | null>(null);
-  const [supervisorsSite, setSupervisorsSite] = useState<Site | null>(null);
-  const [cleanersSite, setCleanersSite] = useState<Site | null>(null);
   const [shiftsSite, setShiftsSite] = useState<Site | null>(null);
   const [scheduleSite, setScheduleSite] = useState<Site | null>(null);
 
@@ -123,59 +119,40 @@ export function SiteManagement() {
       header: "",
       headerClassName: "text-right",
       cellClassName: "text-right",
-      cell: (s) => (
-        <div className="flex justify-end">
-          <RowMenu
-            label={`Actions for ${s.name}`}
-            items={
-              isSupervisor
-                ? [
-                    {
-                      label: "Assign Cleaners",
-                      icon: Users,
-                      onClick: () => setCleanersSite(s),
-                    },
-                  ]
-                : [
-                    {
-                      label: "Supervisor slots",
-                      icon: UserCog,
-                      onClick: () => setSupervisorsSite(s),
-                    },
-                    {
-                      label: "Assign Cleaners",
-                      icon: Users,
-                      onClick: () => setCleanersSite(s),
-                    },
-                    {
-                      label: "Shifts",
-                      icon: Clock,
-                      onClick: () => setShiftsSite(s),
-                    },
-                    {
-                      label: "Inspection schedule",
-                      icon: CalendarClock,
-                      onClick: () => setScheduleSite(s),
-                    },
-                    {
-                      label: "Edit",
-                      icon: Pencil,
-                      onClick: () => {
-                        setEditing(s);
-                        setFormOpen(true);
-                      },
-                    },
-                    {
-                      label: "Delete",
-                      icon: Trash2,
-                      destructive: true,
-                      onClick: () => setDeleting(s),
-                    },
-                  ]
-            }
-          />
-        </div>
-      ),
+      cell: (s) =>
+        isSupervisor ? null : (
+          <div className="flex justify-end">
+            <RowMenu
+              label={`Actions for ${s.name}`}
+              items={[
+                {
+                  label: "Shifts",
+                  icon: Clock,
+                  onClick: () => setShiftsSite(s),
+                },
+                {
+                  label: "Inspection schedule",
+                  icon: CalendarClock,
+                  onClick: () => setScheduleSite(s),
+                },
+                {
+                  label: "Edit",
+                  icon: Pencil,
+                  onClick: () => {
+                    setEditing(s);
+                    setFormOpen(true);
+                  },
+                },
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  destructive: true,
+                  onClick: () => setDeleting(s),
+                },
+              ]}
+            />
+          </div>
+        ),
     },
   ];
 
@@ -233,19 +210,6 @@ export function SiteManagement() {
           setDeleting(null);
           deleteMutation.reset();
         }}
-      />
-
-      <SupervisorProfilesModal
-        open={!!supervisorsSite}
-        onClose={() => setSupervisorsSite(null)}
-        site={supervisorsSite}
-      />
-
-      <CleanerProfilesModal
-        open={!!cleanersSite}
-        onClose={() => setCleanersSite(null)}
-        site={cleanersSite}
-        restrictToAssignOnly={isSupervisor}
       />
 
       <ShiftsModal open={!!shiftsSite} onClose={() => setShiftsSite(null)} site={shiftsSite} />

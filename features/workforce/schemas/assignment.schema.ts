@@ -96,6 +96,12 @@ export const TaskOccurrenceSchema = z.object({
     .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
     .default([]),
   outsourceCleanerIds: z.array(z.string().uuid()).default([]),
+  outsourceCleanerProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
+  outsourceSupervisorProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
   items: z
     .array(
       z.object({
@@ -296,6 +302,10 @@ export const AssignmentFormSchema = z
     profileIds: z.array(z.string().uuid()),
     /** Assignment-level supervisor selection (applies to every task). */
     supervisorIds: z.array(z.string().uuid()),
+    /** Assignment-level outsource cleaner slots (from the site's outsource project). */
+    outsourceCleanerProfileIds: z.array(z.string().uuid()),
+    /** Assignment-level outsource supervisor slots (from the site's outsource project). */
+    outsourceSupervisorProfileIds: z.array(z.string().uuid()),
     assignPerTask: z.boolean(),
     // Recurrence — Periodical, or Other with custom recurrence enabled.
     recurrenceType: RecurrenceTypeSchema.optional(),
@@ -439,6 +449,8 @@ export function assignmentToFormInput(a: Assignment): AssignmentFormInput {
     cleanerIds: [],
     profileIds: [],
     supervisorIds: Array.from(new Set(a.tasks.flatMap((t) => t.supervisors.map((s) => s.id)))),
+    outsourceCleanerProfileIds: [],
+    outsourceSupervisorProfileIds: [],
     assignPerTask: a.tasks.some((t) => t.cleaners.length > 0),
     recurrenceType: a.recurrenceType ?? undefined,
     recurrenceCount: a.recurrenceInterval ?? undefined,
@@ -503,6 +515,8 @@ export function taskToCreateFormInput(
     cleanerIds,
     profileIds,
     supervisorIds,
+    outsourceCleanerProfileIds: [],
+    outsourceSupervisorProfileIds: [],
   };
 
   if (opts.oneOff) {
@@ -570,6 +584,12 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
             ? { profileIds: input.assignPerTask ? task.profileIds : input.profileIds }
             : {}),
           ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
+          ...(input.outsourceCleanerProfileIds.length > 0
+            ? { outsourceCleanerProfileIds: input.outsourceCleanerProfileIds }
+            : {}),
+          ...(input.outsourceSupervisorProfileIds.length > 0
+            ? { outsourceSupervisorProfileIds: input.outsourceSupervisorProfileIds }
+            : {}),
           ...((task.items ?? []).length > 0
             ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
             : {}),

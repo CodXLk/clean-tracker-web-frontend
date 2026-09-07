@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Plus, Pencil, Star, Trash2, Loader2, Moon, Check } from "lucide-react";
+import { Clock, Plus, Pencil, Star, Trash2, Loader2, Moon, Check, Users } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Modal } from "@/components/shared/Modal";
@@ -13,7 +13,11 @@ import {
   useUpdateShift,
   useSetDefaultShift,
   useDeleteShift,
+  useSetShiftCleaners,
 } from "@/features/user-management/hooks/useSiteShifts";
+import { useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
+import type { OutsourceCleanerProfile } from "@/features/outsource/schemas/outsourceProject.schema";
 import {
   ShiftFormSchema,
   type Shift,
@@ -22,6 +26,7 @@ import {
 import {
   DAY_OF_WEEK_VALUES,
   type DayOfWeek,
+  type SiteCleanerProfile,
 } from "@/features/user-management/schemas/site.schema";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
@@ -49,10 +54,15 @@ function hhmm(value: string): string {
 
 export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
   const shiftsQuery = useSiteShifts(open ? site?.id : undefined);
+  const cleanerProfilesQuery = useSiteCleanerProfiles(open ? site?.id : undefined);
+  const outsourceQuery = useSiteOutsourceProject(open ? site?.id : undefined);
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const setDefault = useSetDefaultShift();
   const deleteShift = useDeleteShift();
+
+  const inHouseProfiles = cleanerProfilesQuery.data ?? [];
+  const outsourceProfiles = outsourceQuery.project?.cleanerProfiles ?? [];
 
   const {
     register,
@@ -66,10 +76,12 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [cleanersFor, setCleanersFor] = useState<string | null>(null);
 
   // Reset the editor whenever the modal closes or the site changes.
   useEffect(() => {
     setEditingId(null);
+    setCleanersFor(null);
     setLocalError(null);
     reset(EMPTY_SHIFT);
   }, [open, site?.id, reset]);
@@ -136,8 +148,9 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
             {shifts.map((shift) => (
               <li
                 key={shift.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-grey-200 p-3"
+                className="flex flex-col gap-2 rounded-xl border border-grey-200 p-3"
               >
+                <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-medium text-on-surface">
                     <Clock className="h-4 w-4 text-grey-400" /> {shift.name}
@@ -161,6 +174,18 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setCleanersFor((cur) => (cur === shift.id ? null : shift.id))}
+                    className={
+                      cleanersFor === shift.id
+                        ? "inline-flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-50"
+                        : "inline-flex items-center gap-1 rounded-full border border-grey-200 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50 disabled:opacity-50"
+                    }
+                  >
+                    <Users className="h-3 w-3" /> Cleaners
+                  </button>
                   <button
                     type="button"
                     disabled={busy}
@@ -193,6 +218,19 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                </div>
+
+                {cleanersFor === shift.id && site && (
+                  <ShiftCleanersPanel
+                    key={shift.id}
+                    site={site}
+                    shift={shift}
+                    inHouseProfiles={inHouseProfiles}
+                    outsourceProfiles={outsourceProfiles}
+                    loading={cleanerProfilesQuery.isLoading || outsourceQuery.isLoading}
+                    onDone={() => setCleanersFor(null)}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -263,5 +301,133 @@ export function ShiftsModal({ open, onClose, site }: ShiftsModalProps) {
         </form>
       </div>
     </Modal>
+  );
+}
+
+interface ShiftCleanersPanelProps {
+  site: Site;
+  shift: Shift;
+  inHouseProfiles: SiteCleanerProfile[];
+  outsourceProfiles: OutsourceCleanerProfile[];
+  loading: boolean;
+  onDone: () => void;
+}
+
+/** Per-shift cleaner membership: pick which in-house/outsource slots work this shift. */
+function ShiftCleanersPanel({
+  site,
+  shift,
+  inHouseProfiles,
+  outsourceProfiles,
+  loading,
+  onDone,
+}: ShiftCleanersPanelProps) {
+  const setCleaners = useSetShiftCleaners();
+  const [inHouseSel, setInHouseSel] = useState<string[]>(() =>
+    inHouseProfiles.filter((p) => p.shifts.some((s) => s.id === shift.id)).map((p) => p.id),
+  );
+  const [outsourceSel, setOutsourceSel] = useState<string[]>(() =>
+    outsourceProfiles.filter((p) => p.shifts.some((s) => s.id === shift.id)).map((p) => p.id),
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(list: string[], setList: (v: string[]) => void, id: string) {
+    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  }
+
+  function save() {
+    setError(null);
+    setCleaners.mutate(
+      { siteId: site.id, shiftId: shift.id, inHouseProfileIds: inHouseSel, outsourceProfileIds: outsourceSel },
+      { onSuccess: onDone, onError: (e) => setError(getErrorMessage(e)) },
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-grey-100 bg-grey-50/60 p-3">
+      <p className="mb-2 text-xs font-medium text-grey-600">
+        Cleaners working this shift — its tasks go only to the selected staff.
+      </p>
+      {loading ? (
+        <p className="text-xs text-grey-500">Loading cleaners…</p>
+      ) : inHouseProfiles.length === 0 && outsourceProfiles.length === 0 ? (
+        <p className="text-xs text-grey-500">No cleaner slots on this site yet.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {inHouseProfiles.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-grey-500">In-house</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {inHouseProfiles.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-on-surface hover:bg-white"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={inHouseSel.includes(p.id)}
+                      onChange={() => toggle(inHouseSel, setInHouseSel, p.id)}
+                      className="h-4 w-4 rounded border-grey-300 accent-[#0B585A]"
+                    />
+                    <span className="truncate">
+                      {p.label}
+                      {p.cleanerName ? ` · ${p.cleanerName}` : " · Unassigned"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {outsourceProfiles.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#ED5F25]">Outsource</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {outsourceProfiles.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-on-surface hover:bg-white"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={outsourceSel.includes(p.id)}
+                      onChange={() => toggle(outsourceSel, setOutsourceSel, p.id)}
+                      className="h-4 w-4 rounded border-grey-300 accent-[#ED5F25]"
+                    />
+                    <span className="truncate">
+                      {p.label}
+                      {p.cleanerName ? ` · ${p.cleanerName}` : " · Unassigned"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+          {error}
+        </p>
+      )}
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onDone}
+          disabled={setCleaners.isPending}
+          className="rounded-full border border-grey-300 px-4 py-1.5 text-xs font-semibold text-on-surface hover:bg-grey-100 disabled:opacity-50"
+        >
+          Close
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={setCleaners.isPending || loading}
+          className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-on-primary hover:opacity-90 disabled:opacity-50"
+        >
+          {setCleaners.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Save cleaners
+        </button>
+      </div>
+    </div>
   );
 }

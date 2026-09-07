@@ -20,6 +20,7 @@ import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useF
 import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
+import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
 import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
 import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
@@ -154,6 +155,8 @@ function buildDefaults({
     cleanerIds: [],
     profileIds: [],
     supervisorIds: [],
+    outsourceCleanerProfileIds: [],
+    outsourceSupervisorProfileIds: [],
     assignPerTask: false,
     recurrenceType: "DAILY",
     recurrenceCount: 1,
@@ -1047,6 +1050,8 @@ export function NewAssignmentModal({
   const selectedCleanerIds = watch("cleanerIds");
   const selectedProfileIds = watch("profileIds");
   const selectedSupervisors = watch("supervisorIds");
+  const selectedOutsourceCleaners = watch("outsourceCleanerProfileIds");
+  const selectedOutsourceSupervisors = watch("outsourceSupervisorProfileIds");
   const assignPerTask = watch("assignPerTask");
   const recurrenceType = watch("recurrenceType");
   const monthlyMode = watch("monthlyMode");
@@ -1091,6 +1096,10 @@ export function NewAssignmentModal({
   const profilesQuery = useSiteCleanerProfiles(siteId || undefined);
   // Only supervisors assigned to the selected site can be picked.
   const supervisorsQuery = useSiteSupervisors(siteId || undefined);
+  // The site's outsource project (if any) — its cleaner/supervisor slots become selectable too.
+  const outsourceQuery = useSiteOutsourceProject(siteId || undefined);
+  const outsourceProject = outsourceQuery.project;
+  const hasOutsource = !!outsourceProject;
   // Optional work shifts for the selected site.
   const shiftsQuery = useSiteShifts(siteId || undefined);
   const shiftOptions: SelectOption[] = useMemo(
@@ -1159,6 +1168,27 @@ export function NewAssignmentModal({
   }, [usingProfiles, siteProfiles, cleanersQuery.data]);
 
   const cleanersLoading = usingProfiles ? profilesQuery.isLoading : cleanersQuery.isLoading;
+
+  // Outsource cleaner/supervisor slots of the site's outsource project (empty slots included —
+  // pick a slot now and assign its cleaner later, exactly like in-house profiles).
+  const outsourceCleaners = useMemo(
+    () =>
+      (outsourceProject?.cleanerProfiles ?? []).map((p) => ({
+        id: p.id,
+        label: p.label,
+        assignee: p.cleanerName ?? null,
+      })),
+    [outsourceProject],
+  );
+  const outsourceSupervisors = useMemo(
+    () =>
+      (outsourceProject?.supervisorProfiles ?? []).map((p) => ({
+        id: p.id,
+        label: p.label,
+        assignee: p.supervisorName ?? null,
+      })),
+    [outsourceProject],
+  );
   const filteredCleaners = cleaners.filter((c) =>
     cleanerName(c).toLowerCase().includes(cleanerSearch.toLowerCase()),
   );
@@ -1168,29 +1198,32 @@ export function NewAssignmentModal({
   // Default: every slot is responsible unless the user deselects one (Select All by default).
   const didDefaultProfiles = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!siteId || profilesQuery.isLoading) return;
+    if (!siteId || profilesQuery.isLoading || outsourceQuery.isLoading) return;
     if (sourceTask) return; // seeded tasks pick their default in the seed effect below
     if (didDefaultProfiles.current === siteId) return;
     didDefaultProfiles.current = siteId;
+    // When the site is outsourced, nothing is pre-selected — the user picks in-house and/or outsource.
+    if (hasOutsource) return;
     if (siteProfiles.length > 0 && (getValues("profileIds") ?? []).length === 0) {
       setValue("profileIds", siteProfiles.map((p) => p.id), { shouldValidate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteId, profilesQuery.isLoading, profilesQuery.data]);
+  }, [siteId, profilesQuery.isLoading, profilesQuery.data, outsourceQuery.isLoading]);
   const supervisors = supervisorsQuery.data ?? [];
   // Default supervisor selection to the site's assigned supervisors once they load.
   const didDefaultSupervisors = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!siteId || supervisorsQuery.isLoading) return;
+    if (!siteId || supervisorsQuery.isLoading || outsourceQuery.isLoading) return;
     if (sourceTask) return; // seeded from a task — keep its own supervisors
     // Only auto-select once per site, and only when nothing is chosen yet.
     if (didDefaultSupervisors.current === siteId) return;
     didDefaultSupervisors.current = siteId;
+    if (hasOutsource) return; // outsourced sites start with nothing pre-selected
     if ((getValues("supervisorIds") ?? []).length === 0) {
       setValue("supervisorIds", supervisors.map((s) => s.id), { shouldValidate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteId, supervisorsQuery.isLoading, supervisorsQuery.data]);
+  }, [siteId, supervisorsQuery.isLoading, supervisorsQuery.data, outsourceQuery.isLoading]);
 
   // Pre-fill the start time from the site's configured general-task start time.
   const lastAutoStartTime = useRef<string | null>(null);
@@ -1402,6 +1435,24 @@ export function NewAssignmentModal({
     }
   }
 
+  function toggleOutsourceCleaner(id: string) {
+    const current = selectedOutsourceCleaners ?? [];
+    setValue(
+      "outsourceCleanerProfileIds",
+      current.includes(id) ? current.filter((c) => c !== id) : [...current, id],
+      { shouldValidate: false },
+    );
+  }
+
+  function toggleOutsourceSupervisor(id: string) {
+    const current = selectedOutsourceSupervisors ?? [];
+    setValue(
+      "outsourceSupervisorProfileIds",
+      current.includes(id) ? current.filter((s) => s !== id) : [...current, id],
+      { shouldValidate: false },
+    );
+  }
+
   function toggleSelectAll() {
     const allIds = filteredCleaners.map((c) => c.id);
     const allSelected = allIds.every((id) => selectedCleaners?.includes(id));
@@ -1483,6 +1534,8 @@ export function NewAssignmentModal({
                         setValue("cleanerIds", []);
                         setValue("profileIds", []);
                         setValue("supervisorIds", []);
+                        setValue("outsourceCleanerProfileIds", []);
+                        setValue("outsourceSupervisorProfileIds", []);
                         setValue("shiftId", "");
                         didDefaultSupervisors.current = undefined;
                         didDefaultProfiles.current = undefined;
@@ -2159,6 +2212,103 @@ export function NewAssignmentModal({
                   </div>
                 )}
               </div>
+
+              {hasOutsource && (
+                <>
+                  {/* Outsource cleaners — from the site's outsource project */}
+                  <div className="mt-6 rounded-2xl border border-[#ED5F25]/30 bg-[#ED5F25]/5 p-4">
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="text-sm font-medium text-on-surface">Outsource Cleaners</span>
+                      <span className="rounded-full bg-[#ED5F25]/10 px-2.5 py-0.5 text-xs font-medium text-[#ED5F25]">
+                        {outsourceProject?.companyName}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-xs text-grey-500">
+                      Optional — pick outsource cleaners to work these tasks. Nothing is selected by default.
+                    </p>
+                    {outsourceCleaners.length === 0 ? (
+                      <p className="text-xs text-grey-500">
+                        This project has no outsource cleaner slots yet.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {outsourceCleaners.map((c) => {
+                          const isSelected = selectedOutsourceCleaners?.includes(c.id) ?? false;
+                          const initials =
+                            (c.assignee ?? "").split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "OS";
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => toggleOutsourceCleaner(c.id)}
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED5F25]",
+                                isSelected
+                                  ? "border-[#ED5F25] bg-[#ED5F25]/10 ring-2 ring-[#ED5F25]"
+                                  : "border-white/40 bg-white/60 hover:border-[#ED5F25]/40",
+                              )}
+                            >
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25]/15 text-xs font-semibold text-[#ED5F25]">
+                                {initials}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-on-surface">{c.label}</p>
+                                <p className="truncate text-xs text-grey-500">{c.assignee ?? "Unassigned"}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Outsource supervisors — from the site's outsource project */}
+                  <div className="mt-4 rounded-2xl border border-[#ED5F25]/30 bg-[#ED5F25]/5 p-4">
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="text-sm font-medium text-on-surface">Outsource Supervisors</span>
+                      <span className="rounded-full bg-[#ED5F25]/10 px-2.5 py-0.5 text-xs font-medium text-[#ED5F25]">
+                        {outsourceProject?.companyName}
+                      </span>
+                    </div>
+                    {outsourceSupervisors.length === 0 ? (
+                      <p className="text-xs text-grey-500">
+                        This project has no outsource supervisor slots yet.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {outsourceSupervisors.map((s) => {
+                          const isSelected = selectedOutsourceSupervisors?.includes(s.id) ?? false;
+                          const initials =
+                            (s.assignee ?? "").split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "OS";
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => toggleOutsourceSupervisor(s.id)}
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED5F25]",
+                                isSelected
+                                  ? "border-[#ED5F25] bg-[#ED5F25]/10 ring-2 ring-[#ED5F25]"
+                                  : "border-white/40 bg-white/60 hover:border-[#ED5F25]/40",
+                              )}
+                            >
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ED5F25]/15 text-xs font-semibold text-[#ED5F25]">
+                                {initials}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-on-surface">{s.label}</p>
+                                <p className="truncate text-xs text-grey-500">{s.assignee ?? "Unassigned"}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Footer */}
