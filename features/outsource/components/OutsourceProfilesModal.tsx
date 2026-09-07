@@ -179,7 +179,7 @@ export function OutsourceProfilesModal({ open, onClose, project, kind }: Outsour
                     onClick={() => handleRemove(p.id)}
                     disabled={busy}
                     aria-label={`Remove ${p.label}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-grey-300 px-2.5 py-1 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
+                    className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 disabled:opacity-60"
                   >
                     <Minus size={12} aria-hidden="true" />
                     Remove

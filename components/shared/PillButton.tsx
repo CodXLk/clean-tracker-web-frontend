@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils/cn";
 
-export type PillButtonVariant = "orange" | "teal" | "success";
+export type PillButtonVariant = "orange" | "teal" | "success" | "danger";
 
 const VARIANT_CLASSES: Record<PillButtonVariant, string> = {
   orange:  "bg-status-pending text-white hover:opacity-90 active:opacity-80",
   teal:    "bg-primary text-on-primary hover:opacity-90 active:opacity-80",
   success: "bg-success text-white hover:opacity-90 active:opacity-80",
+  danger:  "bg-error text-white hover:opacity-90 active:opacity-80",
 };
 
 interface PillButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal } from "@/components/shared/Modal";
+import { PanelOrModal } from "@/components/shared/PanelOrModal";
 import { TextField } from "@/components/shared/TextField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
 import { PillButton } from "@/components/shared/PillButton";
@@ -30,9 +30,10 @@ interface CreateUserModalProps {
   /** When set, only these role names are offered (whitelist) — typically the roles the current
    *  user is permitted to create. Combined with `excludeRoleNames`. */
   allowedRoleNames?: Role[];
+  embedded?: boolean;
 }
 
-export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, allowedRoleNames }: CreateUserModalProps) {
+export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, allowedRoleNames, embedded }: CreateUserModalProps) {
   const createUser = useCreateUser();
   const uploadPhoto = useUploadUserPhoto();
   const rolesQuery = useRoles();
@@ -90,7 +91,8 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
   const busy = createUser.isPending || uploadPhoto.isPending;
 
   return (
-    <Modal
+    <PanelOrModal
+      embedded={embedded}
       open={open}
       onClose={close}
       title={roleLabel ? `Add a new ${roleLabel}` : "Invite a user"}
@@ -99,17 +101,9 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
           ? `They will receive an email with a temporary password and a setup link to join as ${roleLabel}.`
           : "They will receive an email with a temporary password and a setup link."
       }
+      embeddedMaxWidthClassName="w-full"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-        <div className="flex justify-center">
-          <AvatarUploadField
-            file={photoFile}
-            onSelect={setPhotoFile}
-            onRemove={() => setPhotoFile(null)}
-            busy={busy}
-          />
-        </div>
-
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
         {!fixedRole && (
           <Controller
             control={control}
@@ -120,7 +114,7 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
                   Roles<span className="ml-0.5 text-error">*</span>
                 </legend>
                 <p className="-mt-1 mb-1 text-xs text-body-2">Assign one or more roles this person can operate as.</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {roleOptions.map((role) => {
                     const checked = (field.value ?? []).includes(role.name);
                     return (
@@ -155,26 +149,42 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
           />
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="First name" required error={errors.firstName?.message} {...register("firstName")} />
-          <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
-        </div>
-        <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
-        <Controller
-          control={control}
-          name="phoneNumber"
-          render={({ field }) => (
-            <PhoneNumberField
-              label="Phone number"
-              value={field.value ?? ""}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              name={field.name}
-              error={errors.phoneNumber?.message}
+        <div
+          className={`flex flex-col gap-5 rounded-2xl border border-grey-200 bg-surface p-4 sm:p-5 ${
+            embedded ? "lg:flex-row lg:items-start" : ""
+          }`}
+        >
+          <div className="flex justify-center lg:justify-start">
+            <AvatarUploadField
+              file={photoFile}
+              onSelect={setPhotoFile}
+              onRemove={() => setPhotoFile(null)}
+              busy={busy}
             />
-          )}
-        />
-        <TextField label="Date of birth" type="date" error={errors.dateOfBirth?.message} {...register("dateOfBirth")} />
+          </div>
+          <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextField label="First name" required error={errors.firstName?.message} {...register("firstName")} />
+            <TextField label="Last name" error={errors.lastName?.message} {...register("lastName")} />
+            <div className="sm:col-span-2">
+              <TextField label="Email" type="email" required error={errors.email?.message} {...register("email")} />
+            </div>
+            <Controller
+              control={control}
+              name="phoneNumber"
+              render={({ field }) => (
+                <PhoneNumberField
+                  label="Phone number"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  error={errors.phoneNumber?.message}
+                />
+              )}
+            />
+            <TextField label="Date of birth" type="date" error={errors.dateOfBirth?.message} {...register("dateOfBirth")} />
+          </div>
+        </div>
 
         {createUser.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
@@ -187,19 +197,19 @@ export function CreateUserModal({ open, onClose, fixedRole, excludeRoleNames, al
           </p>
         )}
 
-        <div className="mt-2 flex gap-3">
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={close}
-            className="h-11 flex-1 rounded-full border border-grey-300 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+            className="h-11 flex-1 rounded-full border border-grey-300 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100 sm:max-w-[200px]"
           >
             Cancel
           </button>
-          <PillButton type="submit" variant="teal" className="h-11 flex-1" disabled={busy}>
+          <PillButton type="submit" variant="teal" className="h-11 flex-1 sm:max-w-[220px]" disabled={busy}>
             {busy ? "Inviting…" : "Send invite"}
           </PillButton>
         </div>
       </form>
-    </Modal>
+    </PanelOrModal>
   );
 }

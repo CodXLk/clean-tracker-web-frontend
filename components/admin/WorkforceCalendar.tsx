@@ -417,7 +417,9 @@ function OccurrenceScopeDialog({ state, isPending, onSelect, onCancel }: Occurre
               type="button"
               onClick={() => onSelect("ALL")}
               disabled={isPending}
-              className="flex-1 rounded-xl bg-primary py-2 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              className={`flex-1 rounded-xl py-2 text-sm font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 ${
+                isDelete ? "bg-error hover:bg-error/90" : "bg-primary hover:bg-primary-variant"
+              }`}
             >
               {isPending ? "Saving…" : "Confirm"}
             </button>
@@ -468,7 +470,9 @@ function OccurrenceScopeDialog({ state, isPending, onSelect, onCancel }: Occurre
               type="button"
               disabled={isPending}
               onClick={() => onSelect(option.scope)}
-              className="rounded-xl border border-grey-300 px-4 py-2.5 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              className={`rounded-xl border border-grey-300 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 ${
+                isDelete ? "hover:border-error hover:bg-error/5" : "hover:border-primary hover:bg-primary/5"
+              }`}
             >
               <span className="block text-sm font-medium text-on-surface">{option.label}</span>
               <span className="block text-xs text-grey-500">{option.hint}</span>
