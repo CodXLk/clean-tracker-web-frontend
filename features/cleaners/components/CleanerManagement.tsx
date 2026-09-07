@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserPlus, Eye, Pencil, RefreshCw, Ban } from "lucide-react";
+import { UserPlus, Eye, Pencil, RefreshCw, Ban, ShieldCheck, FileText } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useDeactivateUser, useResendSetup } from "@/features/users/hooks/useUserActions";
 import { CreateUserModal } from "@/features/users/components/CreateUserModal";
 import { UserDetailModal } from "@/features/users/components/UserDetailModal";
 import { EditUserModal } from "@/features/users/components/EditUserModal";
+import { AssignRolesModal } from "@/features/users/components/AssignRolesModal";
+import { UserDocumentsModal } from "@/features/users/components/UserDocumentsModal";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
 import type { User } from "@/features/users/schemas/user.schema";
 import { canManageCleaners } from "@/features/users/lib/permissions";
@@ -29,10 +31,15 @@ function StatusPill({ user }: { user: User }) {
   return <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">Active</span>;
 }
 
+type CleanerDetail =
+  | { kind: "create" }
+  | { kind: "view"; user: User }
+  | { kind: "edit"; user: User }
+  | { kind: "roles"; user: User }
+  | { kind: "documents"; user: User };
+
 export function CleanerManagement() {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [detailUser, setDetailUser] = useState<User | null>(null);
-  const [editUser, setEditUser] = useState<User | null>(null);
+  const [detail, setDetail] = useState<CleanerDetail | null>(null);
   const [search, setSearch] = useState("");
   const me = useMe();
   const usersQuery = useUsers();
@@ -41,7 +48,9 @@ export function CleanerManagement() {
 
   const canManage = canManageCleaners(me.data?.role);
   const cleaners = useMemo(() => {
-    const list = usersQuery.data?.filter((u) => u.role === "CLEANER") ?? [];
+    // Include anyone who holds the CLEANER role — e.g. a supervisor who is also a cleaner.
+    const list =
+      usersQuery.data?.filter((u) => (u.roles?.length ? u.roles : [u.role]).includes("CLEANER")) ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter((u) =>
@@ -55,6 +64,20 @@ export function CleanerManagement() {
 
   return (
     <>
+      {detail ? (
+        detail.kind === "create" ? (
+          <CreateUserModal embedded open onClose={() => setDetail(null)} fixedRole="CLEANER" />
+        ) : detail.kind === "view" ? (
+          <UserDetailModal embedded open onClose={() => setDetail(null)} user={detail.user} />
+        ) : detail.kind === "roles" ? (
+          <AssignRolesModal embedded open onClose={() => setDetail(null)} user={detail.user} />
+        ) : detail.kind === "documents" ? (
+          <UserDocumentsModal embedded open onClose={() => setDetail(null)} user={detail.user} />
+        ) : (
+          <EditUserModal embedded open onClose={() => setDetail(null)} user={detail.user} />
+        )
+      ) : (
+      <>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput
           value={search}
@@ -65,7 +88,7 @@ export function CleanerManagement() {
         {canManage && (
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
+            onClick={() => setDetail({ kind: "create" })}
             className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
           >
             <UserPlus size={18} aria-hidden="true" />
@@ -109,8 +132,10 @@ export function CleanerManagement() {
                         <RowMenu
                           label={`Actions for ${user.email}`}
                           items={[
-                            { label: "View profile", icon: Eye, onClick: () => setDetailUser(user) },
-                            { label: "Edit details", icon: Pencil, onClick: () => setEditUser(user) },
+                            { label: "View profile", icon: Eye, onClick: () => setDetail({ kind: "view", user }) },
+                            { label: "Edit details", icon: Pencil, onClick: () => setDetail({ kind: "edit", user }) },
+                            { label: "Assign roles", icon: ShieldCheck, onClick: () => setDetail({ kind: "roles", user }) },
+                            { label: "Documents", icon: FileText, onClick: () => setDetail({ kind: "documents", user }) },
                             ...(!user.setupComplete && user.active
                               ? [{ label: "Resend setup", icon: RefreshCw, onClick: () => resend.mutate(user.id) }]
                               : []),
@@ -137,13 +162,8 @@ export function CleanerManagement() {
           <EmptyState title="No cleaners yet" description="Add your first cleaner to get started." />
         )}
       </div>
-
-      {canManage && (
-        <CreateUserModal open={modalOpen} onClose={() => setModalOpen(false)} fixedRole="CLEANER" />
+      </>
       )}
-
-      <UserDetailModal open={detailUser !== null} onClose={() => setDetailUser(null)} user={detailUser} />
-      <EditUserModal open={editUser !== null} onClose={() => setEditUser(null)} user={editUser} />
     </>
   );
 }

@@ -65,6 +65,8 @@ export interface CalendarEvent {
   templateName: string | null;
   /** True when this block represents multiple tasks of one assignment (read-only). */
   grouped?: boolean;
+  /** True when the task has outsource cleaners assigned — highlights the name cell. */
+  outsourced?: boolean;
   /** Underlying per-task events when grouped (length > 1). */
   members?: CalendarEvent[];
   /** Assigned cleaner slots (profiles) and who fills them. */
@@ -319,6 +321,7 @@ function mapOccurrenceToEvent(occurrence: TaskOccurrence): CalendarEvent {
     cleanerProfiles: occurrence.cleanerProfiles,
     supervisorProfiles: occurrence.supervisorProfiles,
     items: occurrence.items,
+    outsourced: (occurrence.outsourceCleanerProfiles?.length ?? 0) > 0,
     raw: occurrence,
   };
 }
@@ -357,6 +360,7 @@ function groupDayEvents(dayEvents: CalendarEvent[]): CalendarEvent[] {
       startTime: members[0].startTime,
       endTime,
       grouped: true,
+      outsourced: members.some((m) => m.outsourced),
       members,
     });
   }
@@ -413,7 +417,9 @@ function OccurrenceScopeDialog({ state, isPending, onSelect, onCancel }: Occurre
               type="button"
               onClick={() => onSelect("ALL")}
               disabled={isPending}
-              className="flex-1 rounded-xl bg-primary py-2 text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              className={`flex-1 rounded-xl py-2 text-sm font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 ${
+                isDelete ? "bg-error hover:bg-error/90" : "bg-primary hover:bg-primary-variant"
+              }`}
             >
               {isPending ? "Saving…" : "Confirm"}
             </button>
@@ -464,7 +470,9 @@ function OccurrenceScopeDialog({ state, isPending, onSelect, onCancel }: Occurre
               type="button"
               disabled={isPending}
               onClick={() => onSelect(option.scope)}
-              className="rounded-xl border border-grey-300 px-4 py-2.5 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+              className={`rounded-xl border border-grey-300 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 ${
+                isDelete ? "hover:border-error hover:bg-error/5" : "hover:border-primary hover:bg-primary/5"
+              }`}
             >
               <span className="block text-sm font-medium text-on-surface">{option.label}</span>
               <span className="block text-xs text-grey-500">{option.hint}</span>
@@ -1089,7 +1097,14 @@ function WeekView({
                       >
                         <p className="flex items-center gap-1 text-xs font-semibold leading-tight truncate">
                           {ev.recurring && <Repeat size={10} className="shrink-0" aria-hidden="true" />}
-                          <span className="truncate">{ev.title}</span>
+                          <span
+                            className={cn(
+                              "truncate",
+                              ev.outsourced && "rounded bg-amber-100 px-1 text-amber-900",
+                            )}
+                          >
+                            {ev.title}
+                          </span>
                         </p>
                         {height > 40 && (
                           <p className="text-xs opacity-80 truncate">{ev.subtitle}</p>

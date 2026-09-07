@@ -5,36 +5,20 @@ import { Handshake } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { PillButton } from "@/components/shared/PillButton";
 import { TextField } from "@/components/shared/TextField";
-import { FilterTabs } from "@/components/shared/FilterTabs";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { useSites } from "@/features/user-management/hooks/useSites";
-import { useFloors } from "@/features/user-management/hooks/useFloors";
-import { useAreas } from "@/features/user-management/hooks/useAreas";
-import { useOccurrences } from "@/features/workforce/hooks/useAssignments";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import {
   useCreateOutsourceProject,
   useUpdateOutsourceProject,
 } from "@/features/outsource/hooks/useOutsourceProjects";
-import {
-  OUTSOURCE_SCOPE_LABELS,
-  type OutsourceProject,
-  type OutsourceScopeType,
-} from "@/features/outsource/schemas/outsourceProject.schema";
-
-const SCOPE_TABS: OutsourceScopeType[] = ["SITE", "FLOORS", "AREAS", "TASKS"];
+import { type OutsourceProject } from "@/features/outsource/schemas/outsourceProject.schema";
 
 function toISODate(d: Date): string {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function addDays(d: Date, days: number): Date {
-  const n = new Date(d);
-  n.setDate(n.getDate() + days);
-  return n;
 }
 
 interface OutsourceProjectModalProps {
@@ -61,10 +45,6 @@ export function OutsourceProjectModal({
   const [contactPersonName, setContactPersonName] = useState(project?.contactPersonName ?? "");
   const [contactNumber, setContactNumber] = useState(project?.contactNumber ?? "");
   const [siteId, setSiteId] = useState(project?.siteId ?? "");
-  const [scopeType, setScopeType] = useState<OutsourceScopeType>(project?.scopeType ?? "SITE");
-  const [floorIds, setFloorIds] = useState<string[]>(project?.floorIds ?? []);
-  const [areaIds, setAreaIds] = useState<string[]>(project?.areaIds ?? []);
-  const [taskIds, setTaskIds] = useState<string[]>(project?.taskIds ?? []);
   const [startDate, setStartDate] = useState(project?.startDate ?? toISODate(new Date()));
   const [endDate, setEndDate] = useState(project?.endDate ?? "");
   const [numberOfOutsourceCleaners, setNumberOfOutsourceCleaners] = useState(
@@ -80,15 +60,6 @@ export function OutsourceProjectModal({
   const isError = isEdit ? update.isError : create.isError;
 
   const sitesQuery = useSites();
-  const floorsQuery = useFloors(siteId || undefined);
-  const areasQuery = useAreas(undefined, { enabled: !!siteId && scopeType === "AREAS" });
-  const taskWindow = useMemo(() => {
-    const today = new Date();
-    return { from: toISODate(today), to: toISODate(addDays(today, 180)) };
-  }, []);
-  const occurrencesQuery = useOccurrences(
-    siteId && scopeType === "TASKS" ? { ...taskWindow, siteId } : undefined,
-  );
 
   const siteOptions: SelectOption[] = useMemo(
     () =>
@@ -100,47 +71,11 @@ export function OutsourceProjectModal({
     [sitesQuery.data],
   );
 
-  const floors = useMemo(
-    () => [...(floorsQuery.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    [floorsQuery.data],
-  );
-  const siteFloorIds = useMemo(() => new Set(floors.map((f) => f.id)), [floors]);
-  const areas = useMemo(
-    () =>
-      [...(areasQuery.data ?? [])]
-        .filter((a) => siteFloorIds.has(a.floorId))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [areasQuery.data, siteFloorIds],
-  );
-
-  // Distinct tasks across the upcoming window (id + label).
-  const tasks = useMemo(() => {
-    const map = new Map<string, { id: string; label: string }>();
-    for (const o of occurrencesQuery.data ?? []) {
-      if (!map.has(o.taskId)) {
-        map.set(o.taskId, { id: o.taskId, label: `${o.name} · ${o.floorName} / ${o.areaName}` });
-      }
-    }
-    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
-  }, [occurrencesQuery.data]);
-
-  function resetSiteDependent() {
-    setFloorIds([]);
-    setAreaIds([]);
-    setTaskIds([]);
-  }
-
-  function toggle(list: string[], id: string): string[] {
-    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-  }
-
   function resetAll() {
     setCompanyName("");
     setContactPersonName("");
     setContactNumber("");
     setSiteId("");
-    setScopeType("SITE");
-    resetSiteDependent();
     setStartDate(toISODate(new Date()));
     setEndDate("");
     setNumberOfOutsourceCleaners(1);
@@ -161,9 +96,6 @@ export function OutsourceProjectModal({
     if (!startDate) return "Select a start date.";
     if (!endDate) return "Select an end date.";
     if (endDate < startDate) return "End date cannot be before the start date.";
-    if (scopeType === "FLOORS" && floorIds.length === 0) return "Select at least one floor.";
-    if (scopeType === "AREAS" && areaIds.length === 0) return "Select at least one area.";
-    if (scopeType === "TASKS" && taskIds.length === 0) return "Select at least one task.";
     return null;
   }
 
@@ -179,10 +111,6 @@ export function OutsourceProjectModal({
       companyName: companyName.trim(),
       contactPersonName: contactPersonName.trim() || undefined,
       contactNumber: contactNumber.trim() || undefined,
-      scopeType,
-      floorIds: scopeType === "FLOORS" ? floorIds : undefined,
-      areaIds: scopeType === "AREAS" ? areaIds : undefined,
-      taskIds: scopeType === "TASKS" ? taskIds : undefined,
       startDate,
       endDate,
       numberOfOutsourceCleaners,
@@ -220,7 +148,7 @@ export function OutsourceProjectModal({
       open={open}
       onClose={handleClose}
       title={isEdit ? "Edit outsource project" : "New outsource project"}
-      description="Outsource a site, floors, areas or specific tasks to an external provider."
+      description="Link a site to an external provider. Assign outsource cleaner and supervisor slots, then pick them when creating assignments."
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -251,7 +179,6 @@ export function OutsourceProjectModal({
             onChange={(value) => {
               if (isEdit) return;
               setSiteId(value);
-              resetSiteDependent();
             }}
             placeholder="Select a site"
             searchPlaceholder="Search sites…"
@@ -259,56 +186,6 @@ export function OutsourceProjectModal({
             disabled={isEdit}
           />
         </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-on-surface">Outsource scope</span>
-          <FilterTabs<OutsourceScopeType>
-            options={SCOPE_TABS}
-            value={scopeType}
-            onChange={(value) => {
-              setScopeType(value);
-              resetSiteDependent();
-            }}
-            getLabel={(v) => OUTSOURCE_SCOPE_LABELS[v]}
-          />
-        </div>
-
-        {!siteId && scopeType !== "SITE" && (
-          <p className="rounded-lg bg-grey-50 px-3 py-2 text-xs text-grey-500">Select a site first.</p>
-        )}
-
-        {siteId && scopeType === "FLOORS" && (
-          <ScopeChecklist
-            title="Floors"
-            loading={floorsQuery.isLoading}
-            empty="This site has no floors."
-            items={floors.map((f) => ({ id: f.id, label: f.name }))}
-            selected={floorIds}
-            onToggle={(id) => setFloorIds((prev) => toggle(prev, id))}
-          />
-        )}
-
-        {siteId && scopeType === "AREAS" && (
-          <ScopeChecklist
-            title="Areas"
-            loading={areasQuery.isLoading}
-            empty="This site has no areas."
-            items={areas.map((a) => ({ id: a.id, label: a.name }))}
-            selected={areaIds}
-            onToggle={(id) => setAreaIds((prev) => toggle(prev, id))}
-          />
-        )}
-
-        {siteId && scopeType === "TASKS" && (
-          <ScopeChecklist
-            title="Tasks (next 180 days)"
-            loading={occurrencesQuery.isLoading}
-            empty="No upcoming tasks found for this site."
-            items={tasks}
-            selected={taskIds}
-            onToggle={(id) => setTaskIds((prev) => toggle(prev, id))}
-          />
-        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
@@ -386,46 +263,5 @@ export function OutsourceProjectModal({
         </div>
       </div>
     </Modal>
-  );
-}
-
-interface ScopeChecklistProps {
-  title: string;
-  loading: boolean;
-  empty: string;
-  items: { id: string; label: string }[];
-  selected: string[];
-  onToggle: (id: string) => void;
-}
-
-function ScopeChecklist({ title, loading, empty, items, selected, onToggle }: ScopeChecklistProps) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-grey-500">
-        {title}
-        {selected.length > 0 ? ` · ${selected.length} selected` : ""}
-      </span>
-      <div className="max-h-48 overflow-y-auto rounded-xl border border-grey-200 p-1.5">
-        {loading ? (
-          <p className="px-2 py-3 text-sm text-grey-500">Loading…</p>
-        ) : items.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-grey-500">{empty}</p>
-        ) : (
-          items.map((it) => (
-            <label
-              key={it.id}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-on-surface hover:bg-grey-50"
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(it.id)}
-                onChange={() => onToggle(it.id)}
-              />
-              <span className="truncate">{it.label}</span>
-            </label>
-          ))
-        )}
-      </div>
-    </div>
   );
 }

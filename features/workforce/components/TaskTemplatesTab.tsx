@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ListChecks, Plus, Pencil, Trash2, Clock } from "lucide-react";
+import { ListChecks, Plus, Pencil, Trash2, Clock, Eye } from "lucide-react";
 import { useTaskTemplates, useDeleteTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { TaskTemplateModal } from "@/features/workforce/components/TaskTemplateModal";
+import { Modal } from "@/components/shared/Modal";
 import { SearchInput } from "@/components/shared/SearchInput";
 import type { TaskTemplate } from "@/features/workforce/schemas/taskTemplate.schema";
 
@@ -11,12 +12,14 @@ function totalDuration(template: TaskTemplate): number {
   return template.tasks.reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0);
 }
 
+type TemplateDetail = { kind: "new" } | { kind: "edit"; template: TaskTemplate };
+
 export function TaskTemplatesTab() {
   const templatesQuery = useTaskTemplates();
   const deleteMutation = useDeleteTaskTemplate();
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<TaskTemplate | null>(null);
+  const [detail, setDetail] = useState<TemplateDetail | null>(null);
+  const [viewing, setViewing] = useState<TaskTemplate | null>(null);
   const [pendingDelete, setPendingDelete] = useState<TaskTemplate | null>(null);
   const [search, setSearch] = useState("");
 
@@ -32,13 +35,11 @@ export function TaskTemplatesTab() {
   }, [templatesQuery.data, search]);
 
   function openNew() {
-    setEditing(null);
-    setModalOpen(true);
+    setDetail({ kind: "new" });
   }
 
   function openEdit(template: TaskTemplate) {
-    setEditing(template);
-    setModalOpen(true);
+    setDetail({ kind: "edit", template });
   }
 
   async function confirmDelete() {
@@ -52,6 +53,15 @@ export function TaskTemplatesTab() {
 
   return (
     <div>
+      {detail ? (
+        <TaskTemplateModal
+          embedded
+          open
+          onClose={() => setDetail(null)}
+          template={detail.kind === "edit" ? detail.template : null}
+        />
+      ) : (
+      <>
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput
@@ -92,78 +102,98 @@ export function TaskTemplatesTab() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {templates.map((template) => {
-            const mins = totalDuration(template);
-            return (
-              <div
-                key={template.id}
-                className="flex flex-col rounded-2xl border border-grey-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-on-surface">{template.name}</h3>
-                    <p className="mt-0.5 text-xs text-grey-500">
-                      {template.tasks.length} {template.tasks.length === 1 ? "task" : "tasks"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      aria-label="Edit template"
-                      onClick={() => openEdit(template)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink"
-                    >
-                      <Pencil size={15} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Delete template"
-                      onClick={() => setPendingDelete(template)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-red-50 hover:text-danger"
-                    >
-                      <Trash2 size={15} aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-
-                {template.tasks.length > 0 && (
-                  <ul className="mt-3 flex flex-col gap-1">
-                    {template.tasks.slice(0, 4).map((t, i) => (
-                      <li key={i} className="flex items-center gap-2 text-xs text-grey-600">
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary/40" />
-                        <span className="truncate">{t.name}</span>
-                      </li>
-                    ))}
-                    {template.tasks.length > 4 && (
-                      <li className="text-xs text-grey-400">+{template.tasks.length - 4} more</li>
-                    )}
-                  </ul>
-                )}
-
-                <div className="mt-4 flex items-center gap-3 border-t border-grey-100 pt-3 text-xs text-grey-500">
-                  {mins > 0 && (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={13} aria-hidden="true" />
-                      {mins} min
-                    </span>
-                  )}
-                  {template.updatedByName && (
-                    <span className="truncate">Updated by {template.updatedByName}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-grey-300 text-xs uppercase tracking-wide text-grey-500">
+                  <th className="px-5 py-3 font-medium">Template</th>
+                  <th className="px-5 py-3 font-medium">Tasks</th>
+                  <th className="px-5 py-3 font-medium">Duration</th>
+                  <th className="px-5 py-3 font-medium">Updated by</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map((template) => {
+                  const mins = totalDuration(template);
+                  return (
+                    <tr key={template.id} className="border-b border-grey-100 last:border-0">
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-on-surface">{template.name}</span>
+                          {template.tasks.length > 0 && (
+                            <span className="max-w-md truncate text-xs text-grey-500">
+                              {template.tasks.slice(0, 3).map((t) => t.name).join(", ")}
+                              {template.tasks.length > 3 ? ` +${template.tasks.length - 3} more` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-grey-700">
+                        {template.tasks.length} {template.tasks.length === 1 ? "task" : "tasks"}
+                      </td>
+                      <td className="px-5 py-3.5 text-grey-700">
+                        {mins > 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock size={13} aria-hidden="true" />
+                            {mins} min
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-grey-700">{template.updatedByName ?? "—"}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label="View template"
+                            onClick={() => setViewing(template)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink"
+                          >
+                            <Eye size={15} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Edit template"
+                            onClick={() => openEdit(template)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink"
+                          >
+                            <Pencil size={15} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Delete template"
+                            onClick={() => setPendingDelete(template)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-red-50 hover:text-danger"
+                          >
+                            <Trash2 size={15} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
+      </>
+      )}
 
-      {/* Editor modal */}
-      <TaskTemplateModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        template={editing}
-      />
+      {viewing && (
+        <TemplateViewModal
+          template={viewing}
+          onEdit={() => {
+            const current = viewing;
+            setViewing(null);
+            openEdit(current);
+          }}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       {/* Delete confirmation */}
       {pendingDelete && (
@@ -204,5 +234,67 @@ export function TaskTemplatesTab() {
         </div>
       )}
     </div>
+  );
+}
+
+interface TemplateViewModalProps {
+  template: TaskTemplate;
+  onEdit: () => void;
+  onClose: () => void;
+}
+
+function TemplateViewModal({ template, onEdit, onClose }: TemplateViewModalProps) {
+  const mins = totalDuration(template);
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={template.name}
+      description={`${template.tasks.length} ${template.tasks.length === 1 ? "task" : "tasks"}${mins > 0 ? ` · ${mins} min total` : ""}`}
+      maxWidthClassName="max-w-lg"
+    >
+      <div className="flex flex-col gap-4">
+        {template.tasks.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-grey-200 px-3 py-8 text-center text-sm text-grey-500">
+            This template has no tasks yet.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {template.tasks.map((task, i) => (
+              <li key={`${task.name}-${i}`} className="rounded-xl border border-grey-200 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-on-surface">{task.name}</p>
+                    {task.description && <p className="mt-0.5 text-xs text-grey-500">{task.description}</p>}
+                  </div>
+                  {task.durationMinutes != null && task.durationMinutes > 0 && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-grey-100 px-2.5 py-0.5 text-xs font-medium text-grey-600">
+                      <Clock size={12} aria-hidden="true" /> {task.durationMinutes} min
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex justify-end gap-2 border-t border-grey-100 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-grey-300 px-4 py-2 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-variant"
+          >
+            <Pencil size={15} aria-hidden="true" /> Edit template
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

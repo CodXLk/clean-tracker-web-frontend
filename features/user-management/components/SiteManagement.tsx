@@ -1,22 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Plus, Pencil, Trash2, UserCog, Users, Clock, CalendarClock } from "lucide-react";
+import { ExternalLink, Plus, Pencil, Trash2, Clock, CalendarClock, Eye } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { DataTable, type Column } from "./DataTable";
 import { RowMenu } from "./RowMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
+import { SiteDetailView } from "./SiteDetailView";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
-import { CleanerProfilesModal } from "./CleanerProfilesModal";
-import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
 import { ShiftsModal } from "./ShiftsModal";
 import { SupervisorScheduleModal } from "./SupervisorScheduleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
 import { useMe } from "@/features/auth/hooks/useMe";
 import type { Site } from "@/features/user-management/schemas/site.schema";
+
+type SiteDetail =
+  | { kind: "create" }
+  | { kind: "view"; site: Site }
+  | { kind: "edit"; site: Site }
+  | { kind: "shifts"; site: Site }
+  | { kind: "schedule"; site: Site };
 
 export function SiteManagement() {
   const query = useSites();
@@ -26,13 +32,8 @@ export function SiteManagement() {
   const isSupervisor = me.data?.role === "SUPERVISOR";
 
   const [search, setSearch] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Site | null>(null);
+  const [detail, setDetail] = useState<SiteDetail | null>(null);
   const [deleting, setDeleting] = useState<Site | null>(null);
-  const [supervisorsSite, setSupervisorsSite] = useState<Site | null>(null);
-  const [cleanersSite, setCleanersSite] = useState<Site | null>(null);
-  const [shiftsSite, setShiftsSite] = useState<Site | null>(null);
-  const [scheduleSite, setScheduleSite] = useState<Site | null>(null);
 
   // A supervisor only ever sees sites they're assigned to — there's no bulk "my
   // sites" endpoint, so this filters the full list against each site's roster.
@@ -123,65 +124,47 @@ export function SiteManagement() {
       header: "",
       headerClassName: "text-right",
       cellClassName: "text-right",
-      cell: (s) => (
-        <div className="flex justify-end">
-          <RowMenu
-            label={`Actions for ${s.name}`}
-            items={
-              isSupervisor
-                ? [
-                    {
-                      label: "Assign Cleaners",
-                      icon: Users,
-                      onClick: () => setCleanersSite(s),
-                    },
-                  ]
-                : [
-                    {
-                      label: "Supervisor slots",
-                      icon: UserCog,
-                      onClick: () => setSupervisorsSite(s),
-                    },
-                    {
-                      label: "Assign Cleaners",
-                      icon: Users,
-                      onClick: () => setCleanersSite(s),
-                    },
-                    {
-                      label: "Shifts",
-                      icon: Clock,
-                      onClick: () => setShiftsSite(s),
-                    },
-                    {
-                      label: "Inspection schedule",
-                      icon: CalendarClock,
-                      onClick: () => setScheduleSite(s),
-                    },
-                    {
-                      label: "Edit",
-                      icon: Pencil,
-                      onClick: () => {
-                        setEditing(s);
-                        setFormOpen(true);
-                      },
-                    },
-                    {
-                      label: "Delete",
-                      icon: Trash2,
-                      destructive: true,
-                      onClick: () => setDeleting(s),
-                    },
-                  ]
-            }
-          />
-        </div>
-      ),
+      cell: (s) =>
+        isSupervisor ? null : (
+          <div className="flex justify-end">
+            <RowMenu
+              label={`Actions for ${s.name}`}
+              items={[
+                {
+                  label: "View",
+                  icon: Eye,
+                  onClick: () => setDetail({ kind: "view", site: s }),
+                },
+                {
+                  label: "Shifts",
+                  icon: Clock,
+                  onClick: () => setDetail({ kind: "shifts", site: s }),
+                },
+                {
+                  label: "Inspection schedule",
+                  icon: CalendarClock,
+                  onClick: () => setDetail({ kind: "schedule", site: s }),
+                },
+                {
+                  label: "Edit",
+                  icon: Pencil,
+                  onClick: () => setDetail({ kind: "edit", site: s }),
+                },
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  destructive: true,
+                  onClick: () => setDeleting(s),
+                },
+              ]}
+            />
+          </div>
+        ),
     },
   ];
 
   function openCreate() {
-    setEditing(null);
-    setFormOpen(true);
+    setDetail({ kind: "create" });
   }
 
   function confirmDelete() {
@@ -191,36 +174,53 @@ export function SiteManagement() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search sites…" className="sm:max-w-xs" />
-        {!isSupervisor && (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
-          >
-            <Plus size={18} aria-hidden="true" />
-            Add site
-          </button>
-        )}
-      </div>
+      {detail ? (
+        detail.kind === "create" || detail.kind === "edit" ? (
+          <SiteFormModal
+            embedded
+            open
+            onClose={() => setDetail(null)}
+            site={detail.kind === "edit" ? detail.site : null}
+          />
+        ) : detail.kind === "view" ? (
+          <SiteDetailView open onClose={() => setDetail(null)} site={detail.site} />
+        ) : detail.kind === "shifts" ? (
+          <ShiftsModal embedded open onClose={() => setDetail(null)} site={detail.site} />
+        ) : (
+          <SupervisorScheduleModal embedded open onClose={() => setDetail(null)} site={detail.site} />
+        )
+      ) : (
+        <>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search sites…" className="sm:max-w-xs" />
+            {!isSupervisor && (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
+              >
+                <Plus size={18} aria-hidden="true" />
+                Add site
+              </button>
+            )}
+          </div>
 
-      <DataTable
-        rows={rows}
-        columns={columns}
-        getRowId={(s) => s.id}
-        isLoading={query.isLoading || (isSupervisor && supervisorSites.isLoading)}
-        isError={query.isError}
-        errorMessage="Failed to load sites."
-        emptyTitle="No sites yet"
-        emptyDescription={
-          isSupervisor
-            ? "No sites are assigned to you yet."
-            : "Add your first site and link it to a client-company and client."
-        }
-      />
-
-      <SiteFormModal open={formOpen} onClose={() => setFormOpen(false)} site={editing} />
+          <DataTable
+            rows={rows}
+            columns={columns}
+            getRowId={(s) => s.id}
+            isLoading={query.isLoading || (isSupervisor && supervisorSites.isLoading)}
+            isError={query.isError}
+            errorMessage="Failed to load sites."
+            emptyTitle="No sites yet"
+            emptyDescription={
+              isSupervisor
+                ? "No sites are assigned to you yet."
+                : "Add your first site and link it to a client-company and client."
+            }
+          />
+        </>
+      )}
 
       <ConfirmDialog
         open={!!deleting}
@@ -233,27 +233,6 @@ export function SiteManagement() {
           setDeleting(null);
           deleteMutation.reset();
         }}
-      />
-
-      <SupervisorProfilesModal
-        open={!!supervisorsSite}
-        onClose={() => setSupervisorsSite(null)}
-        site={supervisorsSite}
-      />
-
-      <CleanerProfilesModal
-        open={!!cleanersSite}
-        onClose={() => setCleanersSite(null)}
-        site={cleanersSite}
-        restrictToAssignOnly={isSupervisor}
-      />
-
-      <ShiftsModal open={!!shiftsSite} onClose={() => setShiftsSite(null)} site={shiftsSite} />
-
-      <SupervisorScheduleModal
-        open={!!scheduleSite}
-        onClose={() => setScheduleSite(null)}
-        site={scheduleSite}
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import type { PillButtonVariant } from "@/components/shared/PillButton";
 
-export type SlideButtonVariant = Exclude<PillButtonVariant, "success"> | "checkout";
+export type SlideButtonVariant = Exclude<PillButtonVariant, "success" | "danger"> | "checkout";
 
 const THUMB_SIZE    = 48; // matches h-12 w-12
 const TRACK_PADDING = 4;  // matches p-1

@@ -1,10 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Nfc, Loader2, Clock, ArrowRight, MoonStar } from "lucide-react";
-import { Modal } from "@/components/shared/Modal";
+import {
+  Nfc,
+  Loader2,
+  Clock,
+  ArrowRight,
+  MoonStar,
+  Building2,
+  User,
+  MapPin,
+  CalendarDays,
+  ShieldCheck,
+  Settings2,
+  Layers,
+} from "lucide-react";
+import { PanelOrModal } from "@/components/shared/PanelOrModal";
 import { TextField } from "@/components/shared/TextField";
 import { TimeField } from "@/components/shared/TimeField";
 import { PhoneNumberField } from "@/components/shared/PhoneNumberField";
@@ -33,11 +46,13 @@ import {
   CERTIFICATE_TYPE_LABELS,
 } from "@/features/users/schemas/document.schema";
 import { isNfcSupported, readNfcTag, NfcError } from "@/lib/nfc";
+import { cn } from "@/lib/utils/cn";
 
 interface SiteFormModalProps {
   open: boolean;
   onClose: () => void;
   site?: Site | null;
+  embedded?: boolean;
 }
 
 /** Duration + overnight flag for a general-task window (end earlier than start = next day). */
@@ -64,6 +79,36 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
   SATURDAY: "Saturday",
   SUNDAY: "Sunday",
 };
+
+/** A titled card that groups related form fields — mirrors the read-only Site view sections. */
+function FormSection({
+  icon: Icon,
+  title,
+  description,
+  className,
+  children,
+}: {
+  icon: ComponentType<{ size?: number; className?: string }>;
+  title: string;
+  description?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cn("rounded-2xl border border-grey-200 bg-surface p-4 sm:p-5", className)}>
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-ink">
+          <Icon size={16} />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-on-surface">{title}</h3>
+          {description && <p className="text-xs text-grey-500">{description}</p>}
+        </div>
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
+  );
+}
 
 const EMPTY: SiteFormInput = {
   clientCompanyId: "",
@@ -92,7 +137,7 @@ const EMPTY: SiteFormInput = {
   cleaningTemplates: [],
 };
 
-export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
+export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalProps) {
   const isEdit = !!site;
   const companiesQuery = useClientCompanies();
   const createMutation = useCreateSite();
@@ -250,14 +295,18 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
 
   return (
     <>
-      <Modal
+      <PanelOrModal
+        embedded={embedded}
         open={open}
         onClose={onClose}
         title={isEdit ? "Edit site" : "Add a site"}
         description="Select a client-company and client, then enter the site details."
         maxWidthClassName="max-w-2xl"
+        embeddedMaxWidthClassName="w-full"
       >
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <FormSection icon={Building2} title="Client & site details" className="lg:col-span-2">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller
             control={control}
@@ -338,6 +387,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             {...register("numberOfCleaners", { valueAsNumber: true })}
           />
         </div>
+        </FormSection>
+
+        <FormSection icon={User} title="Contact person">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Contact person name"
@@ -359,7 +411,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             )}
           />
         </div>
+        </FormSection>
 
+        <FormSection icon={MapPin} title="Location" className="lg:col-span-2">
         <TextField
           label="Google Maps location link"
           placeholder="Paste a Google Maps URL or pick on the map"
@@ -376,12 +430,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
         </div>
 
         <TextField label="Street address" error={errors.streetAddress?.message} {...register("streetAddress")} />
+        </FormSection>
 
-        <div className="flex flex-col gap-3 rounded-xl border border-grey-200 bg-grey-50 p-3">
-          <div className="flex items-center gap-2">
-            <Nfc size={16} className="text-teal" aria-hidden="true" />
-            <span className="text-sm font-medium text-on-surface">NFC check-in tag</span>
-          </div>
+        <FormSection icon={Nfc} title="NFC check-in tag">
+        <div className="flex flex-col gap-3">
           <p className="text-xs text-grey-500">
             Register the tag mounted at this site. Cleaners tap it to check in; if a device has no NFC,
             check-in falls back to matching their location against the map point above.
@@ -419,7 +471,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           )}
           {nfcMessage && <p className="text-xs font-medium text-teal">{nfcMessage}</p>}
         </div>
+        </FormSection>
 
+        <FormSection icon={CalendarDays} title="Schedule & working days">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Site start date"
@@ -452,9 +506,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             General assignments are scheduled only on these days, until the site end date.
           </p>
         </div>
+        </FormSection>
 
+        <FormSection icon={ShieldCheck} title="Required certificates" className="lg:col-span-2">
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-on-surface">Required certificates</span>
           <p className="text-xs text-grey-500">
             Only cleaners and supervisors holding a verified, non-expired copy of every selected
             certificate can be assigned to this site.
@@ -493,7 +548,9 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             }}
           />
         </div>
+        </FormSection>
 
+        <FormSection icon={Settings2} title="Options">
         <label className="flex items-start gap-3 rounded-lg border border-grey-200 p-3">
           <input
             type="checkbox"
@@ -522,12 +579,10 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             </span>
           </span>
         </label>
+        </FormSection>
 
+        <FormSection icon={Clock} title="General task service time" className="lg:col-span-2">
         <div className="flex flex-col gap-3">
-          <span className="flex items-center gap-1.5 text-sm font-medium text-on-surface">
-            <Clock size={15} className="text-grey-500" aria-hidden="true" />
-            General task service time
-          </span>
           <p className="text-xs text-grey-500">
             The window the client allows for general cleaning. Use one window for all working days,
             or set a different window per day. Set an end earlier than the start for an overnight
@@ -683,27 +738,31 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
             </div>
           )}
         </div>
+        </FormSection>
 
         {watch("siteType") === "HOTEL" && (
-          <Controller
-            control={control}
-            name="cleaningTemplates"
-            render={({ field }) => (
-              <CleaningTemplatesSection
-                value={field.value ?? []}
-                onChange={field.onChange}
-                numberOfCleaners={watch("numberOfCleaners") ?? 0}
-                error={errors.cleaningTemplates?.message}
-              />
-            )}
-          />
+          <FormSection icon={Layers} title="Cleaning templates" className="lg:col-span-2">
+            <Controller
+              control={control}
+              name="cleaningTemplates"
+              render={({ field }) => (
+                <CleaningTemplatesSection
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  numberOfCleaners={watch("numberOfCleaners") ?? 0}
+                  error={errors.cleaningTemplates?.message}
+                />
+              )}
+            />
+          </FormSection>
         )}
 
         {isEdit && site && (
-          <div className="flex flex-col gap-3">
+          <FormSection icon={Layers} title="Floors & areas" className="lg:col-span-2">
             <FloorsSection siteId={site.id} />
-          </div>
+          </FormSection>
         )}
+        </div>
 
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
@@ -724,7 +783,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           </PillButton>
         </div>
       </form>
-      </Modal>
+      </PanelOrModal>
 
       <FloorsModal
         open={!!floorsModalSite}

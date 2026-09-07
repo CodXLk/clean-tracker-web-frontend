@@ -207,7 +207,7 @@ export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfi
               <ArrowLeft size={16} aria-hidden="true" /> Back
             </button>
             <PillButton
-              variant="orange"
+              variant="danger"
               onClick={handleRemove}
               disabled={!removeTargetId || removeProfile.isPending}
             >

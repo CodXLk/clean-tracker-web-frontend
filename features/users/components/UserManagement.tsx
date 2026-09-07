@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserPlus, Eye, Pencil, RefreshCw, Ban } from "lucide-react";
+import { UserPlus, Eye, Pencil, RefreshCw, Ban, ShieldCheck, FileText } from "lucide-react";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useDeactivateUser, useResendSetup } from "@/features/users/hooks/useUserActions";
 import { CreateUserModal } from "./CreateUserModal";
 import { UserDetailModal } from "./UserDetailModal";
 import { EditUserModal } from "./EditUserModal";
+import { AssignRolesModal } from "./AssignRolesModal";
+import { UserDocumentsModal } from "./UserDocumentsModal";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
 import { ROLES, ROLE_LABELS, ROLE_BADGE_CLASSES, type Role, type User } from "@/features/users/schemas/user.schema";
 import { creatableRoles } from "@/features/users/lib/permissions";
@@ -52,6 +54,8 @@ export function UserManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<User | null>(null);
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [rolesUser, setRolesUser] = useState<User | null>(null);
+  const [documentsUser, setDocumentsUser] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
   const me = useMe();
   const usersQuery = useUsers();
@@ -152,6 +156,8 @@ export function UserManagement() {
                             items={[
                               { label: "View profile", icon: Eye, onClick: () => setDetailUser(user) },
                               { label: "Edit details", icon: Pencil, onClick: () => setEditUser(user) },
+                              { label: "Assign roles", icon: ShieldCheck, onClick: () => setRolesUser(user) },
+                              { label: "Documents", icon: FileText, onClick: () => setDocumentsUser(user) },
                               ...(!user.setupComplete && user.active
                                 ? [{ label: "Resend setup", icon: RefreshCw, onClick: () => resend.mutate(user.id) }]
                                 : []),
@@ -186,6 +192,8 @@ export function UserManagement() {
 
       <UserDetailModal open={detailUser !== null} onClose={() => setDetailUser(null)} user={detailUser} />
       <EditUserModal open={editUser !== null} onClose={() => setEditUser(null)} user={editUser} />
+      <AssignRolesModal open={rolesUser !== null} onClose={() => setRolesUser(null)} user={rolesUser} />
+      <UserDocumentsModal open={documentsUser !== null} onClose={() => setDocumentsUser(null)} user={documentsUser} />
     </div>
   );
 }

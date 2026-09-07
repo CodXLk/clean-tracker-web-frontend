@@ -25,6 +25,8 @@ interface UserDocumentsSectionProps {
   userId: string;
   /** When false, hide the upload form (read-only view). Defaults to true. */
   canUpload?: boolean;
+  /** Fully read-only: no upload form, no verify and no delete controls. */
+  readOnly?: boolean;
 }
 
 function formatDate(value?: string | null): string {
@@ -36,12 +38,14 @@ function formatDate(value?: string | null): string {
 function DocumentRow({
   doc,
   isManagement,
+  readOnly,
   onDelete,
   onVerify,
   busy,
 }: {
   doc: UserDocument;
   isManagement: boolean;
+  readOnly: boolean;
   onDelete: (doc: UserDocument) => void;
   onVerify: (doc: UserDocument, verified: boolean) => void;
   busy: boolean;
@@ -91,7 +95,7 @@ function DocumentRow({
         >
           View
         </a>
-        {isManagement && (
+        {isManagement && !readOnly && (
           <button
             type="button"
             disabled={busy}
@@ -105,21 +109,23 @@ function DocumentRow({
             {doc.verified ? "Un-verify" : "Verify"}
           </button>
         )}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onDelete(doc)}
-          className="rounded-full p-1.5 text-grey-400 hover:bg-error/10 hover:text-error disabled:opacity-50"
-          aria-label="Delete document"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDelete(doc)}
+            className="rounded-full p-1.5 text-grey-400 hover:bg-error/10 hover:text-error disabled:opacity-50"
+            aria-label="Delete document"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </li>
   );
 }
 
-export function UserDocumentsSection({ userId, canUpload = true }: UserDocumentsSectionProps) {
+export function UserDocumentsSection({ userId, canUpload = true, readOnly = false }: UserDocumentsSectionProps) {
   const me = useMe();
   const isManagement = MANAGEMENT_ROLES.has(me.data?.role ?? "");
 
@@ -205,12 +211,13 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
           No documents uploaded yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={`gap-2 ${readOnly ? "flex flex-col" : "grid grid-cols-1 xl:grid-cols-2"}`}>
           {documents.map((doc) => (
             <DocumentRow
               key={doc.id}
               doc={doc}
               isManagement={isManagement}
+              readOnly={readOnly}
               busy={busy}
               onDelete={(d) => remove.mutate({ documentId: d.id, userId })}
               onVerify={(d, v) => verify.mutate({ documentId: d.id, userId, verified: v })}
@@ -219,10 +226,10 @@ export function UserDocumentsSection({ userId, canUpload = true }: UserDocuments
         </ul>
       )}
 
-      {canUpload && (
+      {canUpload && !readOnly && (
         <div className="flex flex-col gap-3 rounded-xl border border-grey-200 p-3">
           <p className="text-sm font-medium text-on-surface">Add a document</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-grey-600">Certificate type</span>
               <select

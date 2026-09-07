@@ -126,7 +126,9 @@ export const UserDetailSchema = z.object({
   setupComplete: z.boolean().optional().default(false),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
-  documents: z.array(UserDocumentSchema).default([]),
-  sites: z.array(AssignedSiteSummarySchema).default([]),
+  // Tolerate an unexpected embedded shape here — the profile UI loads documents/sites
+  // from their own endpoints, so a single odd record must never blank the whole profile.
+  documents: z.array(UserDocumentSchema).catch([]),
+  sites: z.array(AssignedSiteSummarySchema).catch([]),
 });
 export type UserDetail = z.infer<typeof UserDetailSchema>;

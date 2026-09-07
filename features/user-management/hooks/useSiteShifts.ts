@@ -66,3 +66,30 @@ export function useDeleteShift() {
       queryClient.invalidateQueries({ queryKey: shiftKeys.bySite(siteId) }),
   });
 }
+
+/** Set which in-house and outsource cleaner slots work a shift (replaces its membership). */
+export function useSetShiftCleaners() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      shiftId,
+      inHouseProfileIds,
+      outsourceProfileIds,
+    }: {
+      siteId: string;
+      shiftId: string;
+      inHouseProfileIds: string[];
+      outsourceProfileIds: string[];
+    }) => {
+      await clientApi.put(ENDPOINTS.shifts.cleaners(shiftId), {
+        inHouseProfileIds,
+        outsourceProfileIds,
+      });
+    },
+    onSuccess: (_data, { siteId }) => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.bySite(siteId) });
+      queryClient.invalidateQueries({ queryKey: ["site-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["outsource-projects"] });
+    },
+  });
+}

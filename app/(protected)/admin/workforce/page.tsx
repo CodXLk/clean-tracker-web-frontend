@@ -14,7 +14,6 @@ import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesT
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
 import { SiteRoster } from "@/features/user-management/components/SiteRoster";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
-import { OutsourceManagement } from "@/features/outsource/components/OutsourceManagement";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useDrafts } from "@/features/workforce/hooks/useDrafts";
@@ -23,7 +22,7 @@ import { cn } from "@/lib/utils/cn";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-const MANAGER_TABS = ["Operations", "Sites", "Cleaners", "Outsource", "Task Templates"] as const;
+const MANAGER_TABS = ["Operations", "Sites", "Cleaners", "Task Templates"] as const;
 type Tab = (typeof MANAGER_TABS)[number];
 
 /** URL-friendly slug per tab, so the selection survives refreshes and can be linked. */
@@ -31,14 +30,12 @@ const TAB_SLUG: Record<Tab, string> = {
   Operations: "operations",
   Sites: "sites",
   Cleaners: "cleaners",
-  Outsource: "outsource",
   "Task Templates": "templates",
 };
 const SLUG_TAB: Record<string, Tab> = {
   operations: "Operations",
   sites: "Sites",
   cleaners: "Cleaners",
-  outsource: "Outsource",
   templates: "Task Templates",
 };
 
@@ -97,7 +94,8 @@ function WorkforceContent() {
 
   function handleNewAssignmentButton() {
     setLoadedDraft(null);
-    setPrefill({ date: new Date(), time: "09:00" });
+    // Seed the modal with the site currently selected in Operations.
+    setPrefill({ date: new Date(), time: "09:00", siteId: operationsSiteId || undefined });
     setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
@@ -182,7 +180,6 @@ function WorkforceContent() {
 
           {tab === "Sites" && <SiteManagement />}
           {tab === "Cleaners" && <CleanerManagement />}
-          {tab === "Outsource" && <OutsourceManagement />}
           {tab === "Task Templates" && <TaskTemplatesTab />}
         </div>
 

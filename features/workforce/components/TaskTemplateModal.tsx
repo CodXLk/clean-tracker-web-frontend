@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Plus, Trash2, ListChecks } from "lucide-react";
+import { X, Plus, Trash2, ListChecks, ArrowLeft } from "lucide-react";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
@@ -26,6 +26,7 @@ interface TaskTemplateModalProps {
   open: boolean;
   onClose: () => void;
   template?: TaskTemplate | null;
+  embedded?: boolean;
 }
 
 function blankTask(): EditableTask {
@@ -51,7 +52,7 @@ function toEditableTasks(template?: TaskTemplate | null): EditableTask[] {
   }));
 }
 
-export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModalProps) {
+export function TaskTemplateModal({ open, onClose, template, embedded }: TaskTemplateModalProps) {
   const isEdit = Boolean(template?.id);
   const saveMutation = useSaveTaskTemplate();
   const itemsQuery = useInventoryItems(true);
@@ -145,46 +146,65 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
 
   if (!open) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+  const dialogBody = (
       <div
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? "Edit task list template" : "New task list template"}
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+        className={
+          embedded
+            ? "flex w-full flex-col"
+            : "flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+        }
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-grey-200 p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-ink">
-              <ListChecks size={20} aria-hidden="true" />
-            </span>
+        {embedded ? (
+          <div className="flex flex-col gap-3 border-b border-line pb-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex w-fit items-center gap-1.5 rounded-full border border-grey-300 px-3.5 py-1.5 text-sm font-medium text-on-surface transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back
+            </button>
             <div>
-              <h2 className="text-lg font-semibold text-on-surface">
+              <h2 className="text-lg font-semibold text-on-surface sm:text-xl">
                 {isEdit ? "Edit Task List Template" : "New Task List Template"}
               </h2>
-              <p className="mt-0.5 text-sm text-grey-500">
+              <p className="mt-1 text-sm text-grey-500">
                 A reusable list of tasks with optional expected inventory items.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-start justify-between gap-4 border-b border-grey-200 p-6">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-ink">
+                <ListChecks size={20} aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold text-on-surface">
+                  {isEdit ? "Edit Task List Template" : "New Task List Template"}
+                </h2>
+                <p className="mt-0.5 text-sm text-grey-500">
+                  A reusable list of tasks with optional expected inventory items.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-grey-500 hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className={embedded ? "flex-1 pt-5" : "flex-1 overflow-y-auto p-6"}>
           {error && (
             <div className="mb-4 rounded-lg border border-danger/30 bg-red-50 px-3 py-2 text-sm text-danger">
               {error}
@@ -292,7 +312,7 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-grey-200 p-6">
+        <div className={embedded ? "mt-4 flex items-center justify-end gap-3 border-t border-grey-200 pt-4" : "flex items-center justify-end gap-3 border-t border-grey-200 p-6"}>
           <button
             type="button"
             onClick={onClose}
@@ -310,6 +330,17 @@ export function TaskTemplateModal({ open, onClose, template }: TaskTemplateModal
           </button>
         </div>
       </div>
+  );
+
+  if (embedded) return dialogBody;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {dialogBody}
     </div>
   );
 }
