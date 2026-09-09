@@ -5,6 +5,7 @@ import { Camera, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
 import { UserAvatar } from "@/components/shared/UserAvatar";
+import { ImageCropModal } from "@/components/shared/ImageCropModal";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useUpdateUser } from "@/features/users/hooks/useUserActions";
 import { useUploadMyPhoto } from "@/features/users/hooks/useProfilePhoto";
@@ -25,6 +26,7 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
   const [lastName,  setLastName]  = useState("");
   const [phone,     setPhone]     = useState("");
   const [error,     setError]     = useState<string | null>(null);
+  const [cropFile,  setCropFile]  = useState<File | null>(null);
 
   // Re-fill from the cleaner's real data each time the modal transitions to open —
   // adjusting state during render (React's documented pattern for this) instead of an
@@ -129,7 +131,7 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) uploadPhoto.mutate(file);
+                  if (file) setCropFile(file);
                   e.target.value = "";
                 }}
               />
@@ -186,6 +188,16 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
           </div>
         </div>
       </div>
+
+      <ImageCropModal
+        open={cropFile !== null}
+        file={cropFile}
+        busy={uploadPhoto.isPending}
+        onCancel={() => setCropFile(null)}
+        onConfirm={(cropped) =>
+          uploadPhoto.mutate(cropped, { onSuccess: () => setCropFile(null) })
+        }
+      />
     </>
   );
 }
