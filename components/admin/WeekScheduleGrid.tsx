@@ -658,7 +658,7 @@ export function WeekScheduleGrid({
         {weekDates.map((dateStr) => {
           const wos = workOrdersByDate.get(dateStr) ?? [];
           const first = wos[0];
-          const poIds = [...new Set(wos.map((w) => w.poId).filter(Boolean))];
+          const poIds = [...new Set(wos.map((w) => w.poId).filter((p): p is string => Boolean(p)))];
           const label = poIds.length ? `Work Order — PO ${poIds.join(", ")}` : "Work Order";
           const isOpen = woPopupDate === dateStr;
           return (
