@@ -14,6 +14,7 @@ import {
   Repeat,
   Star,
   CalendarCheck,
+  ShieldCheck,
 } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -23,6 +24,7 @@ import { EditProfileModal } from "@/components/modals/EditProfileModal";
 import { ResetPasswordModal } from "@/components/modals/ResetPasswordModal";
 import { NotificationsModal } from "@/components/modals/NotificationsModal";
 import { SignOutConfirmModal } from "@/components/modals/SignOutConfirmModal";
+import { UserDocumentsModal } from "@/features/users/components/UserDocumentsModal";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { UserAvatar } from "@/components/shared/UserAvatar";
@@ -59,6 +61,7 @@ interface SettingsRow {
 
 const SETTINGS_ROWS: SettingsRow[] = [
   { id: "editProfile",  label: "Edit profile",       icon: Pencil },
+  { id: "documents",    label: "My documents",        icon: ShieldCheck },
   { id: "password",     label: "Password & security", icon: Key    },
   { id: "notifications",label: "Notifications",       icon: Bell   },
 ];
@@ -69,6 +72,7 @@ export default function ProfilePage() {
   const [editProfileOpen,   setEditProfileOpen]   = useState(false);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [documentsOpen,     setDocumentsOpen]     = useState(false);
   const [signOutOpen,       setSignOutOpen]       = useState(false);
 
   const router = useRouter();
@@ -112,6 +116,7 @@ export default function ProfilePage() {
 
   function handleSettingsClick(id: string) {
     if (id === "editProfile")   { setEditProfileOpen(true);   return; }
+    if (id === "documents")     { setDocumentsOpen(true);     return; }
     if (id === "password")      { setResetPasswordOpen(true); return; }
     if (id === "notifications") { setNotificationsOpen(true); return; }
   }
@@ -386,6 +391,11 @@ export default function ProfilePage() {
       <NotificationsModal
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
+      />
+      <UserDocumentsModal
+        open={documentsOpen}
+        onClose={() => setDocumentsOpen(false)}
+        user={me.data ?? null}
       />
       <SignOutConfirmModal
         open={signOutOpen}
