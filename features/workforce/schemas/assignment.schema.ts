@@ -102,6 +102,12 @@ export const TaskOccurrenceSchema = z.object({
   outsourceSupervisorProfiles: z
     .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
     .default([]),
+  workOrderCleanerProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
+  workOrderSupervisorProfiles: z
+    .array(z.object({ id: z.string().uuid(), label: z.string(), name: z.string().nullable().optional() }))
+    .default([]),
   items: z
     .array(
       z.object({
@@ -293,6 +299,10 @@ export const AssignmentFormSchema = z
     startTime: z.string().min(1, "Expected start time is required"),
     /** Purchase-order reference — required for Work Order assignments. */
     poId: z.string().max(100, "PO ID is too long").optional().or(z.literal("")),
+    /** Parent work order id — set only when adding tasks to a work order. */
+    workOrderId: z.string().uuid().optional(),
+    /** Work-order supervisor slots (from the parent work order), attached to every task. */
+    workOrderSupervisorProfileIds: z.array(z.string().uuid()).optional(),
     /** Name of the saved task-list template used to build this assignment, if any. */
     templateName: z.string().max(150, "Template name is too long").optional().or(z.literal("")),
     groups: z.array(LocationGroupFormSchema).min(1, "Add a floor and area"),
@@ -559,6 +569,11 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
     (input.workType === "OTHER" && input.otherUseRecurrence) ||
     (input.workType === "GENERAL_TASK" && input.generalUseRecurrence);
 
+  // Work-order add-tasks flow: tasks reference the work order's own cleaner/supervisor slots
+  // instead of the site's, so the selected profile ids map to workOrder* fields.
+  const isWorkOrder = input.workType === "WORK_ORDER" && !!input.workOrderId;
+  const workOrderSupervisorProfileIds = input.workOrderSupervisorProfileIds ?? [];
+
   const payload: Record<string, unknown> = {
     siteId: input.siteId,
     ...(input.shiftId ? { shiftId: input.shiftId } : {}),
@@ -566,28 +581,38 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
     ...(input.workType === "WORK_ORDER" && input.poId?.trim()
       ? { poId: input.poId.trim() }
       : {}),
+    ...(isWorkOrder ? { workOrderId: input.workOrderId } : {}),
     ...(input.templateName?.trim() ? { templateName: input.templateName.trim() } : {}),
     startDate: input.date,
     ...(input.seriesEndDate ? { seriesEndDate: input.seriesEndDate } : {}),
     startTime: input.startTime.length === 5 ? `${input.startTime}:00` : input.startTime,
     tasks: input.groups.flatMap((group) =>
-      group.tasks.flatMap((task) =>
-        group.areaIds.map((areaId) => ({
+      group.tasks.flatMap((task) => {
+        const selectedProfileIds = input.assignPerTask ? task.profileIds : input.profileIds;
+        return group.areaIds.map((areaId) => ({
           ...(task.id ? { id: task.id } : {}),
           name: task.name.trim(),
           ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
           floorId: group.floorId,
           areaId,
           ...(task.description?.trim() ? { description: task.description.trim() } : {}),
-          cleanerIds: input.assignPerTask ? task.cleanerIds : input.cleanerIds,
-          ...((input.assignPerTask ? task.profileIds : input.profileIds).length > 0
-            ? { profileIds: input.assignPerTask ? task.profileIds : input.profileIds }
+          cleanerIds: isWorkOrder ? [] : input.assignPerTask ? task.cleanerIds : input.cleanerIds,
+          ...(!isWorkOrder && selectedProfileIds.length > 0
+            ? { profileIds: selectedProfileIds }
             : {}),
-          ...(input.supervisorIds.length > 0 ? { supervisorIds: input.supervisorIds } : {}),
-          ...(input.outsourceCleanerProfileIds.length > 0
+          ...(isWorkOrder && selectedProfileIds.length > 0
+            ? { workOrderCleanerProfileIds: selectedProfileIds }
+            : {}),
+          ...(isWorkOrder && workOrderSupervisorProfileIds.length > 0
+            ? { workOrderSupervisorProfileIds }
+            : {}),
+          ...(!isWorkOrder && input.supervisorIds.length > 0
+            ? { supervisorIds: input.supervisorIds }
+            : {}),
+          ...(!isWorkOrder && input.outsourceCleanerProfileIds.length > 0
             ? { outsourceCleanerProfileIds: input.outsourceCleanerProfileIds }
             : {}),
-          ...(input.outsourceSupervisorProfileIds.length > 0
+          ...(!isWorkOrder && input.outsourceSupervisorProfileIds.length > 0
             ? { outsourceSupervisorProfileIds: input.outsourceSupervisorProfileIds }
             : {}),
           ...((task.items ?? []).length > 0
@@ -605,8 +630,8 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
                   : {}),
               }
             : {}),
-        })),
-      ),
+        }));
+      }),
     ),
   };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ComponentType } from "react";
-import { Plus, UserCog, Users, X } from "lucide-react";
+import { Plus, UserCog, Users, X, ChevronDown, ChevronRight } from "lucide-react";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { CleanerProfilesModal } from "./CleanerProfilesModal";
 import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
@@ -13,8 +13,10 @@ import {
   useAssignCleanerProfiles,
   useAssignSupervisorProfiles,
 } from "@/features/user-management/hooks/useSiteAssignments";
-import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
+import { useSiteOutsourceProjects } from "@/features/outsource/hooks/useOutsourceProjects";
 import { OutsourceProfilesModal } from "@/features/outsource/components/OutsourceProfilesModal";
+import { useSiteWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
+import { WorkOrderProfilesModal } from "@/features/work-orders/components/WorkOrderProfilesModal";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 interface RosterEntry {
@@ -46,6 +48,12 @@ export function SiteRoster({
   const [cleanersOpen, setCleanersOpen] = useState(false);
   const [supervisorsOpen, setSupervisorsOpen] = useState(false);
   const [outsourceManage, setOutsourceManage] = useState<"cleaner" | "supervisor" | null>(null);
+  const [workOrderManage, setWorkOrderManage] = useState<"cleaner" | "supervisor" | null>(null);
+  const [selectedOutsourceId, setSelectedOutsourceId] = useState<string>("");
+  const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string>("");
+  // Each roster section collapses independently; all expanded by default.
+  const [outsourceOpen, setOutsourceOpen] = useState(true);
+  const [workOrderOpen, setWorkOrderOpen] = useState(true);
   // A pending unassign awaiting confirmation — the actual removal runs task cleanup
   // and notifications on the backend, so it must be intentional.
   const [removing, setRemoving] = useState<{
@@ -64,7 +72,18 @@ export function SiteRoster({
     [supervisorProfilesQuery.data],
   );
 
-  const { project: outsourceProject } = useSiteOutsourceProject(siteId);
+  const { projects: outsourceProjects } = useSiteOutsourceProjects(siteId);
+  const { workOrders: siteWorkOrders } = useSiteWorkOrders(siteId);
+
+  // Keep the selected project/work-order valid as the lists load or change.
+  const outsourceProject = useMemo(
+    () => outsourceProjects.find((p) => p.id === selectedOutsourceId) ?? outsourceProjects[0] ?? null,
+    [outsourceProjects, selectedOutsourceId],
+  );
+  const workOrder = useMemo(
+    () => siteWorkOrders.find((w) => w.id === selectedWorkOrderId) ?? siteWorkOrders[0] ?? null,
+    [siteWorkOrders, selectedWorkOrderId],
+  );
   const outsourceCleaners = useMemo(
     () => [...(outsourceProject?.cleanerProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [outsourceProject],
@@ -72,6 +91,14 @@ export function SiteRoster({
   const outsourceSupervisors = useMemo(
     () => [...(outsourceProject?.supervisorProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [outsourceProject],
+  );
+  const workOrderCleaners = useMemo(
+    () => [...(workOrder?.cleanerProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
+    [workOrder],
+  );
+  const workOrderSupervisors = useMemo(
+    () => [...(workOrder?.supervisorProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
+    [workOrder],
   );
 
   if (!site) return null;
@@ -155,11 +182,42 @@ export function SiteRoster({
       />
       </div>
 
-      {outsourceProject && (
-        <div className="mt-5 border-t border-line pt-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-body-2">
-            Outsourced — {outsourceProject.companyName}
-          </p>
+      {outsourceProjects.length > 0 && outsourceProject && (
+        <div
+          className={`mt-5 border-t border-line pt-5 ${outsourceOpen ? "" : "cursor-pointer"}`}
+          onClick={() => { if (!outsourceOpen) setOutsourceOpen(true); }}
+        >
+          <div
+            className="mb-3 flex w-full cursor-pointer flex-wrap items-center justify-between gap-2"
+            onClick={() => setOutsourceOpen((v) => !v)}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-body-2">Outsourced</span>
+              <select
+                aria-label="Select outsource project"
+                value={outsourceProject.id}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setSelectedOutsourceId(e.target.value)}
+                className="rounded-lg border border-grey-300 bg-white px-2.5 py-1.5 text-xs font-medium text-on-surface outline-none focus:border-primary"
+              >
+                {outsourceProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.companyName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setOutsourceOpen((v) => !v); }}
+              aria-expanded={outsourceOpen}
+              aria-label={outsourceOpen ? "Collapse outsource section" : "Expand outsource section"}
+              className="text-body-2"
+            >
+              {outsourceOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+            </button>
+          </div>
+          {outsourceOpen && (
           <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
             <RosterGroup
               title="Outsource cleaners"
@@ -190,6 +248,77 @@ export function SiteRoster({
               onRemoveRequest={() => setOutsourceManage("supervisor")}
             />
           </div>
+          )}
+        </div>
+      )}
+
+      {siteWorkOrders.length > 0 && workOrder && (
+        <div
+          className={`mt-5 border-t border-line pt-5 ${workOrderOpen ? "" : "cursor-pointer"}`}
+          onClick={() => { if (!workOrderOpen) setWorkOrderOpen(true); }}
+        >
+          <div
+            className="mb-3 flex w-full cursor-pointer flex-wrap items-center justify-between gap-2"
+            onClick={() => setWorkOrderOpen((v) => !v)}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-body-2">Work order</span>
+              <select
+                aria-label="Select work order"
+                value={workOrder.id}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setSelectedWorkOrderId(e.target.value)}
+                className="rounded-lg border border-grey-300 bg-white px-2.5 py-1.5 text-xs font-medium text-on-surface outline-none focus:border-primary"
+              >
+                {siteWorkOrders.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    PO {w.poId}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setWorkOrderOpen((v) => !v); }}
+              aria-expanded={workOrderOpen}
+              aria-label={workOrderOpen ? "Collapse work order section" : "Expand work order section"}
+              className="text-body-2"
+            >
+              {workOrderOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+            </button>
+          </div>
+          {workOrderOpen && (
+          <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+            <RosterGroup
+              title="Work order cleaners"
+              icon={Users}
+              canManage
+              isLoading={false}
+              emptyLabel="No work order cleaner slots."
+              entries={workOrderCleaners.map((p) => ({
+                id: p.id,
+                label: p.label || `Work Order Cleaner ${p.profileIndex}`,
+                personName: p.cleanerName ?? null,
+              }))}
+              onManage={() => setWorkOrderManage("cleaner")}
+              onRemoveRequest={() => setWorkOrderManage("cleaner")}
+            />
+            <RosterGroup
+              title="Work order supervisors"
+              icon={UserCog}
+              canManage
+              isLoading={false}
+              emptyLabel="No work order supervisor slots."
+              entries={workOrderSupervisors.map((p) => ({
+                id: p.id,
+                label: p.label || `Work Order Supervisor ${p.profileIndex}`,
+                personName: p.supervisorName ?? null,
+              }))}
+              onManage={() => setWorkOrderManage("supervisor")}
+              onRemoveRequest={() => setWorkOrderManage("supervisor")}
+            />
+          </div>
+          )}
         </div>
       )}
 
@@ -210,6 +339,13 @@ export function SiteRoster({
         onClose={() => setOutsourceManage(null)}
         project={outsourceProject}
         kind={outsourceManage ?? "cleaner"}
+      />
+
+      <WorkOrderProfilesModal
+        open={workOrderManage !== null}
+        onClose={() => setWorkOrderManage(null)}
+        workOrder={workOrder}
+        kind={workOrderManage ?? "cleaner"}
       />
 
       <ConfirmDialog

@@ -82,6 +82,23 @@ interface NewAssignmentModalProps {
   editTaskId?: string;
   /** When set, load this draft's saved form state instead of a blank form. */
   loadedDraft?: { id: string; payload: unknown } | null;
+  /**
+   * Work-order add-tasks mode. Locks the form to the WORK_ORDER type at a fixed site/date and
+   * swaps the cleaner selection to the work order's own cleaner slots (no recurrence).
+   */
+  workOrderMode?: WorkOrderTaskConfig;
+}
+
+/** Config for the work-order add-tasks flow (see {@link NewAssignmentModalProps.workOrderMode}). */
+export interface WorkOrderTaskConfig {
+  workOrderId: string;
+  poId: string;
+  siteId: string;
+  startDate?: string;
+  /** The work order's cleaner slots offered for per-task assignment. */
+  cleanerProfiles: Array<{ id: string; label: string; cleanerName?: string | null }>;
+  /** The work order's supervisor slots attached to every created task. */
+  supervisorProfileIds: string[];
 }
 
 function formatDateForInput(date: Date): string {
@@ -131,6 +148,7 @@ interface Prefill {
   defaultTaskName?: string;
   scopeMode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
   scopeWeekday?: DayOfWeek;
+  workOrderMode?: WorkOrderTaskConfig;
 }
 
 function buildDefaults({
@@ -142,6 +160,7 @@ function buildDefaults({
   defaultTaskName = "",
   scopeMode,
   scopeWeekday,
+  workOrderMode,
 }: Prefill): AssignmentFormInput {
   const base: AssignmentFormInput = {
     workType: "GENERAL_TASK",
@@ -173,6 +192,20 @@ function buildDefaults({
   // Date-view cell: a single one-off assignment (no recurrence, no working-day repeat).
   if (scopeMode === "ONE_OFF") {
     return { ...base, workType: "OTHER", otherRepeatWorkingDays: false, otherUseRecurrence: false };
+  }
+  // Work-order add-tasks: locked WORK_ORDER at the work order's site/date, with all of the
+  // work order's cleaner slots responsible by default.
+  if (workOrderMode) {
+    return {
+      ...base,
+      workType: "WORK_ORDER",
+      siteId: workOrderMode.siteId,
+      date: workOrderMode.startDate ?? (defaultDate ? formatDateForInput(defaultDate) : ""),
+      poId: workOrderMode.poId,
+      workOrderId: workOrderMode.workOrderId,
+      workOrderSupervisorProfileIds: workOrderMode.supervisorProfileIds,
+      profileIds: workOrderMode.cleanerProfiles.map((p) => p.id),
+    };
   }
   // Day-view cell: repeats weekly on the clicked weekday by default (week/month allowed, not day).
   if (scopeMode === "DAY_WEEKLY") {
@@ -1004,6 +1037,7 @@ export function NewAssignmentModal({
   editData,
   editTaskId,
   loadedDraft,
+  workOrderMode,
 }: NewAssignmentModalProps) {
   const [cleanerSearch, setCleanerSearch] = useState("");
   const [activeDraftId, setActiveDraftId] = useState<string | undefined>();
@@ -1019,7 +1053,7 @@ export function NewAssignmentModal({
 
   const methods = useForm<AssignmentFormInput>({
     resolver: zodResolver(AssignmentFormSchema),
-    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday }),
+    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }),
   });
   const {
     register,
@@ -1129,10 +1163,13 @@ export function NewAssignmentModal({
   );
   const workTypeOptions: SelectOption[] = useMemo(
     () =>
-      (Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((t) => ({
-        value: t,
-        label: WORK_TYPE_LABELS[t],
-      })),
+      (Object.keys(WORK_TYPE_LABELS) as WorkType[])
+        // Work orders are created from the Work Orders tab, not the New Assignment type list.
+        .filter((t) => t !== "WORK_ORDER")
+        .map((t) => ({
+          value: t,
+          label: WORK_TYPE_LABELS[t],
+        })),
     [],
   );
 
@@ -1145,15 +1182,26 @@ export function NewAssignmentModal({
 
   // Cleaner slots (profiles) are the preferred selection unit. Each slot is
   // adapted into a Cleaner-shaped option so it reuses the existing selection UI.
+  // In work-order mode the source is the work order's own cleaner slots.
   const siteProfiles = useMemo(
     () => [...(profilesQuery.data ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [profilesQuery.data],
   );
-  const usingProfiles = siteProfiles.length > 0;
+  const usingProfiles = workOrderMode ? true : siteProfiles.length > 0;
   const cleanerField = usingProfiles ? ("profileIds" as const) : ("cleanerIds" as const);
   const selectedCleaners = usingProfiles ? selectedProfileIds : selectedCleanerIds;
 
   const cleaners: Cleaner[] = useMemo(() => {
+    if (workOrderMode) {
+      return workOrderMode.cleanerProfiles.map(
+        (p) =>
+          ({
+            id: p.id,
+            firstName: p.label,
+            lastName: p.cleanerName ? `· ${p.cleanerName}` : "· Unassigned",
+          }) as Cleaner,
+      );
+    }
     if (usingProfiles) {
       return siteProfiles.map(
         (p) =>
@@ -1165,9 +1213,13 @@ export function NewAssignmentModal({
       );
     }
     return cleanersQuery.data ?? [];
-  }, [usingProfiles, siteProfiles, cleanersQuery.data]);
+  }, [workOrderMode, usingProfiles, siteProfiles, cleanersQuery.data]);
 
-  const cleanersLoading = usingProfiles ? profilesQuery.isLoading : cleanersQuery.isLoading;
+  const cleanersLoading = workOrderMode
+    ? false
+    : usingProfiles
+      ? profilesQuery.isLoading
+      : cleanersQuery.isLoading;
 
   // Outsource cleaner/supervisor slots of the site's outsource project (empty slots included —
   // pick a slot now and assign its cleaner later, exactly like in-house profiles).
@@ -1198,6 +1250,7 @@ export function NewAssignmentModal({
   // Default: every slot is responsible unless the user deselects one (Select All by default).
   const didDefaultProfiles = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if (workOrderMode) return; // work-order slots are pre-selected in buildDefaults
     if (!siteId || profilesQuery.isLoading || outsourceQuery.isLoading) return;
     if (sourceTask) return; // seeded tasks pick their default in the seed effect below
     if (didDefaultProfiles.current === siteId) return;
@@ -1213,6 +1266,7 @@ export function NewAssignmentModal({
   // Default supervisor selection to the site's assigned supervisors once they load.
   const didDefaultSupervisors = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if (workOrderMode) return; // work-order supervisor slots are attached via the payload
     if (!siteId || supervisorsQuery.isLoading || outsourceQuery.isLoading) return;
     if (sourceTask) return; // seeded from a task — keep its own supervisors
     // Only auto-select once per site, and only when nothing is chosen yet.
@@ -1255,7 +1309,7 @@ export function NewAssignmentModal({
         // once its assignment loads; keep a blank base until then.
         setActiveDraftId(undefined);
       } else {
-        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday }));
+        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }));
         setActiveDraftId(undefined);
       }
       setCleanerSearch("");
@@ -1480,7 +1534,7 @@ export function NewAssignmentModal({
       <div className="relative z-10 w-full max-w-2xl rounded-3xl bg-surface shadow-2xl">
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 id="modal-title" className="text-lg font-medium text-ink">
-            Create New Assignment
+            {workOrderMode ? "Add Tasks — Work Order" : "Create New Assignment"}
           </h2>
           <button
             type="button"
@@ -1497,7 +1551,14 @@ export function NewAssignmentModal({
             <div className="max-h-[72vh] overflow-y-auto px-6 pb-2">
               {/* Row 1: Work Type + Site */}
               <div className="grid grid-cols-2 gap-4">
-                {scopeLocked ? (
+                {workOrderMode ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-on-surface">Work Type</label>
+                    <div className="rounded-xl border border-grey-300 bg-grey-100/60 px-3 py-2 text-sm text-on-surface">
+                      Work Order{workOrderMode.poId ? ` · ${workOrderMode.poId}` : ""}
+                    </div>
+                  </div>
+                ) : scopeLocked ? (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-on-surface">Work Type</label>
                     <div className="rounded-xl border border-grey-300 bg-grey-100/60 px-3 py-2 text-sm text-on-surface">
@@ -1528,6 +1589,7 @@ export function NewAssignmentModal({
                       label="Site"
                       options={siteOptions}
                       value={field.value || null}
+                      disabled={!!workOrderMode}
                       onChange={(v) => {
                         field.onChange(v);
                         // Floors/areas/cleaners are site-specific — reset to one blank group.
@@ -1621,8 +1683,8 @@ export function NewAssignmentModal({
                 </div>
               </div>
 
-              {/* Work Order: PO reference */}
-              {workType === "WORK_ORDER" && (
+              {/* Work Order: PO reference (hidden in work-order add-tasks mode — fixed by the order). */}
+              {workType === "WORK_ORDER" && !workOrderMode && (
                 <div className="mt-4 flex flex-col gap-1.5">
                   <label htmlFor="assign-po" className="text-sm font-medium text-on-surface">
                     PO ID
@@ -2213,7 +2275,7 @@ export function NewAssignmentModal({
                 )}
               </div>
 
-              {hasOutsource && (
+              {hasOutsource && !workOrderMode && (
                 <>
                   {/* Outsource cleaners — from the site's outsource project */}
                   <div className="mt-6 rounded-2xl border border-[#ED5F25]/30 bg-[#ED5F25]/5 p-4">
@@ -2326,7 +2388,7 @@ export function NewAssignmentModal({
                 <p className="mb-3 text-sm text-danger">{getErrorMessage(saveDraftMutation.error)}</p>
               )}
               <div className="flex gap-3">
-                {!editAssignmentId && (
+                {!editAssignmentId && !workOrderMode && (
                 <button
                   type="button"
                   onClick={() => saveDraftNow(false)}
@@ -2353,7 +2415,9 @@ export function NewAssignmentModal({
                       : "Update Assignment"
                     : createMutation.isPending
                       ? "Creating…"
-                      : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
+                      : workOrderMode
+                        ? `Add Tasks${totalTasks > 0 ? ` (${totalTasks})` : ""}`
+                        : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
                 </button>
               </div>
             </div>

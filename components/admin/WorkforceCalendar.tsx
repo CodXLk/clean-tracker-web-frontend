@@ -1819,15 +1819,18 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const setTaskStatusMutation = useSetTaskStatus();
   const restoreTaskMutation = useRestoreTask();
 
-  // Day view aggregates the recurrence pattern into weekday columns (independent of the
-  // selected week), so it fetches a wider lookahead than the visible week.
+  // Day view aggregates the recurrence pattern into weekday columns, so it fetches a wide
+  // lookahead. Anchor the fetch at the visible week's start (not today) so the current week's
+  // earlier weekdays are included even when today is mid-week — otherwise those columns would
+  // show blank for one-off tasks that already occurred this week.
   const dayScope = managing && scopeView === "day";
   const dayRange = useMemo<OccurrenceQuery | undefined>(() => {
     if (!dayScope) return undefined;
-    const end = new Date(`${today}T00:00:00`);
+    const startStr = weekDates[0]! < today ? weekDates[0]! : today;
+    const end = new Date(`${startStr}T00:00:00`);
     end.setDate(end.getDate() + 41);
-    return { from: today, to: formatDate(end), siteId: siteFilter || undefined, taskStatus: taskStatusFilter };
-  }, [dayScope, today, siteFilter, taskStatusFilter]);
+    return { from: startStr, to: formatDate(end), siteId: siteFilter || undefined, taskStatus: taskStatusFilter };
+  }, [dayScope, today, weekDates, siteFilter, taskStatusFilter]);
   const dayOccurrencesQuery = useOccurrences(dayRange);
 
   // Persist the task-status filter so a manager who switches to Inactive/All stays there.

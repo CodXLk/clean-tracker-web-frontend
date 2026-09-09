@@ -27,3 +27,9 @@ const CLEANER_MANAGER_ROLES = new Set<Role>(["SUPER_ADMIN", "COMPANY_ADMIN", "CL
 export function canManageCleaners(role: Role | undefined): boolean {
   return !!role && CLEANER_MANAGER_ROLES.has(role);
 }
+
+// Staff tabs (cleaners, supervisors, outsource cleaners/supervisors) share the same
+// management tier — the check is on the acting user's role, not the staff type.
+export function canManageStaff(role: Role | undefined): boolean {
+  return !!role && CLEANER_MANAGER_ROLES.has(role);
+}
