@@ -90,6 +90,25 @@ export const ENDPOINTS = {
     removeSupervisorProfile: (id: string, profileId: string) =>
       `/outsource-projects/${id}/supervisor-profiles/${profileId}`,
   },
+  workOrders: {
+    list:   "/work-orders",
+    create: "/work-orders",
+    byId:   (id: string) => `/work-orders/${id}`,
+    status: (id: string) => `/work-orders/${id}/status`,
+    photos: (id: string) => `/work-orders/${id}/photos`,
+    photo:  (photoId: string) => `/work-orders/photos/${photoId}`,
+    deletePhoto: (id: string, photoId: string) => `/work-orders/${id}/photos/${photoId}`,
+    eligibleCleaners: "/work-orders/eligible-cleaners",
+    eligibleSupervisors: "/work-orders/eligible-supervisors",
+    cleanerProfiles: (id: string) => `/work-orders/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/work-orders/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) =>
+      `/work-orders/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/work-orders/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/work-orders/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) =>
+      `/work-orders/${id}/supervisor-profiles/${profileId}`,
+  },
   floors: {
     list:   "/floors",
     create: "/floors",
@@ -311,6 +330,25 @@ export const BACKEND = {
     addSupervisorProfile: (id: string) => `/api/v1/outsource-projects/${id}/supervisor-profiles/add`,
     removeSupervisorProfile: (id: string, profileId: string) =>
       `/api/v1/outsource-projects/${id}/supervisor-profiles/${profileId}`,
+  },
+  workOrders: {
+    list:   "/api/v1/work-orders",
+    create: "/api/v1/work-orders",
+    byId:   (id: string) => `/api/v1/work-orders/${id}`,
+    status: (id: string) => `/api/v1/work-orders/${id}/status`,
+    photos: (id: string) => `/api/v1/work-orders/${id}/photos`,
+    photo:  (photoId: string) => `/api/v1/work-orders/photos/${photoId}`,
+    deletePhoto: (id: string, photoId: string) => `/api/v1/work-orders/${id}/photos/${photoId}`,
+    eligibleCleaners: "/api/v1/work-orders/eligible-cleaners",
+    eligibleSupervisors: "/api/v1/work-orders/eligible-supervisors",
+    cleanerProfiles: (id: string) => `/api/v1/work-orders/${id}/cleaner-profiles`,
+    addCleanerProfile: (id: string) => `/api/v1/work-orders/${id}/cleaner-profiles/add`,
+    removeCleanerProfile: (id: string, profileId: string) =>
+      `/api/v1/work-orders/${id}/cleaner-profiles/${profileId}`,
+    supervisorProfiles: (id: string) => `/api/v1/work-orders/${id}/supervisor-profiles`,
+    addSupervisorProfile: (id: string) => `/api/v1/work-orders/${id}/supervisor-profiles/add`,
+    removeSupervisorProfile: (id: string, profileId: string) =>
+      `/api/v1/work-orders/${id}/supervisor-profiles/${profileId}`,
   },
   floors: {
     list:   "/api/v1/floors",

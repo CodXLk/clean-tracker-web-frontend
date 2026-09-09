@@ -49,6 +49,13 @@ export function useSiteOutsourceProject(siteId: string | undefined) {
   return { ...query, project };
 }
 
+/** All outsource projects linked to a site, from the cached list. */
+export function useSiteOutsourceProjects(siteId: string | undefined) {
+  const query = useOutsourceProjects();
+  const projects = siteId ? (query.data ?? []).filter((p) => p.siteId === siteId) : [];
+  return { ...query, projects };
+}
+
 export function useCreateOutsourceProject() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -11,9 +11,11 @@ import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { DraftsModal } from "@/components/admin/DraftsModal";
 import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesTab";
+import { WorkOrdersTab } from "@/features/work-orders/components/WorkOrdersTab";
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
 import { SiteRoster } from "@/features/user-management/components/SiteRoster";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
+import { StaffManagement } from "@/features/users/components/StaffManagement";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useDrafts } from "@/features/workforce/hooks/useDrafts";
@@ -22,20 +24,24 @@ import { cn } from "@/lib/utils/cn";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-const MANAGER_TABS = ["Operations", "Sites", "Cleaners", "Task Templates"] as const;
+const MANAGER_TABS = ["Operations", "Work Orders", "Sites", "Cleaners", "Supervisors", "Task Templates"] as const;
 type Tab = (typeof MANAGER_TABS)[number];
 
 /** URL-friendly slug per tab, so the selection survives refreshes and can be linked. */
 const TAB_SLUG: Record<Tab, string> = {
   Operations: "operations",
+  "Work Orders": "work-orders",
   Sites: "sites",
   Cleaners: "cleaners",
+  Supervisors: "supervisors",
   "Task Templates": "templates",
 };
 const SLUG_TAB: Record<string, Tab> = {
   operations: "Operations",
+  "work-orders": "Work Orders",
   sites: "Sites",
   cleaners: "Cleaners",
+  supervisors: "Supervisors",
   templates: "Task Templates",
 };
 
@@ -179,7 +185,9 @@ function WorkforceContent() {
           )}
 
           {tab === "Sites" && <SiteManagement />}
+          {tab === "Work Orders" && <WorkOrdersTab />}
           {tab === "Cleaners" && <CleanerManagement />}
+          {tab === "Supervisors" && <StaffManagement role="SUPERVISOR" noun="supervisor" />}
           {tab === "Task Templates" && <TaskTemplatesTab />}
         </div>
 

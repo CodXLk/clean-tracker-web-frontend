@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Handshake } from "lucide-react";
-import { Modal } from "@/components/shared/Modal";
+import { PanelOrModal } from "@/components/shared/PanelOrModal";
 import { PillButton } from "@/components/shared/PillButton";
 import { TextField } from "@/components/shared/TextField";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
@@ -28,6 +28,7 @@ interface OutsourceProjectModalProps {
   project?: OutsourceProject | null;
   onCreated?: (companyName: string) => void;
   onUpdated?: (companyName: string) => void;
+  embedded?: boolean;
 }
 
 export function OutsourceProjectModal({
@@ -36,6 +37,7 @@ export function OutsourceProjectModal({
   project,
   onCreated,
   onUpdated,
+  embedded,
 }: OutsourceProjectModalProps) {
   const isEdit = !!project;
   const create = useCreateOutsourceProject();
@@ -144,14 +146,17 @@ export function OutsourceProjectModal({
   }
 
   return (
-    <Modal
+    <PanelOrModal
+      embedded={embedded}
       open={open}
       onClose={handleClose}
       title={isEdit ? "Edit outsource project" : "New outsource project"}
       description="Link a site to an external provider. Assign outsource cleaner and supervisor slots, then pick them when creating assignments."
+      maxWidthClassName="max-w-2xl"
+      embeddedMaxWidthClassName="w-full"
     >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-grey-200 bg-surface p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
           <TextField
             label="Outsource company name"
             required
@@ -163,9 +168,6 @@ export function OutsourceProjectModal({
             value={contactPersonName}
             onChange={(e) => setContactPersonName(e.target.value)}
           />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Contact number"
             value={contactNumber}
@@ -185,9 +187,6 @@ export function OutsourceProjectModal({
             emptyMessage="No sites"
             disabled={isEdit}
           />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Start date"
             type="date"
@@ -204,8 +203,8 @@ export function OutsourceProjectModal({
           />
         </div>
 
-        <div className="rounded-xl border border-grey-200 bg-grey-50 p-3">
-          <p className="mb-2 text-xs text-grey-500">
+        <div className="rounded-2xl border border-grey-200 bg-grey-50 p-4 sm:p-5">
+          <p className="mb-3 text-xs text-grey-500">
             Set how many outsource cleaner and supervisor slots this project has. Assign the actual
             outsource staff to those slots from the project's actions.
           </p>
@@ -262,6 +261,6 @@ export function OutsourceProjectModal({
           </PillButton>
         </div>
       </div>
-    </Modal>
+    </PanelOrModal>
   );
 }

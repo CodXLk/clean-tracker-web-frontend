@@ -31,6 +31,66 @@ function formatWeekdayLong(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
 }
 
+/** Work-order detail popover shown when a scope-band work-order cell is clicked. */
+function WorkOrderPopover({
+  occurrences,
+  poIds,
+  onClose,
+  onTaskClick,
+}: {
+  occurrences: TaskOccurrence[];
+  poIds: string[];
+  onClose: () => void;
+  onTaskClick: (occ: TaskOccurrence) => void;
+}) {
+  const siteName = occurrences[0]?.siteName;
+  return (
+    <>
+      {/* Click-away backdrop */}
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-label="Work order details"
+        className="absolute left-1/2 top-full z-50 mt-1 w-64 -translate-x-1/2 rounded-xl border border-grey-200 bg-white p-3 text-left shadow-xl"
+      >
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[#C2410C]">Work Order</p>
+            {poIds.length > 0 && (
+              <p className="truncate text-xs font-semibold text-on-surface" title={poIds.join(", ")}>
+                PO {poIds.join(", ")}
+              </p>
+            )}
+            {siteName && <p className="truncate text-[11px] text-grey-500">{siteName}</p>}
+          </div>
+          <span className="shrink-0 rounded-full bg-grey-100 px-2 py-0.5 text-[10px] font-semibold text-grey-600">
+            {occurrences.length} task{occurrences.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+          {occurrences.map((occ) => (
+            <li key={`${occ.taskId}:${occ.date}`}>
+              <button
+                type="button"
+                onClick={() => onTaskClick(occ)}
+                className="flex w-full flex-col gap-0.5 rounded-lg border border-grey-100 px-2 py-1.5 text-left transition-colors hover:bg-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span className="truncate text-xs font-medium text-on-surface" title={occ.name}>
+                  {occ.name}
+                </span>
+                <span className="truncate text-[10px] text-grey-500">
+                  {[occ.floorName, occ.areaName].filter(Boolean).join(" · ")}
+                  {occ.startTime ? ` · ${occ.startTime.slice(0, 5)}` : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
 const DAY_SHORT: Record<DayOfWeek, string> = {
   MONDAY: "Mon",
   TUESDAY: "Tue",
@@ -508,6 +568,8 @@ export function WeekScheduleGrid({
     return map;
   }, [occurrences]);
   const hasWorkOrders = workOrdersByDate.size > 0;
+  // Date whose work-order detail popover is open in the scope band.
+  const [woPopupDate, setWoPopupDate] = useState<string | null>(null);
 
   const taskCount = occurrences.length;
   const multiSite = !managed && readOnlyGroups.length > 1;
@@ -598,11 +660,12 @@ export function WeekScheduleGrid({
           const first = wos[0];
           const poIds = [...new Set(wos.map((w) => w.poId).filter(Boolean))];
           const label = poIds.length ? `Work Order — PO ${poIds.join(", ")}` : "Work Order";
+          const isOpen = woPopupDate === dateStr;
           return (
             <div
               key={dateStr}
               className={cn(
-                "flex items-center justify-center border-l border-grey-200 p-1",
+                "relative flex items-center justify-center border-l border-grey-200 p-1",
                 dateStr === today && "bg-primary/[0.04]",
               )}
             >
@@ -611,17 +674,30 @@ export function WeekScheduleGrid({
                   type="button"
                   title={label}
                   aria-label={label}
-                  onClick={() => onOccurrenceClick?.(first)}
+                  aria-expanded={isOpen}
+                  onClick={() => setWoPopupDate(isOpen ? null : dateStr)}
                   className="relative w-full truncate rounded-md px-1.5 py-1 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   style={{ backgroundColor: TYPE_HEX.WORK_ORDER }}
                 >
                   Work Order
-                  {wos.length > 1 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-on-surface text-[9px] font-semibold text-white">
-                      {wos.length}
-                    </span>
-                  )}
                 </button>
+              )}
+              {/* Count sits outside the (truncating) button so it isn't clipped at the cell edge. */}
+              {first && wos.length > 0 && (
+                <span className="pointer-events-none absolute right-0.5 top-0.5 z-10 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-on-surface px-1 text-[9px] font-semibold text-white shadow">
+                  {wos.length}
+                </span>
+              )}
+              {first && isOpen && (
+                <WorkOrderPopover
+                  occurrences={wos}
+                  poIds={poIds}
+                  onClose={() => setWoPopupDate(null)}
+                  onTaskClick={(occ) => {
+                    setWoPopupDate(null);
+                    onOccurrenceClick?.(occ);
+                  }}
+                />
               )}
             </div>
           );
@@ -941,7 +1017,8 @@ export function WeekScheduleGrid({
               <DayHeaderRow />
             </div>
           </div>
-          {hasWorkOrders && (
+          {/* Work orders land on specific dates only — hidden in the weekday (day) view. */}
+          {hasWorkOrders && !dayView && (
             <div className="flex">
               {managed && <div className="w-11 shrink-0 bg-[#F97316]/[0.06]" aria-hidden="true" />}
               <div className="min-w-0 flex-1">
