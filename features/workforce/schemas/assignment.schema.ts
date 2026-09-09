@@ -618,7 +618,9 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
           ...((task.items ?? []).length > 0
             ? { items: task.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })) }
             : {}),
-          ...(usesRecurrence && task.recurrenceType
+          // Per-task schedule only applies when the assignment itself does NOT recur; when it
+          // does, the assignment rule overrides every task, so the per-task rule is omitted.
+          ...(!usesRecurrence && task.recurrenceType
             ? {
                 recurrenceType: task.recurrenceType,
                 recurrenceInterval: task.recurrenceInterval ?? 1,
