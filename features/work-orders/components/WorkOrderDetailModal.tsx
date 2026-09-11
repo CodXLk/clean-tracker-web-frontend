@@ -42,6 +42,7 @@ const STATUS_STYLES: Record<WorkOrderStatus, string> = {
   PENDING: "bg-grey-100 text-grey-600",
   APPROVED: "bg-blue-100 text-blue-700",
   ONGOING: "bg-amber-100 text-amber-700",
+  TASKS_COMPLETED: "bg-teal-100 text-teal-700",
   PENDING_REVIEW: "bg-purple-100 text-purple-700",
   COMPLETED: "bg-success/10 text-success",
 };
