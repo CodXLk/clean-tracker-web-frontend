@@ -5,6 +5,7 @@ export const WORK_ORDER_STATUS_VALUES = [
   "PENDING",
   "APPROVED",
   "ONGOING",
+  "TASKS_COMPLETED",
   "PENDING_REVIEW",
   "COMPLETED",
 ] as const;
@@ -15,6 +16,7 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   PENDING: "Pending",
   APPROVED: "Approved",
   ONGOING: "Ongoing",
+  TASKS_COMPLETED: "Tasks Completed",
   PENDING_REVIEW: "Pending Review",
   COMPLETED: "Completed",
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, CalendarCheck, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useSites, useClientPortalSites } from "@/features/user-management/hooks/useSites";
@@ -127,6 +127,22 @@ export default function ClientSiteManagementPage() {
 
   const selectedSite = useMemo(() => sites.find((s) => s.id === siteId), [sites, siteId]);
   const isHotel = selectedSite?.siteType === "HOTEL";
+
+  // When a site whose start date is still in the future is selected, open the scope view on its
+  // start week (not today) so check-ins/tasks aren't added before the site begins operating.
+  const positionedSiteRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedSite) return;
+    if (positionedSiteRef.current === selectedSite.id) return;
+    positionedSiteRef.current = selectedSite.id;
+    if (!selectedSite.startDate) return;
+    const start = new Date(`${selectedSite.startDate}T00:00:00`);
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    if (!Number.isNaN(start.getTime()) && start.getTime() > todayMidnight.getTime()) {
+      setWeekStart(startOfWeek(start));
+    }
+  }, [selectedSite]);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),

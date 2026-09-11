@@ -170,6 +170,13 @@ function getWeekStart(date: Date): Date {
   return d;
 }
 
+/** Local Date at midnight for a "yyyy-MM-dd" string, or null when absent/invalid. */
+function parseISODateLocal(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function getMonthWeeks(year: number, month: number): string[][] {
   const firstDay = new Date(year, month, 1);
   const start = getWeekStart(firstDay);
@@ -1733,6 +1740,20 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     selectedSite && (selectedSite.workingDays?.length ?? 0) > 0
       ? selectedSite.workingDays
       : null;
+
+  // When a site whose start date is still in the future is selected, open the scope/calendar
+  // view on its start week (not today) so tasks aren't seeded before the site begins operating.
+  const positionedSiteRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedSite) return;
+    if (positionedSiteRef.current === selectedSite.id) return;
+    positionedSiteRef.current = selectedSite.id;
+    const start = parseISODateLocal(selectedSite.startDate);
+    if (!start) return;
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    if (start.getTime() > todayMidnight.getTime()) setCurrentDate(start);
+  }, [selectedSite]);
 
   // ── Scope-view management: full floor/area structure of the selected site ────
   const managing = mainView === "scope" && !!siteFilter;

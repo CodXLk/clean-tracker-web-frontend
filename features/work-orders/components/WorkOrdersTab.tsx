@@ -39,6 +39,7 @@ const STATUS_STYLES: Record<WorkOrderStatus, string> = {
   PENDING: "bg-grey-100 text-grey-600",
   APPROVED: "bg-blue-100 text-blue-700",
   ONGOING: "bg-amber-100 text-amber-700",
+  TASKS_COMPLETED: "bg-teal-100 text-teal-700",
   PENDING_REVIEW: "bg-purple-100 text-purple-700",
   COMPLETED: "bg-success/10 text-success",
 };
@@ -87,7 +88,9 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
             text:
               status === "PENDING_REVIEW"
                 ? `Work order ${workOrder.poId} marked for review — the client has been emailed and notified.`
-                : `Work order ${workOrder.poId} set to ${WORK_ORDER_STATUS_LABELS[status]}.`,
+                : status === "TASKS_COMPLETED"
+                  ? `Work order ${workOrder.poId} tasks completed — company admins and client service managers have been notified.`
+                  : `Work order ${workOrder.poId} set to ${WORK_ORDER_STATUS_LABELS[status]}.`,
           });
           setPendingStatus(null);
         },
@@ -312,7 +315,9 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
           pendingStatus
             ? pendingStatus.status === "PENDING_REVIEW"
               ? `Mark work order "${pendingStatus.workOrder.poId}" as Pending Review? The client will be emailed and notified to review and give feedback.`
-              : `Change work order "${pendingStatus.workOrder.poId}" status to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}?`
+              : pendingStatus.status === "TASKS_COMPLETED"
+                ? `Mark work order "${pendingStatus.workOrder.poId}" as Tasks Completed? Company admins and client service managers will be emailed and notified to send it to the client for review.`
+                : `Change work order "${pendingStatus.workOrder.poId}" status to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}?`
             : ""
         }
         confirmLabel="Yes, continue"

@@ -100,8 +100,16 @@ function WorkforceContent() {
 
   function handleNewAssignmentButton() {
     setLoadedDraft(null);
+    // Default to the site's start date when it's still in the future, so we don't seed a date
+    // before the site begins operating.
+    const start = selectedSite?.startDate ? new Date(`${selectedSite.startDate}T00:00:00`) : null;
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    const date = start && !Number.isNaN(start.getTime()) && start.getTime() > todayMidnight.getTime()
+      ? start
+      : new Date();
     // Seed the modal with the site currently selected in Operations.
-    setPrefill({ date: new Date(), time: "09:00", siteId: operationsSiteId || undefined });
+    setPrefill({ date, time: "09:00", siteId: operationsSiteId || undefined });
     setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
