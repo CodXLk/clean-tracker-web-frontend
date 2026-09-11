@@ -25,11 +25,33 @@ interface GoogleMapOptions {
   fullscreenControl?: boolean;
 }
 
+interface GoogleLatLngBounds {
+  extend(latLng: GoogleLatLngLiteral): void;
+  isEmpty(): boolean;
+}
+
 interface GoogleMap {
   setCenter(latLng: GoogleLatLngLiteral): void;
   setZoom(zoom: number): void;
   panTo(latLng: GoogleLatLngLiteral): void;
+  fitBounds(bounds: GoogleLatLngBounds, padding?: number): void;
   addListener(eventName: string, handler: (event: GoogleMapMouseEvent) => void): void;
+}
+
+interface GoogleCircleOptions {
+  center: GoogleLatLngLiteral;
+  radius: number;
+  map: GoogleMap;
+  strokeColor?: string;
+  strokeOpacity?: number;
+  strokeWeight?: number;
+  fillColor?: string;
+  fillOpacity?: number;
+  clickable?: boolean;
+}
+
+interface GoogleCircle {
+  setMap(map: GoogleMap | null): void;
 }
 
 interface GoogleSymbol {
@@ -100,6 +122,8 @@ interface GoogleMapsEventNamespace {
 interface GoogleMapsNamespace {
   Map: new (element: HTMLElement, options: GoogleMapOptions) => GoogleMap;
   Marker: new (options: GoogleMarkerOptions) => GoogleMarker;
+  Circle: new (options: GoogleCircleOptions) => GoogleCircle;
+  LatLngBounds: new () => GoogleLatLngBounds;
   Geocoder: new () => GoogleGeocoder;
   places: GooglePlacesNamespace;
   event: GoogleMapsEventNamespace;

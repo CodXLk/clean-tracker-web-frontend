@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Minus, Plus, Search, X } from "lucide-react";
+import { Minus, Plus, Search, X, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PillButton } from "@/components/shared/PillButton";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -24,16 +24,20 @@ const TYPE_OPTIONS: { value: RequestType; label: string }[] = [
   { value: "CLEANER", label: "For myself" },
 ];
 
+type Step = "confirm" | "request";
+
 export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
   const sitesQuery = useMySites();
   const itemsQuery = useInventoryItems(true);
   const createMutation = useCreateRequest();
 
+  const [step,        setStep]        = useState<Step>("confirm");
   const [siteId,      setSiteId]      = useState("");
   const [requestType, setRequestType] = useState<RequestType>("SITE");
   const [search,      setSearch]      = useState("");
   const [note,        setNote]        = useState("");
-  const [quantities,  setQuantities]  = useState<Record<string, number>>({});
+  const [confirmQty,  setConfirmQty]  = useState<Record<string, number>>({});
+  const [requestQty,  setRequestQty]  = useState<Record<string, number>>({});
   const [error,       setError]       = useState<string | null>(null);
 
   // Current stock for the chosen context: the site's stock, or the cleaner's own stock.
@@ -58,9 +62,11 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
 
   useEffect(() => {
     if (open) {
+      setStep("confirm");
       setSearch("");
       setNote("");
-      setQuantities({});
+      setConfirmQty({});
+      setRequestQty({});
       setError(null);
       setRequestType("SITE");
       createMutation.reset();
@@ -85,7 +91,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
     setSyncedKey(syncKey);
     const next: Record<string, number> = {};
     for (const item of items) next[item.id] = currentStock.get(item.id) ?? 0;
-    setQuantities(next);
+    setConfirmQty(next);
   }, [open, contextReady, syncKey, syncedKey, items, currentStock]);
   useEffect(() => {
     if (!open) setSyncedKey(null);
@@ -97,11 +103,13 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
     item.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const chosenCount = items.filter((item) => (quantities[item.id] ?? 0) > 0).length;
+  const requestCount = items.filter((item) => (requestQty[item.id] ?? 0) > 0).length;
 
+  const activeQty = step === "confirm" ? confirmQty : requestQty;
+  const setActiveQty = step === "confirm" ? setConfirmQty : setRequestQty;
   function setQty(id: string, value: number) {
     const q = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-    setQuantities((prev) => ({ ...prev, [id]: q }));
+    setActiveQty((prev) => ({ ...prev, [id]: q }));
   }
 
   function handleSubmit() {
@@ -111,18 +119,24 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       return;
     }
     const lines = items
-      .filter((item) => (quantities[item.id] ?? 0) > 0)
-      .map((item) => ({ itemId: item.id, requestedQuantity: quantities[item.id] }));
+      .filter((item) => (requestQty[item.id] ?? 0) > 0)
+      .map((item) => ({ itemId: item.id, requestedQuantity: requestQty[item.id] }));
     if (lines.length === 0) {
-      setError("Set a quantity for at least one item.");
+      setError("Set a quantity for at least one item you need.");
       return;
     }
+    // Confirm the on-hand counts for items the target currently holds.
+    const confirmedStock = Array.from(currentStock.keys()).map((itemId) => ({
+      itemId,
+      quantity: confirmQty[itemId] ?? currentStock.get(itemId) ?? 0,
+    }));
     createMutation.mutate(
       {
         siteId,
         requestType,
         // CLEANER requests default to the requester's own cleaner profile on the backend.
         note: note.trim() || undefined,
+        confirmedStock,
         lines,
       },
       { onSuccess: onClose },
@@ -151,7 +165,20 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       >
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-on-surface">Request Items</h2>
+          <div className="flex items-center gap-2">
+            {step === "request" && (
+              <button
+                onClick={() => setStep("confirm")}
+                aria-label="Back to confirm stock"
+                className="rounded-full p-0.5 text-grey-500 transition-colors hover:bg-grey-100 hover:text-ink"
+              >
+                <ArrowLeft size={20} strokeWidth={2} />
+              </button>
+            )}
+            <h2 className="text-xl font-bold text-on-surface">
+              {step === "confirm" ? "Confirm current stock" : "Request items"}
+            </h2>
+          </div>
           <button
             onClick={onClose}
             aria-label="Close modal"
@@ -159,6 +186,17 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           >
             <X size={20} strokeWidth={2} />
           </button>
+        </div>
+
+        {/* Step indicator */}
+        <div className="mb-4 flex items-center gap-2 text-xs font-medium">
+          <span className={cn("rounded-full px-2.5 py-1", step === "confirm" ? "bg-primary text-white" : "bg-grey-100 text-grey-500")}>
+            1 · Confirm stock
+          </span>
+          <span className="text-grey-300">→</span>
+          <span className={cn("rounded-full px-2.5 py-1", step === "request" ? "bg-primary text-white" : "bg-grey-100 text-grey-500")}>
+            2 · Request items
+          </span>
         </div>
 
         {/* Request type */}
@@ -169,9 +207,14 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => setRequestType(opt.value)}
+                onClick={() => {
+                  setRequestType(opt.value);
+                  setStep("confirm");
+                  setRequestQty({});
+                }}
+                disabled={step === "request"}
                 className={cn(
-                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60",
                   requestType === opt.value
                     ? "border-primary bg-primary text-white"
                     : "border-grey-300 text-on-surface hover:bg-grey-100",
@@ -182,14 +225,16 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
             ))}
           </div>
           <p className="mt-1.5 text-xs text-grey-500">
-            {requestType === "SITE"
-              ? "Quantities below show the site's current stock. Edit them and confirm."
-              : "Quantities below show your current stock. Edit them and confirm."}
+            {step === "confirm"
+              ? requestType === "SITE"
+                ? "Check the site's current stock and correct any quantities before requesting."
+                : "Check your current stock and correct any quantities before requesting."
+              : "Enter how much of each item you need."}
           </p>
         </div>
 
         {/* Site selector (shown when the cleaner covers more than one site) */}
-        {sites.length > 1 && (
+        {sites.length > 1 && step === "confirm" && (
           <div className="mb-4">
             <label htmlFor="request-site" className="mb-1 block text-xs font-medium text-grey-700">
               Site
@@ -229,7 +274,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
             <p className="py-4 text-center text-sm text-grey-500">No items found.</p>
           ) : (
             filtered.map((item) => {
-              const qty = quantities[item.id] ?? 0;
+              const qty = activeQty[item.id] ?? 0;
               const inStock = currentStock.get(item.id) ?? 0;
               return (
                 <div
@@ -239,7 +284,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-on-surface">{item.name}</span>
                     <span className="text-[11px] text-grey-500">
-                      In stock: {inStock} {item.unit}
+                      {step === "confirm" ? "Recorded" : "In stock"}: {inStock} {item.unit}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -273,15 +318,17 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           )}
         </div>
 
-        {/* Note */}
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Add a note (optional)"
-          rows={2}
-          maxLength={1000}
-          className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
-        />
+        {/* Note (request step only) */}
+        {step === "request" && (
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Add a note (optional)"
+            rows={2}
+            maxLength={1000}
+            className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
+          />
+        )}
 
         {(error || createMutation.isError) && (
           <p role="alert" className="mb-3 rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
@@ -289,15 +336,33 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           </p>
         )}
 
-        {/* Submit */}
-        <PillButton
-          variant="teal"
-          className="w-full"
-          onClick={handleSubmit}
-          disabled={chosenCount === 0 || createMutation.isPending}
-        >
-          {createMutation.isPending ? "Submitting…" : `Confirm & Send (${chosenCount})`}
-        </PillButton>
+        {/* Footer */}
+        {step === "confirm" ? (
+          <PillButton
+            variant="teal"
+            className="w-full"
+            onClick={() => {
+              if (!siteId) {
+                setError("Select a site first.");
+                return;
+              }
+              setError(null);
+              setStep("request");
+            }}
+            disabled={!contextReady}
+          >
+            Confirm stock &amp; continue →
+          </PillButton>
+        ) : (
+          <PillButton
+            variant="teal"
+            className="w-full"
+            onClick={handleSubmit}
+            disabled={requestCount === 0 || createMutation.isPending}
+          >
+            {createMutation.isPending ? "Submitting…" : `Confirm & Send (${requestCount})`}
+          </PillButton>
+        )}
 
         <p className="mt-3 text-center text-xs text-grey-500">
           Requests will be reviewed by your supervisor.

@@ -6,17 +6,17 @@ import { FilterTabs } from "@/components/shared/FilterTabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
-import { useDeliveries, useCancelDelivery } from "@/features/inventory/hooks/useInventory";
+import { useDeliveries, useCancelDelivery, useDispatchPending } from "@/features/inventory/hooks/useInventory";
 import { DispatchModal } from "./DispatchModal";
 import { ConfirmDeliveryModal } from "./ConfirmDeliveryModal";
 import { StatusBadge } from "./StatusBadge";
 import { fmtQty, fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { InventoryDelivery, DeliveryStatus } from "@/features/inventory/schemas/inventory.schema";
 
-const FILTERS = ["All", "Dispatched", "Confirmed"] as const;
+const FILTERS = ["All", "Pending dispatch", "Dispatched", "Pending approval", "Received"] as const;
 type Filter = (typeof FILTERS)[number];
 const STATUS_MAP: Record<Exclude<Filter, "All">, DeliveryStatus> = {
-  Dispatched: "DISPATCHED", Confirmed: "CONFIRMED",
+  "Pending dispatch": "PENDING_DISPATCH", Dispatched: "DISPATCHED", "Pending approval": "PENDING_APPROVAL", Received: "RECEIVED",
 };
 
 interface DeliveriesTabProps {
@@ -26,10 +26,11 @@ interface DeliveriesTabProps {
 export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
   const [filter, setFilter] = useState<Filter>("All");
   const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [confirming, setConfirming] = useState<InventoryDelivery | null>(null);
+  const [review, setReview] = useState<{ delivery: InventoryDelivery; mode: "confirm" | "approve" } | null>(null);
 
   const query = useDeliveries(filter === "All" ? {} : { status: STATUS_MAP[filter] });
   const cancel = useCancelDelivery();
+  const dispatchPending = useDispatchPending();
   const deliveries = query.data ?? [];
 
   return (
@@ -65,12 +66,27 @@ export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
                     <StatusBadge status={d.status} />
                   </div>
                   <p className="mt-0.5 text-xs text-grey-500">
-                    Dispatched by {d.dispatchedByName ?? "Unknown"} · {fmtDateTime(d.dispatchedAt)}
+                    {d.status === "PENDING_DISPATCH"
+                      ? `Awaiting dispatch · raised ${fmtDateTime(d.createdAt)}`
+                      : `Dispatched by ${d.dispatchedByName ?? "Unknown"} · ${fmtDateTime(d.dispatchedAt)}`}
                   </p>
                 </div>
+                {d.status === "PENDING_DISPATCH" && canManage && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => dispatchPending.mutate({ id: d.id })}
+                      disabled={dispatchPending.isPending}
+                      className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-variant disabled:opacity-60">
+                      <Truck size={13} aria-hidden="true" /> Dispatch
+                    </button>
+                    <button type="button" onClick={() => cancel.mutate(d.id)}
+                      className="flex items-center gap-1 rounded-lg border border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:bg-grey-100">
+                      <Ban size={13} aria-hidden="true" /> Cancel
+                    </button>
+                  </div>
+                )}
                 {d.status === "DISPATCHED" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => setConfirming(d)}
+                    <button type="button" onClick={() => setReview({ delivery: d, mode: "confirm" })}
                       className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-variant">
                       <PackageCheck size={13} aria-hidden="true" /> Confirm receipt
                     </button>
@@ -82,6 +98,18 @@ export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
                     )}
                   </div>
                 )}
+                {d.status === "PENDING_APPROVAL" && canManage && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => setReview({ delivery: d, mode: "approve" })}
+                      className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-variant">
+                      <PackageCheck size={13} aria-hidden="true" /> Approve receipt
+                    </button>
+                    <button type="button" onClick={() => cancel.mutate(d.id)}
+                      className="flex items-center gap-1 rounded-lg border border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:bg-grey-100">
+                      <Ban size={13} aria-hidden="true" /> Cancel
+                    </button>
+                  </div>
+                )}
               </div>
 
               <ul className="mt-3 flex flex-wrap gap-2">
@@ -89,9 +117,9 @@ export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
                   <li key={l.id} className="rounded-lg bg-grey-100 px-2.5 py-1 text-xs text-on-surface">
                     {l.itemName} ·{" "}
                     <span className="font-medium">
-                      {d.status === "CONFIRMED" && l.confirmedQuantity != null
-                        ? `${fmtQty(l.confirmedQuantity)} ${l.unit} received`
-                        : `${fmtQty(l.expectedQuantity)} ${l.unit} sent`}
+                      {(d.status === "RECEIVED" || d.status === "PENDING_APPROVAL") && l.confirmedQuantity != null
+                        ? `${fmtQty(l.confirmedQuantity)} ${l.unit} ${d.status === "RECEIVED" ? "received" : "reported"} / ${fmtQty(l.expectedQuantity)} sent`
+                        : `${fmtQty(l.expectedQuantity)} ${l.unit} ${d.status === "PENDING_DISPATCH" ? "requested" : "sent"}`}
                     </span>
                   </li>
                 ))}
@@ -107,7 +135,12 @@ export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
       )}
 
       <DispatchModal open={dispatchOpen} onClose={() => setDispatchOpen(false)} />
-      <ConfirmDeliveryModal open={!!confirming} onClose={() => setConfirming(null)} delivery={confirming} />
+      <ConfirmDeliveryModal
+        open={!!review}
+        onClose={() => setReview(null)}
+        delivery={review?.delivery ?? null}
+        mode={review?.mode ?? "confirm"}
+      />
     </div>
   );
 }

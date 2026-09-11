@@ -5,9 +5,12 @@ import { PackageCheck, ClipboardList } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { cn } from "@/lib/utils/cn";
 import { useClientItemRequests } from "@/features/inventory/hooks/usePurchaseOrders";
 import { ClientDispatchModal } from "@/features/inventory/components/ClientDispatchModal";
+import { ClientInventoryRequests } from "@/features/inventory/components/ClientInventoryRequests";
+import { ClientItemInventoryTab } from "@/features/inventory/components/ClientItemInventoryTab";
 import { PO_STATUS_LABELS, type PurchaseOrder } from "@/features/inventory/schemas/inventory.schema";
 
 function formatDate(iso?: string | null): string {
@@ -15,8 +18,36 @@ function formatDate(iso?: string | null): string {
   return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
+const TABS = ["Item Requests", "Item Inventory"] as const;
+type Tab = (typeof TABS)[number];
+
 export default function ItemRequestsPage() {
   const useDrawerNav = useIsDrawerNav();
+  const [tab, setTab] = useState<Tab>("Item Requests");
+
+  return (
+    <>
+      {!useDrawerNav && (
+        <div className="lg:hidden">
+          <PageHeader title="Client Inventory" />
+        </div>
+      )}
+
+      <div className={cn("px-4 pt-6 sm:px-6 lg:px-8 lg:pt-8", !useDrawerNav ? "pb-28 lg:pb-8" : "pb-6 lg:pb-8")}>
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-6">
+            <SegmentedTabs<Tab> options={TABS} value={tab} onChange={setTab} />
+          </div>
+
+          {tab === "Item Requests" && <ItemRequestsTab />}
+          {tab === "Item Inventory" && <ClientItemInventoryTab />}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ItemRequestsTab() {
   const requestsQuery = useClientItemRequests();
   const [active, setActive] = useState<PurchaseOrder | null>(null);
 
@@ -26,23 +57,15 @@ export default function ItemRequestsPage() {
 
   return (
     <>
-      {!useDrawerNav && (
-        <div className="lg:hidden">
-          <PageHeader title="Item Requests" />
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-6">
+          <p className="text-sm text-grey-500">
+            Requests for items to supply to your site. Review, adjust quantities and dispatch — the site
+            team then confirms what they receive.
+          </p>
         </div>
-      )}
 
-      <div className={cn("px-6 pt-6 lg:px-8 lg:pt-8", !useDrawerNav ? "pb-28 lg:pb-8" : "pb-6 lg:pb-8")}>
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-6">
-            <h1 className="text-lg font-semibold text-on-surface">Item Requests</h1>
-            <p className="text-sm text-grey-500">
-              Requests for items to supply to your site. Review, adjust quantities and dispatch — the site
-              team then confirms what they receive.
-            </p>
-          </div>
-
-          {requestsQuery.isLoading ? (
+        {requestsQuery.isLoading ? (
             <div className="flex justify-center py-16">
               <LoadingSpinner />
             </div>
@@ -81,7 +104,10 @@ export default function ItemRequestsPage() {
               )}
             </div>
           )}
-        </div>
+
+          <div className="mt-6">
+            <ClientInventoryRequests />
+          </div>
       </div>
 
       <ClientDispatchModal open={!!active} onClose={() => setActive(null)} request={active} />

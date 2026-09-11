@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Plus, Pencil, Trash2, Clock, CalendarClock, Eye } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
@@ -15,7 +15,7 @@ import { SupervisorScheduleModal } from "./SupervisorScheduleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
 import { useMe } from "@/features/auth/hooks/useMe";
-import type { Site } from "@/features/user-management/schemas/site.schema";
+import { SITE_TYPE_LABELS, type Site } from "@/features/user-management/schemas/site.schema";
 
 type SiteDetail =
   | { kind: "create" }
@@ -24,7 +24,14 @@ type SiteDetail =
   | { kind: "shifts"; site: Site }
   | { kind: "schedule"; site: Site };
 
-export function SiteManagement() {
+interface SiteManagementProps {
+  /** When true, manage only work-order-only sites (lighter form, no inspection schedule). */
+  workOrderSite?: boolean;
+  /** Bump this value to programmatically open the create form (used by the Work Orders section). */
+  openCreateSignal?: number;
+}
+
+export function SiteManagement({ workOrderSite = false, openCreateSignal }: SiteManagementProps = {}) {
   const query = useSites();
   const deleteMutation = useDeleteSite();
 
@@ -35,6 +42,12 @@ export function SiteManagement() {
   const [detail, setDetail] = useState<SiteDetail | null>(null);
   const [deleting, setDeleting] = useState<Site | null>(null);
 
+  // Allow the parent Work Orders section to open the create form via a changing signal.
+  useEffect(() => {
+    if (openCreateSignal) setDetail({ kind: "create" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreateSignal]);
+
   // A supervisor only ever sees sites they're assigned to — there's no bulk "my
   // sites" endpoint, so this filters the full list against each site's roster.
   const supervisorSites = useSupervisorSiteFilter(
@@ -43,7 +56,8 @@ export function SiteManagement() {
   );
 
   const rows = useMemo(() => {
-    const list = isSupervisor ? supervisorSites.sites : query.data ?? [];
+    const base = isSupervisor ? supervisorSites.sites : query.data ?? [];
+    const list = base.filter((s) => Boolean(s.workOrderSite) === workOrderSite);
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
@@ -54,7 +68,7 @@ export function SiteManagement() {
         (s.contactPersonName ?? "").toLowerCase().includes(q) ||
         (s.streetAddress ?? "").toLowerCase().includes(q),
     );
-  }, [query.data, search, isSupervisor, supervisorSites.sites]);
+  }, [query.data, search, isSupervisor, supervisorSites.sites, workOrderSite]);
 
   const columns: Column<Site>[] = [
     {
@@ -92,17 +106,22 @@ export function SiteManagement() {
       ),
     },
     {
-      header: "Schedule",
-      cell: (s) => (
-        <div className="flex flex-col gap-1">
-          <WorkingDaysSelector value={s.workingDays ?? []} readOnly size="sm" />
-          {(s.startDate || s.endDate) && (
-            <span className="text-xs text-grey-500">
-              {s.startDate ?? "—"} → {s.endDate ?? "open"}
-            </span>
-          )}
-        </div>
-      ),
+      header: workOrderSite ? "Type" : "Schedule",
+      cell: (s) =>
+        workOrderSite ? (
+          <span className="rounded-full bg-grey-100 px-2.5 py-0.5 text-xs font-medium text-grey-700">
+            {SITE_TYPE_LABELS[s.siteType]}
+          </span>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <WorkingDaysSelector value={s.workingDays ?? []} readOnly size="sm" />
+            {(s.startDate || s.endDate) && (
+              <span className="text-xs text-grey-500">
+                {s.startDate ?? "—"} → {s.endDate ?? "open"}
+              </span>
+            )}
+          </div>
+        ),
     },
     {
       header: "Map",
@@ -140,11 +159,15 @@ export function SiteManagement() {
                   icon: Clock,
                   onClick: () => setDetail({ kind: "shifts", site: s }),
                 },
-                {
-                  label: "Inspection schedule",
-                  icon: CalendarClock,
-                  onClick: () => setDetail({ kind: "schedule", site: s }),
-                },
+                ...(workOrderSite
+                  ? []
+                  : [
+                      {
+                        label: "Inspection schedule",
+                        icon: CalendarClock,
+                        onClick: () => setDetail({ kind: "schedule", site: s }),
+                      },
+                    ]),
                 {
                   label: "Edit",
                   icon: Pencil,
@@ -181,6 +204,7 @@ export function SiteManagement() {
             open
             onClose={() => setDetail(null)}
             site={detail.kind === "edit" ? detail.site : null}
+            workOrderSite={workOrderSite}
           />
         ) : detail.kind === "view" ? (
           <SiteDetailView open onClose={() => setDetail(null)} site={detail.site} />
@@ -200,7 +224,7 @@ export function SiteManagement() {
                 className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
               >
                 <Plus size={18} aria-hidden="true" />
-                Add site
+                {workOrderSite ? "Add work order site" : "Add site"}
               </button>
             )}
           </div>
@@ -212,11 +236,13 @@ export function SiteManagement() {
             isLoading={query.isLoading || (isSupervisor && supervisorSites.isLoading)}
             isError={query.isError}
             errorMessage="Failed to load sites."
-            emptyTitle="No sites yet"
+            emptyTitle={workOrderSite ? "No work order sites yet" : "No sites yet"}
             emptyDescription={
               isSupervisor
                 ? "No sites are assigned to you yet."
-                : "Add your first site and link it to a client-company and client."
+                : workOrderSite
+                  ? "Add a work order site — a lighter site used only for work orders."
+                  : "Add your first site and link it to a client-company and client."
             }
           />
         </>

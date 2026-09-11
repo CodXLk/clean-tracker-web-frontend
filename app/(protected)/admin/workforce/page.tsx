@@ -11,7 +11,7 @@ import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { DraftsModal } from "@/components/admin/DraftsModal";
 import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesTab";
-import { WorkOrdersTab } from "@/features/work-orders/components/WorkOrdersTab";
+import { WorkOrdersSection } from "@/features/work-orders/components/WorkOrdersSection";
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
 import { SiteRoster } from "@/features/user-management/components/SiteRoster";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
@@ -185,7 +185,7 @@ function WorkforceContent() {
           )}
 
           {tab === "Sites" && <SiteManagement />}
-          {tab === "Work Orders" && <WorkOrdersTab />}
+          {tab === "Work Orders" && <WorkOrdersSection />}
           {tab === "Cleaners" && <CleanerManagement />}
           {tab === "Supervisors" && <StaffManagement role="SUPERVISOR" noun="supervisor" />}
           {tab === "Task Templates" && <TaskTemplatesTab />}

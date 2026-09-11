@@ -19,6 +19,16 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   COMPLETED: "Completed",
 };
 
+// Mirrors backend WorkOrderPriceType.
+export const WORK_ORDER_PRICE_TYPE_VALUES = ["TOTAL_AMOUNT", "RATE_PER_HOUR"] as const;
+export const WorkOrderPriceTypeSchema = z.enum(WORK_ORDER_PRICE_TYPE_VALUES);
+export type WorkOrderPriceType = z.infer<typeof WorkOrderPriceTypeSchema>;
+
+export const WORK_ORDER_PRICE_TYPE_LABELS: Record<WorkOrderPriceType, string> = {
+  TOTAL_AMOUNT: "Total amount",
+  RATE_PER_HOUR: "Rate per hour",
+};
+
 // One work-order cleaner slot — mirrors backend WorkOrderCleanerProfileResponse.
 export const WorkOrderCleanerProfileSchema = z.object({
   id: z.string().uuid(),
@@ -60,8 +70,11 @@ export const WorkOrderSchema = z.object({
   description: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   expectedDurationDays: z.number().nullable().optional(),
+  taskDates: z.array(z.string()).default([]),
   numberOfCleaners: z.number().default(0),
   numberOfSupervisors: z.number().default(0),
+  priceType: WorkOrderPriceTypeSchema.nullable().optional(),
+  priceAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
   cleanerProfiles: z.array(WorkOrderCleanerProfileSchema).default([]),
   supervisorProfiles: z.array(WorkOrderSupervisorProfileSchema).default([]),
@@ -73,24 +86,24 @@ export const WorkOrderSchema = z.object({
 export type WorkOrder = z.infer<typeof WorkOrderSchema>;
 export const WorkOrderListSchema = z.array(WorkOrderSchema);
 
-// Outbound create payload — matches CreateWorkOrderRequest.
+// Outbound create payload — matches CreateWorkOrderRequest. Work-order dates come from its tasks.
 export interface CreateWorkOrderInput {
   poId: string;
   siteId: string;
   description?: string;
-  startDate: string;
-  expectedDurationDays?: number;
   numberOfCleaners?: number;
   numberOfSupervisors?: number;
+  priceType?: WorkOrderPriceType;
+  priceAmount?: number;
 }
 
 // Outbound update payload — matches UpdateWorkOrderRequest (site is fixed).
 export interface UpdateWorkOrderInput {
   poId: string;
   description?: string;
-  startDate: string;
-  expectedDurationDays?: number;
   numberOfCleaners?: number;
   numberOfSupervisors?: number;
+  priceType?: WorkOrderPriceType;
+  priceAmount?: number;
   status?: WorkOrderStatus;
 }

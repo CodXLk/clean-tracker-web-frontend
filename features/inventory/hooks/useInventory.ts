@@ -8,6 +8,7 @@ import {
   InventoryItemSchema,
   SiteInventoryListSchema,
   TransactionListSchema,
+  InventoryEventListSchema,
   InventoryRequestListSchema,
   InventoryRequestSchema,
   InventoryDeliveryListSchema,
@@ -18,6 +19,7 @@ import {
   type ItemFormInput,
   type RequestStatus,
   type RequestType,
+  type RequestSource,
   type DeliveryStatus,
 } from "@/features/inventory/schemas/inventory.schema";
 
@@ -152,6 +154,17 @@ export function useTransactions(filters: TransactionFilters = {}) {
   });
 }
 
+/** Workflow event log (request/delivery lifecycle) for the Logs tab. */
+export function useInventoryEvents(filters: { refType?: string; refId?: string } = {}) {
+  return useQuery({
+    queryKey: [...inventoryKeys.all, "events", JSON.stringify(filters)] as const,
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.events, { params: filters });
+      return InventoryEventListSchema.parse(data);
+    },
+  });
+}
+
 // ── Requests ────────────────────────────────────────────────────────────────────
 
 export interface RequestLineInput {
@@ -175,8 +188,10 @@ export function useCreateRequest() {
     mutationFn: async (input: {
       siteId: string;
       requestType?: RequestType;
+      source?: RequestSource;
       cleanerId?: string;
       note?: string;
+      confirmedStock?: { itemId: string; quantity: number }[];
       lines: RequestLineInput[];
     }) => {
       const { data } = await clientApi.post(ENDPOINTS.inventory.requests, input);
@@ -194,6 +209,32 @@ export function useRequestAction() {
     }) => {
       const { data } = await clientApi.post(ENDPOINTS.inventory.requestAction(id, action), { note });
       return data;
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+/** Client-sourced requests the logged-in client can dispatch (or all, for management). */
+export function useClientInventoryRequests() {
+  return useQuery({
+    queryKey: [...inventoryKeys.all, "client-requests"] as const,
+    queryFn: async () => {
+      const { data } = await clientApi.get(`${ENDPOINTS.inventory.requests}/client-requests`);
+      return InventoryRequestListSchema.parse(data);
+    },
+  });
+}
+
+export function useClientDispatchRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note, lines }: {
+      id: string; note?: string; lines: { itemId: string; quantity: number; minStock?: number }[];
+    }) => {
+      const { data } = await clientApi.post(
+        ENDPOINTS.inventory.requestAction(id, "client-dispatch"), { note, lines },
+      );
+      return InventoryRequestSchema.parse(data);
     },
     onSuccess: () => invalidateAll(qc),
   });
@@ -236,11 +277,35 @@ export function useDispatchDelivery() {
   });
 }
 
+export function useDispatchPending() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note, lines }: {
+      id: string; note?: string; lines?: { lineId: string; expectedQuantity?: number; minStock?: number }[];
+    }) => {
+      const { data } = await clientApi.post(ENDPOINTS.inventory.deliveryAction(id, "dispatch"), { note, lines });
+      return InventoryDeliverySchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
 export function useConfirmDelivery() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, note, lines }: { id: string; note?: string; lines: ConfirmLineInput[] }) => {
       const { data } = await clientApi.post(ENDPOINTS.inventory.deliveryAction(id, "confirm"), { note, lines });
+      return InventoryDeliverySchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useApproveReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, note, lines }: { id: string; note?: string; lines: ConfirmLineInput[] }) => {
+      const { data } = await clientApi.post(ENDPOINTS.inventory.deliveryAction(id, "approve-receipt"), { note, lines });
       return InventoryDeliverySchema.parse(data);
     },
     onSuccess: () => invalidateAll(qc),

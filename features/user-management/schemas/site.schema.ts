@@ -38,6 +38,7 @@ export const SITE_TYPE_VALUES = [
   "RETAIL",
   "SCHOOL",
   "RESTAURANT",
+  "BUILDING_CLEANING",
 ] as const;
 
 export const SiteTypeSchema = z.enum(SITE_TYPE_VALUES);
@@ -51,6 +52,7 @@ export const SITE_TYPE_LABELS: Record<SiteType, string> = {
   RETAIL: "Retail",
   SCHOOL: "School",
   RESTAURANT: "Restaurant",
+  BUILDING_CLEANING: "Building cleaning site",
 };
 
 // A General-task shift assigned to a cleaner slot — mirrors backend AssignedShift.
@@ -92,6 +94,16 @@ export const SiteCleaningTemplateSchema = z.object({
   templateId: z.string().uuid(),
   templateName: z.string().nullable().optional(),
   profileIndexes: z.array(z.number()).default([]),
+  items: z
+    .array(
+      z.object({
+        itemId: z.string().uuid(),
+        itemName: z.string(),
+        unit: z.string(),
+        quantity: z.number(),
+      }),
+    )
+    .default([]),
 });
 export type SiteCleaningTemplate = z.infer<typeof SiteCleaningTemplateSchema>;
 
@@ -124,6 +136,7 @@ export const SiteSchema = z.object({
   requiredCertificates: z.array(CertificateTypeSchema).default([]),
   clientSiteManagementEnabled: z.boolean().optional().default(false),
   worksOnPublicHolidays: z.boolean().optional().default(false),
+  workOrderSite: z.boolean().optional().default(false),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
@@ -173,6 +186,7 @@ export const SiteFormSchema = z
     requiredCertificates: z.array(CertificateTypeSchema),
     clientSiteManagementEnabled: z.boolean().optional(),
     worksOnPublicHolidays: z.boolean().optional(),
+    workOrderSite: z.boolean().optional(),
     cleaningTemplates: z.array(
       z.object({
         templateId: z.string().uuid("Please select a template"),

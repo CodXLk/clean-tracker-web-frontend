@@ -29,6 +29,8 @@ export interface CleaningCheckInInput {
   siteCleaningTemplateId: string;
   floorId?: string;
   areaId?: string;
+  note?: string;
+  items?: Array<{ itemId: string; quantity: number }>;
 }
 
 /** Check a template in for a day: generates a one-time assignment and notifies cleaners. */

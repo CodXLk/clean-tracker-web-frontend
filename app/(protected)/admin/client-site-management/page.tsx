@@ -15,6 +15,8 @@ import {
 import { WORK_TYPE_LABELS, type TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
+import { CleaningCheckInModal, type CheckInSubmit } from "@/features/user-management/components/CleaningCheckInModal";
+import { useSiteInventory } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 // ── Date helpers ────────────────────────────────────────────────────────────────
@@ -139,12 +141,17 @@ export default function ClientSiteManagementPage() {
   const floorsQuery = useFloors(siteId || undefined);
   const areasQuery = useAreas(undefined, { enabled: !!siteId });
   const templatesQuery = useSiteCleaningTemplates(isHotel ? siteId : undefined);
+  const siteInventoryQuery = useSiteInventory(isHotel ? siteId || undefined : undefined);
   const checkIn = useCleaningCheckIn();
   const deleteAssignment = useDeleteAssignment();
 
-  const [openCell, setOpenCell] = useState<{ floorId: string; areaId: string; date: string } | null>(
-    null,
-  );
+  const [modalCell, setModalCell] = useState<{
+    floorId: string;
+    areaId: string;
+    areaName: string;
+    date: string;
+  } | null>(null);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<{
     assignmentId: string;
@@ -175,24 +182,27 @@ export default function ClientSiteManagementPage() {
   const templates = templatesQuery.data ?? [];
   const structureLoading = floorsQuery.isLoading || areasQuery.isLoading;
 
-  async function addTemplate(floorId: string, areaId: string, dayIso: string, templateId: string) {
-    if (!siteId || !templateId) return;
+  async function submitCheckIn(payload: CheckInSubmit) {
+    if (!siteId || !modalCell) return;
+    setCheckInError(null);
     try {
       await checkIn.mutateAsync({
         siteId,
-        date: dayIso,
-        siteCleaningTemplateId: templateId,
-        floorId,
-        areaId,
+        date: modalCell.date,
+        siteCleaningTemplateId: payload.siteCleaningTemplateId,
+        floorId: modalCell.floorId,
+        areaId: modalCell.areaId,
+        note: payload.note,
+        items: payload.items,
       });
-      const tpl = templates.find((t) => t.id === templateId);
+      const tpl = templates.find((t) => t.id === payload.siteCleaningTemplateId);
       setBanner({
         kind: "success",
-        text: `${tpl?.templateName ?? "Template"} added on ${dayIso}. Cleaners have been notified.`,
+        text: `${tpl?.templateName ?? "Task"} added on ${modalCell.date}. Cleaners have been notified.`,
       });
-      setOpenCell(null);
+      setModalCell(null);
     } catch (err) {
-      setBanner({ kind: "error", text: getErrorMessage(err) });
+      setCheckInError(getErrorMessage(err));
     }
   }
 
@@ -218,12 +228,6 @@ export default function ClientSiteManagementPage() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6">
-      <p className="text-sm text-grey-500">
-        View a site&apos;s cleaning schedule by floor and area. For hotels, hover an area and pick a
-        saved template on any day to schedule its tasks and notify the responsible cleaners. Click a
-        template to remove it if it was added by mistake.
-      </p>
-
       {/* Toolbar */}
       <div className="flex flex-col gap-4 rounded-2xl border border-grey-200 bg-surface p-4 shadow-sm lg:flex-row lg:items-end lg:justify-between">
         {/* Site filter */}
@@ -238,7 +242,7 @@ export default function ClientSiteManagementPage() {
               value={siteId}
               onChange={(e) => {
                 setSiteId(e.target.value);
-                setOpenCell(null);
+                setModalCell(null);
                 setBanner(null);
               }}
               className="h-11 w-full min-w-[16rem] appearance-none rounded-xl border border-grey-300 bg-surface pl-9 pr-9 text-sm font-medium text-on-surface transition-colors hover:border-grey-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -442,8 +446,6 @@ export default function ClientSiteManagementPage() {
                                     {area.name}
                                   </div>
                                   {weekISO.map((iso) => {
-                                    const isOpen =
-                                      openCell?.areaId === area.id && openCell?.date === iso;
                                     const added = dayTemplates?.get(iso) ?? [];
                                     const isToday = iso === todayISO;
                                     return (
@@ -490,52 +492,32 @@ export default function ClientSiteManagementPage() {
                                           </button>
                                         ))}
 
-                                        {isHotel &&
-                                          (isOpen ? (
-                                            <select
-                                              autoFocus
-                                              defaultValue=""
-                                              disabled={checkIn.isPending}
-                                              onChange={(e) =>
-                                                e.target.value &&
-                                                addTemplate(floor.id, area.id, iso, e.target.value)
-                                              }
-                                              onBlur={() => setOpenCell(null)}
-                                              className="w-full rounded-md border border-teal-400 bg-surface px-1 py-0.5 text-[11px] text-on-surface focus:outline-none"
-                                            >
-                                              <option value="" disabled>
-                                                Template…
-                                              </option>
-                                              {templates.map((t) => (
-                                                <option key={t.id} value={t.id}>
-                                                  {t.templateName ?? "Template"}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              aria-label={`Add a template in ${area.name} on ${iso}`}
-                                              title="Add a saved template"
-                                              disabled={templates.length === 0}
-                                              onClick={() => {
-                                                setBanner(null);
-                                                setOpenCell({
-                                                  floorId: floor.id,
-                                                  areaId: area.id,
-                                                  date: iso,
-                                                });
-                                              }}
-                                              className={cn(
-                                                "mx-auto flex h-5 w-5 items-center justify-center rounded-md text-ink transition-all hover:bg-primary hover:text-white hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0",
-                                                added.length > 0
-                                                  ? "opacity-40 group-hover/area:opacity-70"
-                                                  : "opacity-0 group-hover/area:opacity-70",
-                                              )}
-                                            >
-                                              <Plus size={12} aria-hidden="true" />
-                                            </button>
-                                          ))}
+                                        {isHotel && (
+                                          <button
+                                            type="button"
+                                            aria-label={`Add a task in ${area.name} on ${iso}`}
+                                            title="Add a cleaning task"
+                                            disabled={templates.length === 0}
+                                            onClick={() => {
+                                              setBanner(null);
+                                              setCheckInError(null);
+                                              setModalCell({
+                                                floorId: floor.id,
+                                                areaId: area.id,
+                                                areaName: area.name,
+                                                date: iso,
+                                              });
+                                            }}
+                                            className={cn(
+                                              "mx-auto flex h-5 w-5 items-center justify-center rounded-md text-ink transition-all hover:bg-primary hover:text-white hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-0",
+                                              added.length > 0
+                                                ? "opacity-40 group-hover/area:opacity-70"
+                                                : "opacity-0 group-hover/area:opacity-70",
+                                            )}
+                                          >
+                                            <Plus size={12} aria-hidden="true" />
+                                          </button>
+                                        )}
                                       </div>
                                     );
                                   })}
@@ -571,6 +553,30 @@ export default function ClientSiteManagementPage() {
           setPendingRemove(null);
           setRemoveError(null);
         }}
+      />
+
+      <CleaningCheckInModal
+        open={!!modalCell}
+        onClose={() => {
+          if (checkIn.isPending) return;
+          setModalCell(null);
+          setCheckInError(null);
+        }}
+        templates={templates}
+        inventory={siteInventoryQuery.data ?? []}
+        areaName={modalCell?.areaName ?? ""}
+        dayLabel={
+          modalCell
+            ? new Date(`${modalCell.date}T00:00:00`).toLocaleDateString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              })
+            : ""
+        }
+        submitting={checkIn.isPending}
+        error={checkInError}
+        onSubmit={submitCheckIn}
       />
     </div>
   );

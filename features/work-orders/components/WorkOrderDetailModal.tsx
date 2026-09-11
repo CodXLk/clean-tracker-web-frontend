@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Calendar, Clock, ListChecks, Hash, X, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { Calendar, ListChecks, Hash, X, ChevronLeft, ChevronRight, ImageOff, DollarSign } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import {
   WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_PRICE_TYPE_LABELS,
   type WorkOrder,
   type WorkOrderStatus,
 } from "@/features/work-orders/schemas/workOrder.schema";
@@ -16,6 +17,21 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(d.getTime())
     ? value
     : d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatPrice(wo: WorkOrder): string {
+  if (wo.priceAmount == null || !wo.priceType) return "—";
+  const amount = wo.priceAmount.toLocaleString(undefined, { style: "currency", currency: "AUD" });
+  return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
+}
+
+/** Compact span of the dates a work order has tasks on. */
+function formatDates(dates?: string[] | null): string {
+  if (!dates || dates.length === 0) return "—";
+  const sorted = [...dates].sort();
+  const first = formatDate(sorted[0]);
+  if (sorted.length === 1) return first;
+  return `${first} → ${formatDate(sorted[sorted.length - 1])}`;
 }
 
 function photoUrl(photoId: string): string {
@@ -55,16 +71,21 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[workOrder.status]}`}>
             {WORK_ORDER_STATUS_LABELS[workOrder.status]}
           </span>
+          {workOrder.priceType && workOrder.priceAmount != null && (
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              {WORK_ORDER_PRICE_TYPE_LABELS[workOrder.priceType]}: {formatPrice(workOrder)}
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard icon={<Hash size={15} />} label="PO ID" value={workOrder.poId} />
-          <StatCard icon={<Calendar size={15} />} label="Start date" value={formatDate(workOrder.startDate)} />
           <StatCard
-            icon={<Clock size={15} />}
-            label="Duration"
-            value={workOrder.expectedDurationDays ? `${workOrder.expectedDurationDays} day(s)` : "—"}
+            icon={<Calendar size={15} />}
+            label="Dates"
+            value={formatDates(workOrder.taskDates)}
           />
+          <StatCard icon={<DollarSign size={15} />} label="Price" value={formatPrice(workOrder)} />
           <StatCard icon={<ListChecks size={15} />} label="Tasks" value={String(workOrder.taskCount)} />
         </div>
 

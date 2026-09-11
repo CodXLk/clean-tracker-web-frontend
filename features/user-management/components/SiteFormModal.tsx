@@ -53,6 +53,8 @@ interface SiteFormModalProps {
   onClose: () => void;
   site?: Site | null;
   embedded?: boolean;
+  /** Register/edit a lighter work-order-only site (no working days / general-task window). */
+  workOrderSite?: boolean;
 }
 
 /** Duration + overnight flag for a general-task window (end earlier than start = next day). */
@@ -134,11 +136,14 @@ const EMPTY: SiteFormInput = {
   requiredCertificates: [],
   clientSiteManagementEnabled: false,
   worksOnPublicHolidays: false,
+  workOrderSite: false,
   cleaningTemplates: [],
 };
 
-export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalProps) {
+export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = false }: SiteFormModalProps) {
   const isEdit = !!site;
+  // A site is treated as work-order-only when the caller opts in, or when editing one.
+  const isWorkOrderSite = workOrderSite || !!site?.workOrderSite;
   const companiesQuery = useClientCompanies();
   const createMutation = useCreateSite();
   const updateMutation = useUpdateSite();
@@ -216,12 +221,13 @@ export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalPr
             requiredCertificates: site.requiredCertificates ?? [],
             clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
             worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
+            workOrderSite: site.workOrderSite ?? false,
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
               profileIndexes: t.profileIndexes ?? [],
             })),
           }
-        : EMPTY,
+        : { ...EMPTY, workOrderSite, siteType: workOrderSite ? "BUILDING_CLEANING" : "GENERAL" },
     );
     createMutation.reset();
     updateMutation.reset();
@@ -299,8 +305,10 @@ export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalPr
         embedded={embedded}
         open={open}
         onClose={onClose}
-        title={isEdit ? "Edit site" : "Add a site"}
-        description="Select a client-company and client, then enter the site details."
+        title={isEdit ? (isWorkOrderSite ? "Edit work order site" : "Edit site") : (isWorkOrderSite ? "Add a work order site" : "Add a site")}
+        description={isWorkOrderSite
+          ? "A lighter site used only for work orders — shifts and cleaner slots, no general working days."
+          : "Select a client-company and client, then enter the site details."}
         maxWidthClassName="max-w-2xl"
         embeddedMaxWidthClassName="w-full"
       >
@@ -473,7 +481,7 @@ export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalPr
         </div>
         </FormSection>
 
-        <FormSection icon={CalendarDays} title="Schedule & working days">
+        <FormSection icon={CalendarDays} title="Schedule & working days" className={cn(isWorkOrderSite && "hidden")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
             label="Site start date"
@@ -550,7 +558,7 @@ export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalPr
         </div>
         </FormSection>
 
-        <FormSection icon={Settings2} title="Options">
+        <FormSection icon={Settings2} title="Options" className={cn(isWorkOrderSite && "hidden")}>
         <label className="flex items-start gap-3 rounded-lg border border-grey-200 p-3">
           <input
             type="checkbox"
@@ -581,7 +589,7 @@ export function SiteFormModal({ open, onClose, site, embedded }: SiteFormModalPr
         </label>
         </FormSection>
 
-        <FormSection icon={Clock} title="General task service time" className="lg:col-span-2">
+        <FormSection icon={Clock} title="General task service time" className={cn("lg:col-span-2", isWorkOrderSite && "hidden")}>
         <div className="flex flex-col gap-3">
           <p className="text-xs text-grey-500">
             The window the client allows for general cleaning. Use one window for all working days,

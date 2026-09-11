@@ -44,8 +44,9 @@ export type CleanerSite = z.infer<typeof CleanerSiteSchema>;
 // Mirrors backend AttendanceLogResponse.
 export const AttendanceLogSchema = z.object({
   id: z.string().uuid(),
-  cleanerId: z.string().uuid(),
+  cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
+  actorRole: z.enum(["CLEANER", "SUPERVISOR"]).nullable().optional(),
   siteId: z.string().uuid(),
   siteName: z.string(),
   siteLatitude: z.number().nullable().optional(),

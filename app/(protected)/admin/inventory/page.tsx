@@ -9,6 +9,7 @@ import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { RequestItemsModal } from "@/components/modals/RequestItemsModal";
 import { RequestedItemsModal } from "@/components/modals/RequestedItemsModal";
+import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { StatusBadge } from "@/features/inventory/components/StatusBadge";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
@@ -32,7 +33,7 @@ const ADMIN_TABS = [
   "Warehouse",
   "Suppliers",
   "Purchase Orders",
-  "Requests",
+  "Item Requests",
   "Deliveries",
   "Site Inventory",
   "Cleaner Inventory",
@@ -138,14 +139,14 @@ function DesktopInventoryConsole() {
           </div>
         )}
 
-        <div className="mb-6 overflow-x-auto">
-          <FilterTabs<AdminTab> options={[...ADMIN_TABS]} value={tab} onChange={setTab} />
+        <div className="mb-6">
+          <SegmentedTabs<AdminTab> options={[...ADMIN_TABS]} value={tab} onChange={setTab} />
         </div>
 
         {tab === "Warehouse" && <WarehouseTab canManage={canManage} />}
         {tab === "Suppliers" && <SuppliersTab canManage={canManage} />}
         {tab === "Purchase Orders" && <PurchaseOrdersTab canManage={canManage} />}
-        {tab === "Requests" && <RequestsTab canManage={canManage} />}
+        {tab === "Item Requests" && <RequestsTab canManage={canManage} />}
         {tab === "Deliveries" && <DeliveriesTab canManage={canManage} />}
         {tab === "Site Inventory" && <SiteInventoryTab canManage={canManage} />}
         {tab === "Cleaner Inventory" && <CleanerInventoryTab canManage={canManage} />}

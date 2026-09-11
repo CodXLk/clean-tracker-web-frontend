@@ -14,13 +14,11 @@ import {
   useDeleteWorkOrderPhoto,
 } from "@/features/work-orders/hooks/useWorkOrders";
 import type { WorkOrder } from "@/features/work-orders/schemas/workOrder.schema";
-
-function toISODate(d: Date): string {
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import {
+  WORK_ORDER_PRICE_TYPE_LABELS,
+  WORK_ORDER_PRICE_TYPE_VALUES,
+  type WorkOrderPriceType,
+} from "@/features/work-orders/schemas/workOrder.schema";
 
 /** Browser URL for a stored work-order photo. */
 function photoUrl(photoId: string): string {
@@ -46,10 +44,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [poId, setPoId] = useState(workOrder?.poId ?? "");
   const [siteId, setSiteId] = useState(workOrder?.siteId ?? "");
   const [description, setDescription] = useState(workOrder?.description ?? "");
-  const [startDate, setStartDate] = useState(workOrder?.startDate ?? toISODate(new Date()));
-  const [expectedDurationDays, setExpectedDurationDays] = useState(workOrder?.expectedDurationDays ?? 1);
   const [numberOfCleaners, setNumberOfCleaners] = useState(workOrder?.numberOfCleaners ?? 1);
   const [numberOfSupervisors, setNumberOfSupervisors] = useState(workOrder?.numberOfSupervisors ?? 1);
+  const [priceType, setPriceType] = useState<WorkOrderPriceType>(workOrder?.priceType ?? "TOTAL_AMOUNT");
+  const [priceAmount, setPriceAmount] = useState<string>(
+    workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
+  );
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,8 +83,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   function validate(): string | null {
     if (!poId.trim()) return "Enter the PO ID.";
     if (!siteId) return "Select a site.";
-    if (!startDate) return "Select a start date.";
-    if (expectedDurationDays < 1) return "Expected duration must be at least 1 day.";
+    if (priceAmount.trim() && !(Number(priceAmount) > 0)) return "Enter a valid price greater than zero.";
     return null;
   }
 
@@ -97,6 +96,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     setFormError(null);
     const trimmedPo = poId.trim();
 
+    const parsedPrice = priceAmount.trim() ? Number(priceAmount) : undefined;
+    const pricePayload = {
+      priceType: parsedPrice != null ? priceType : undefined,
+      priceAmount: parsedPrice,
+    };
+
     if (isEdit && workOrder) {
       update.mutate(
         {
@@ -104,10 +109,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           input: {
             poId: trimmedPo,
             description: description.trim() || undefined,
-            startDate,
-            expectedDurationDays,
             numberOfCleaners,
             numberOfSupervisors,
+            ...pricePayload,
             status: workOrder.status,
           },
         },
@@ -129,10 +133,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
         poId: trimmedPo,
         siteId,
         description: description.trim() || undefined,
-        startDate,
-        expectedDurationDays,
         numberOfCleaners,
         numberOfSupervisors,
+        ...pricePayload,
       },
       {
         onSuccess: async (created) => {
@@ -182,25 +185,6 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
-            label="Start date"
-            name="wo-start"
-            type="date"
-            required
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <TextField
-            label="Expected duration (days)"
-            name="wo-duration"
-            type="number"
-            min={1}
-            value={expectedDurationDays}
-            onChange={(e) => setExpectedDurationDays(Math.max(1, Number(e.target.value) || 1))}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
             label="Cleaners"
             name="wo-cleaners"
             type="number"
@@ -215,6 +199,36 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             min={0}
             value={numberOfSupervisors}
             onChange={(e) => setNumberOfSupervisors(Math.max(0, Number(e.target.value) || 0))}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-on-surface">Price</span>
+          <div className="flex flex-wrap gap-2">
+            {WORK_ORDER_PRICE_TYPE_VALUES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPriceType(value)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                  priceType === value
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-grey-300 text-on-surface hover:bg-grey-100"
+                }`}
+              >
+                {WORK_ORDER_PRICE_TYPE_LABELS[value]}
+              </button>
+            ))}
+          </div>
+          <TextField
+            label={priceType === "RATE_PER_HOUR" ? "Rate per hour (AUD)" : "Total amount (AUD)"}
+            name="wo-price"
+            type="number"
+            min={0}
+            step="0.01"
+            value={priceAmount}
+            onChange={(e) => setPriceAmount(e.target.value)}
+            placeholder="e.g. 250.00"
           />
         </div>
 
