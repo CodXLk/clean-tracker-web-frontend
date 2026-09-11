@@ -5,9 +5,14 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
 import { cn } from "@/lib/utils/cn";
+import { FilterTabs } from "@/components/shared/FilterTabs";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
-import { useInventoryItems, useTransactions } from "@/features/inventory/hooks/useInventory";
-import { TRANSACTION_TYPE_LABELS, type TransactionType } from "@/features/inventory/schemas/inventory.schema";
+import { useInventoryItems, useTransactions, useInventoryEvents } from "@/features/inventory/hooks/useInventory";
+import {
+  TRANSACTION_TYPE_LABELS,
+  INVENTORY_EVENT_TYPE_LABELS,
+  type TransactionType,
+} from "@/features/inventory/schemas/inventory.schema";
 import { fmtQty, fmtDateTime } from "@/features/inventory/lib/inventory";
 
 const TYPE_OPTIONS: SelectOption[] = (Object.keys(TRANSACTION_TYPE_LABELS) as TransactionType[]).map((t) => ({
@@ -15,7 +20,65 @@ const TYPE_OPTIONS: SelectOption[] = (Object.keys(TRANSACTION_TYPE_LABELS) as Tr
   label: TRANSACTION_TYPE_LABELS[t],
 }));
 
+const VIEWS = ["Activity", "Stock ledger"] as const;
+type View = (typeof VIEWS)[number];
+
 export function LogsTab() {
+  const [view, setView] = useState<View>("Activity");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FilterTabs<View> options={[...VIEWS]} value={view} onChange={setView} />
+      {view === "Activity" ? <ActivityLog /> : <StockLedger />}
+    </div>
+  );
+}
+
+/** Request/delivery workflow events — who did what and when. */
+function ActivityLog() {
+  const query = useInventoryEvents();
+  const rows = query.data ?? [];
+
+  if (query.isLoading) {
+    return <div className="flex justify-center py-12"><LoadingSpinner size={28} /></div>;
+  }
+  if (query.isError) return <ErrorMessage message="Failed to load activity." />;
+  if (rows.length === 0) {
+    return <EmptyState title="No activity yet" description="Request and delivery events are recorded here as they happen." />;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-grey-200 bg-white">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-grey-200 text-left text-xs font-semibold uppercase tracking-wide text-grey-500">
+            <th className="px-4 py-3">When</th>
+            <th className="px-4 py-3">Event</th>
+            <th className="px-4 py-3">Details</th>
+            <th className="px-4 py-3">By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((e) => (
+            <tr key={e.id} className="border-b border-grey-100 last:border-b-0">
+              <td className="whitespace-nowrap px-4 py-3 text-grey-500">{fmtDateTime(e.performedAt)}</td>
+              <td className="px-4 py-3">
+                <span className="rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-600">
+                  {INVENTORY_EVENT_TYPE_LABELS[e.eventType]}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-on-surface">{e.message ?? "—"}</td>
+              <td className="px-4 py-3 text-grey-500">{e.performedByName ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Immutable stock-movement ledger. */
+function StockLedger() {
   const itemsQuery = useInventoryItems();
   const [itemId, setItemId] = useState<string>("");
   const [type, setType] = useState<string>("");

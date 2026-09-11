@@ -46,6 +46,7 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   payload.requiredCertificates = input.requiredCertificates ?? [];
   payload.clientSiteManagementEnabled = input.clientSiteManagementEnabled ?? false;
   payload.worksOnPublicHolidays = input.worksOnPublicHolidays ?? false;
+  payload.workOrderSite = input.workOrderSite ?? false;
   payload.cleaningTemplates = (input.cleaningTemplates ?? [])
     .filter((t) => t.templateId)
     .map((t) => ({ templateId: t.templateId, profileIndexes: t.profileIndexes ?? [] }));

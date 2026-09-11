@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Check, X, Truck, Ban } from "lucide-react";
+import { Plus, Eye } from "lucide-react";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
-import { useRequests, useRequestAction } from "@/features/inventory/hooks/useInventory";
+import { useRequests } from "@/features/inventory/hooks/useInventory";
 import { RequestFormModal } from "./RequestFormModal";
-import { DispatchModal } from "./DispatchModal";
+import { RequestDetailModal } from "./RequestDetailModal";
 import { StatusBadge } from "./StatusBadge";
-import { fmtQty, fmtDateTime } from "@/features/inventory/lib/inventory";
+import { fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { InventoryRequest, RequestStatus } from "@/features/inventory/schemas/inventory.schema";
 
 const FILTERS = ["All", "Pending", "Approved", "Rejected", "Fulfilled"] as const;
@@ -26,10 +26,9 @@ interface RequestsTabProps {
 export function RequestsTab({ canManage }: RequestsTabProps) {
   const [filter, setFilter] = useState<Filter>("All");
   const [formOpen, setFormOpen] = useState(false);
-  const [dispatching, setDispatching] = useState<InventoryRequest | null>(null);
+  const [viewing, setViewing] = useState<InventoryRequest | null>(null);
 
   const query = useRequests(filter === "All" ? {} : { status: STATUS_MAP[filter] });
-  const action = useRequestAction();
   const requests = query.data ?? [];
 
   return (
@@ -53,72 +52,60 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
       ) : requests.length === 0 ? (
         <EmptyState title="No requests" description="Item requests raised for sites appear here." />
       ) : (
-        <div className="flex flex-col gap-3">
-          {requests.map((req) => (
-            <div key={req.id} className="rounded-2xl border border-grey-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-on-surface">{req.siteName}</span>
-                    <StatusBadge status={req.status} />
-                    {req.requestType === "CLEANER" && (
-                      <span className="rounded-full bg-secondary/10 px-2 py-0.5 text-[11px] font-medium text-secondary">
-                        To cleaner{req.targetCleanerName ? `: ${req.targetCleanerName}` : ""}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-grey-500">
-                    By {req.requestedByName ?? "Unknown"} · {fmtDateTime(req.createdAt)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {canManage && req.status === "PENDING" && (
-                    <>
-                      <button type="button" onClick={() => action.mutate({ id: req.id, action: "approve" })}
-                        className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-variant">
-                        <Check size={13} aria-hidden="true" /> Approve
-                      </button>
-                      <button type="button" onClick={() => action.mutate({ id: req.id, action: "reject" })}
-                        className="flex items-center gap-1 rounded-lg border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-red-50 hover:text-danger">
-                        <X size={13} aria-hidden="true" /> Reject
-                      </button>
-                    </>
-                  )}
-                  {canManage && req.status === "APPROVED" && (
-                    <button type="button" onClick={() => setDispatching(req)}
-                      className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-variant">
-                      <Truck size={13} aria-hidden="true" /> Dispatch
-                    </button>
-                  )}
-                  {(req.status === "PENDING" || req.status === "APPROVED") && (
-                    <button type="button" onClick={() => action.mutate({ id: req.id, action: "cancel" })}
-                      className="flex items-center gap-1 rounded-lg border border-grey-300 px-3 py-1.5 text-xs font-medium text-grey-500 hover:bg-grey-100">
-                      <Ban size={13} aria-hidden="true" /> Cancel
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {req.lines.map((l) => (
-                  <li key={l.itemId} className="rounded-lg bg-grey-100 px-2.5 py-1 text-xs text-on-surface">
-                    {l.itemName} · <span className="font-medium">{fmtQty(l.requestedQuantity)} {l.unit}</span>
-                  </li>
+        <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-grey-300 text-xs uppercase tracking-wide text-grey-500">
+                  <th className="px-5 py-3 font-medium">Site</th>
+                  <th className="px-5 py-3 font-medium">Type</th>
+                  <th className="px-5 py-3 font-medium">Requested by</th>
+                  <th className="px-5 py-3 font-medium">Items</th>
+                  <th className="px-5 py-3 font-medium">Raised</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 text-right font-medium">View</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((req) => (
+                  <tr key={req.id} className="border-b border-grey-100 last:border-0">
+                    <td className="px-5 py-3.5 font-medium text-on-surface">{req.siteName}</td>
+                    <td className="px-5 py-3.5 text-grey-700">
+                      {req.requestType === "CLEANER"
+                        ? `To cleaner${req.targetCleanerName ? `: ${req.targetCleanerName}` : ""}`
+                        : "Site restock"}
+                    </td>
+                    <td className="px-5 py-3.5 text-grey-700">{req.requestedByName ?? "Unknown"}</td>
+                    <td className="px-5 py-3.5 text-grey-700">{req.lines.length}</td>
+                    <td className="px-5 py-3.5 text-grey-700">{fmtDateTime(req.createdAt)}</td>
+                    <td className="px-5 py-3.5"><StatusBadge status={req.status} /></td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          aria-label={`View request for ${req.siteName}`}
+                          onClick={() => setViewing(req)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-grey-100 hover:text-ink"
+                        >
+                          <Eye size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-              </ul>
-              {req.note && <p className="mt-2 text-xs text-grey-500">“{req.note}”</p>}
-              {req.reviewedByName && (
-                <p className="mt-1 text-xs text-grey-400">
-                  Reviewed by {req.reviewedByName} · {fmtDateTime(req.reviewedAt)}
-                </p>
-              )}
-            </div>
-          ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      <RequestFormModal open={formOpen} onClose={() => setFormOpen(false)} />
-      <DispatchModal open={!!dispatching} onClose={() => setDispatching(null)} request={dispatching} />
+      <RequestFormModal open={formOpen} onClose={() => setFormOpen(false)} canManage={canManage} />
+      <RequestDetailModal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        request={viewing}
+        canManage={canManage}
+      />
     </div>
   );
 }

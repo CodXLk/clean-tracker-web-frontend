@@ -47,7 +47,7 @@ export const RequestStatusSchema = z.enum([
 ]);
 export type RequestStatus = z.infer<typeof RequestStatusSchema>;
 
-export const DeliveryStatusSchema = z.enum(["DISPATCHED", "CONFIRMED", "CANCELLED"]);
+export const DeliveryStatusSchema = z.enum(["PENDING_DISPATCH", "DISPATCHED", "PENDING_APPROVAL", "RECEIVED", "CANCELLED"]);
 export type DeliveryStatus = z.infer<typeof DeliveryStatusSchema>;
 
 export const RequestTypeSchema = z.enum(["SITE", "CLEANER"]);
@@ -56,6 +56,15 @@ export type RequestType = z.infer<typeof RequestTypeSchema>;
 export const REQUEST_TYPE_LABELS: Record<RequestType, string> = {
   SITE: "Site restock",
   CLEANER: "Issue to cleaner",
+};
+
+// Where a request's items are supplied from — mirrors backend InventoryRequestSource.
+export const RequestSourceSchema = z.enum(["WAREHOUSE", "CLIENT"]);
+export type RequestSource = z.infer<typeof RequestSourceSchema>;
+
+export const REQUEST_SOURCE_LABELS: Record<RequestSource, string> = {
+  WAREHOUSE: "From warehouse",
+  CLIENT: "From client",
 };
 
 // ── Items ───────────────────────────────────────────────────────────────────────
@@ -155,6 +164,54 @@ export const TransactionSchema = z.object({
 export const TransactionListSchema = z.array(TransactionSchema);
 export type Transaction = z.infer<typeof TransactionSchema>;
 
+// ── Workflow event log ────────────────────────────────────────────────────────
+
+export const INVENTORY_EVENT_TYPE_VALUES = [
+  "REQUEST_CREATED",
+  "STOCK_RECONCILED",
+  "REQUEST_APPROVED",
+  "REQUEST_REJECTED",
+  "REQUEST_CANCELLED",
+  "REQUEST_CLIENT_DISPATCHED",
+  "DELIVERY_CREATED",
+  "DELIVERY_DISPATCHED",
+  "DELIVERY_RECEIVE_REPORTED",
+  "DELIVERY_APPROVED",
+  "DELIVERY_RECEIVED",
+  "DELIVERY_CANCELLED",
+] as const;
+export const InventoryEventTypeSchema = z.enum(INVENTORY_EVENT_TYPE_VALUES);
+export type InventoryEventType = z.infer<typeof InventoryEventTypeSchema>;
+
+export const INVENTORY_EVENT_TYPE_LABELS: Record<InventoryEventType, string> = {
+  REQUEST_CREATED: "Request created",
+  STOCK_RECONCILED: "Stock confirmed",
+  REQUEST_APPROVED: "Request approved",
+  REQUEST_REJECTED: "Request rejected",
+  REQUEST_CANCELLED: "Request cancelled",
+  REQUEST_CLIENT_DISPATCHED: "Client dispatched",
+  DELIVERY_CREATED: "Delivery queued",
+  DELIVERY_DISPATCHED: "Delivery dispatched",
+  DELIVERY_RECEIVE_REPORTED: "Receipt reported",
+  DELIVERY_APPROVED: "Receipt approved",
+  DELIVERY_RECEIVED: "Delivery received",
+  DELIVERY_CANCELLED: "Delivery cancelled",
+};
+
+export const InventoryEventSchema = z.object({
+  id: z.string().uuid(),
+  eventType: InventoryEventTypeSchema,
+  refType: z.string().nullable().optional(),
+  refId: z.string().uuid().nullable().optional(),
+  siteId: z.string().uuid().nullable().optional(),
+  message: z.string().nullable().optional(),
+  performedBy: z.string().uuid().nullable().optional(),
+  performedByName: z.string().nullable().optional(),
+  performedAt: z.string(),
+});
+export const InventoryEventListSchema = z.array(InventoryEventSchema);
+export type InventoryEvent = z.infer<typeof InventoryEventSchema>;
+
 // ── Requests ────────────────────────────────────────────────────────────────────
 
 const RequestLineSchema = z.object({
@@ -169,6 +226,7 @@ export const InventoryRequestSchema = z.object({
   siteId: z.string().uuid(),
   siteName: z.string(),
   requestType: RequestTypeSchema.default("SITE"),
+  source: RequestSourceSchema.default("WAREHOUSE"),
   targetCleanerId: z.string().uuid().nullable().optional(),
   targetCleanerName: z.string().nullable().optional(),
   requestedBy: z.string().uuid(),
@@ -210,6 +268,9 @@ export const InventoryDeliverySchema = z.object({
   confirmedBy: z.string().uuid().nullable().optional(),
   confirmedByName: z.string().nullable().optional(),
   confirmedAt: z.string().nullable().optional(),
+  approvedBy: z.string().uuid().nullable().optional(),
+  approvedByName: z.string().nullable().optional(),
+  approvedAt: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   lines: z.array(DeliveryLineSchema),
   createdAt: z.string().nullable().optional(),

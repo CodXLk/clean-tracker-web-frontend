@@ -19,6 +19,7 @@ import {
   MoreVertical,
   Package,
   PackageCheck,
+  Radar,
   Repeat,
   User,
   Users,
@@ -64,10 +65,11 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inspections", href: "/dashboard/inspections", icon: ListChecks },
   { label: "Complaints", href: "/admin/complaints", icon: MessageSquare },
   { label: "Inventory", href: "/admin/inventory", icon: Package },
-  { label: "Item Requests", href: "/admin/item-requests", icon: PackageCheck },
+  { label: "Client Inventory", href: "/admin/item-requests", icon: PackageCheck },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Workforce Management", href: "/admin/workforce", icon: UsersRound },
   { label: "Outsource Projects", href: "/admin/outsource", icon: Handshake },
+  { label: "Cleaners Dashboard", href: "/admin/cleaners-dashboard", icon: Radar },
   { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
@@ -128,10 +130,13 @@ const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = NAV_ITEMS.filter(
 );
 
 /** Everyone who isn't a client (e.g. company admin) sees the full admin nav, including the
- *  Client Site Management view (management sees every site there). The cleaner Tasks tab is
- *  excluded — task completion is a cleaner-only activity. */
+ *  Client Site Management view (management sees every site there). The cleaner Tasks and
+ *  Inspections tabs are excluded — those are cleaner-only activities. Client Inventory is client-only. */
 const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href !== "/dashboard/tasks",
+  (item) =>
+    item.href !== "/dashboard/tasks" &&
+    item.href !== "/dashboard/inspections" &&
+    item.href !== "/admin/item-requests",
 );
 
 /** The nav items visible to the current user, based on role. */
@@ -167,10 +172,11 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/companies", "Client Companies"],
   ["/admin/workforce", "Workforce Management"],
   ["/admin/outsource", "Outsource Projects"],
+  ["/admin/cleaners-dashboard", "Cleaners Dashboard"],
   ["/admin/inspections", "Inspections Dashboard"],
   ["/admin/complaints", "Complaints"],
   ["/admin/inventory", "Inventory"],
-  ["/admin/item-requests", "Item Requests"],
+  ["/admin/item-requests", "Client Inventory"],
   ["/admin/client-site-management", "Client Site Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/notifications", "Notifications"],

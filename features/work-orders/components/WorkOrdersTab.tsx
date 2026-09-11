@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2 } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SearchInput } from "@/components/shared/SearchInput";
@@ -26,6 +26,15 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
 }
 
+/** Compact span of the dates a work order has tasks on (derived from its task occurrences). */
+function formatDates(dates?: string[] | null): string {
+  if (!dates || dates.length === 0) return "—";
+  const sorted = [...dates].sort();
+  const first = formatDate(sorted[0]);
+  if (sorted.length === 1) return first;
+  return `${first} → ${formatDate(sorted[sorted.length - 1])} (${sorted.length}d)`;
+}
+
 const STATUS_STYLES: Record<WorkOrderStatus, string> = {
   PENDING: "bg-grey-100 text-grey-600",
   APPROVED: "bg-blue-100 text-blue-700",
@@ -35,7 +44,7 @@ const STATUS_STYLES: Record<WorkOrderStatus, string> = {
 };
 
 /** Work Orders tab — out-of-scope client jobs with their own cleaner/supervisor slots. */
-export function WorkOrdersTab() {
+export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () => void } = {}) {
   const workOrdersQuery = useWorkOrders();
   const deleteWorkOrder = useDeleteWorkOrder();
   const updateStatus = useUpdateWorkOrderStatus();
@@ -46,6 +55,7 @@ export function WorkOrdersTab() {
   const [manage, setManage] = useState<{ workOrder: WorkOrder; kind: "cleaner" | "supervisor" } | null>(null);
   const [addTasks, setAddTasks] = useState<WorkOrder | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WorkOrder | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<{ workOrder: WorkOrder; status: WorkOrderStatus } | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const workOrders = useMemo(() => {
@@ -63,6 +73,26 @@ export function WorkOrdersTab() {
         setPendingDelete(null);
       },
     });
+  }
+
+  function confirmStatusChange() {
+    if (!pendingStatus) return;
+    const { workOrder, status } = pendingStatus;
+    updateStatus.mutate(
+      { id: workOrder.id, status },
+      {
+        onSuccess: () => {
+          setBanner({
+            kind: "success",
+            text:
+              status === "PENDING_REVIEW"
+                ? `Work order ${workOrder.poId} marked for review — the client has been emailed and notified.`
+                : `Work order ${workOrder.poId} set to ${WORK_ORDER_STATUS_LABELS[status]}.`,
+          });
+          setPendingStatus(null);
+        },
+      },
+    );
   }
 
   const addTasksConfig: WorkOrderTaskConfig | null = addTasks
@@ -89,17 +119,29 @@ export function WorkOrdersTab() {
           placeholder="Search by PO ID…"
           className="w-full sm:max-w-xs"
         />
-        <button
-          type="button"
-          onClick={() => {
-            setBanner(null);
-            setFormModal({ workOrder: null });
-          }}
-          className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          <Plus size={18} aria-hidden="true" />
-          New work order
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {onAddWorkOrderSite && (
+            <button
+              type="button"
+              onClick={onAddWorkOrderSite}
+              className="flex items-center gap-2 rounded-full border border-grey-300 px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100"
+            >
+              <Building2 size={18} aria-hidden="true" />
+              Add work order site
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setBanner(null);
+              setFormModal({ workOrder: null });
+            }}
+            className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <Plus size={18} aria-hidden="true" />
+            New work order
+          </button>
+        </div>
       </div>
 
       {banner && (
@@ -127,8 +169,7 @@ export function WorkOrdersTab() {
                 <tr className="border-b border-grey-300 text-xs uppercase tracking-wide text-grey-500">
                   <th className="px-5 py-3 font-medium">PO ID</th>
                   <th className="px-5 py-3 font-medium">Site</th>
-                  <th className="px-5 py-3 font-medium">Start</th>
-                  <th className="px-5 py-3 font-medium">Days</th>
+                  <th className="px-5 py-3 font-medium">Dates</th>
                   <th className="px-5 py-3 font-medium">Cleaners</th>
                   <th className="px-5 py-3 font-medium">Tasks</th>
                   <th className="px-5 py-3 font-medium">Status</th>
@@ -140,8 +181,7 @@ export function WorkOrdersTab() {
                   <tr key={w.id} className="border-b border-grey-100 last:border-0">
                     <td className="px-5 py-3.5 font-medium text-on-surface">{w.poId}</td>
                     <td className="px-5 py-3.5 text-grey-700">{w.siteName ?? "—"}</td>
-                    <td className="px-5 py-3.5 text-grey-700">{formatDate(w.startDate)}</td>
-                    <td className="px-5 py-3.5 text-grey-700">{w.expectedDurationDays ?? "—"}</td>
+                    <td className="px-5 py-3.5 text-grey-700">{formatDates(w.taskDates)}</td>
                     <td className="px-5 py-3.5 text-grey-700">
                       {w.cleanerProfiles.filter((s) => s.cleanerId).length}/{w.numberOfCleaners}
                     </td>
@@ -152,7 +192,7 @@ export function WorkOrdersTab() {
                         value={w.status}
                         disabled={updateStatus.isPending}
                         onChange={(e) =>
-                          updateStatus.mutate({ id: w.id, status: e.target.value as WorkOrderStatus })
+                          setPendingStatus({ workOrder: w, status: e.target.value as WorkOrderStatus })
                         }
                         className={`rounded-full border-0 px-2.5 py-1 text-xs font-semibold outline-none ${STATUS_STYLES[w.status]}`}
                       >
@@ -262,6 +302,26 @@ export function WorkOrdersTab() {
         onClose={() => {
           if (deleteWorkOrder.isPending) return;
           setPendingDelete(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingStatus}
+        title="Change work order status"
+        description={
+          pendingStatus
+            ? pendingStatus.status === "PENDING_REVIEW"
+              ? `Mark work order "${pendingStatus.workOrder.poId}" as Pending Review? The client will be emailed and notified to review and give feedback.`
+              : `Change work order "${pendingStatus.workOrder.poId}" status to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}?`
+            : ""
+        }
+        confirmLabel="Yes, continue"
+        isPending={updateStatus.isPending}
+        error={updateStatus.isError ? getErrorMessage(updateStatus.error) : undefined}
+        onConfirm={confirmStatusChange}
+        onClose={() => {
+          if (updateStatus.isPending) return;
+          setPendingStatus(null);
         }}
       />
     </>

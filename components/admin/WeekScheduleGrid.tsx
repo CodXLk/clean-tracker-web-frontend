@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, GripVertical, Plus, Pencil, Repeat, RotateCcw, Trash2 } from "lucide-react";
+import { Building2, GripVertical, Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -818,12 +818,6 @@ export function WeekScheduleGrid({
               {row.name}
             </span>
             {statusControl}
-            {row.recurrenceLabel && (
-              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
-                <Repeat size={9} aria-hidden="true" />
-                {row.recurrenceLabel}
-              </span>
-            )}
           </div>
           <div className="col-span-7 flex items-center gap-2 border-l border-grey-200 px-4 py-2.5">
             <span
@@ -869,12 +863,6 @@ export function WeekScheduleGrid({
             {row.name}
           </span>
           {statusControl}
-          {row.recurrenceLabel && (
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-ink">
-              <Repeat size={9} aria-hidden="true" />
-              {row.recurrenceLabel}
-            </span>
-          )}
         </div>
         {weekDates.map((dateStr) => {
           const cellOccurrences = dayView

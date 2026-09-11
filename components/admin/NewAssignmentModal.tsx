@@ -2044,7 +2044,7 @@ export function NewAssignmentModal({
                       })}
                     </div>
 
-                    {!editTaskId && (
+                    {!editTaskId && !defaultAreaId && (
                       <button
                         type="button"
                         onClick={() => appendGroup(emptyGroup())}

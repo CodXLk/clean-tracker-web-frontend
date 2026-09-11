@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils/cn";
 import { OperationsOverviewTab } from "@/features/live-dashboard/components/OperationsOverviewTab";
 import { LiveLocationMap } from "@/features/live-dashboard/components/LiveLocationMap";
 
-const TABS = ["Overview", "Supervisor Map"] as const;
+const TABS = ["Overview", "Cleaners Map"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function InspectionsDashboardPage() {
+export default function CleanersDashboardPage() {
   const useDrawerNav = useIsDrawerNav();
   const [tab, setTab] = useState<Tab>("Overview");
 
@@ -19,7 +19,7 @@ export default function InspectionsDashboardPage() {
     <>
       {!useDrawerNav && (
         <div className="lg:hidden">
-          <PageHeader title="Inspections Dashboard" />
+          <PageHeader title="Cleaners Dashboard" />
         </div>
       )}
 
@@ -29,8 +29,8 @@ export default function InspectionsDashboardPage() {
             <SegmentedTabs<Tab> options={TABS} value={tab} onChange={setTab} />
           </div>
 
-          {tab === "Overview" && <OperationsOverviewTab audience="supervisors" />}
-          {tab === "Supervisor Map" && <LiveLocationMap audience="supervisors" />}
+          {tab === "Overview" && <OperationsOverviewTab audience="cleaners" />}
+          {tab === "Cleaners Map" && <LiveLocationMap audience="cleaners" />}
         </div>
       </div>
     </>
