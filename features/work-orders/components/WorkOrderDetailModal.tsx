@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ListChecks, Hash, X, ChevronLeft, ChevronRight, ImageOff, DollarSign } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
+import { CERTIFICATE_TYPE_LABELS } from "@/features/users/schemas/document.schema";
 import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRICE_TYPE_LABELS,
@@ -96,6 +97,31 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
             <p className="rounded-xl bg-grey-50 px-3.5 py-3 text-sm leading-relaxed text-on-surface">
               {workOrder.description}
             </p>
+          </section>
+        )}
+
+        {(workOrder.requiredCertificatesAllWorkers.length > 0 ||
+          workOrder.requiredCertificatesAnyWorker.length > 0) && (
+          <section>
+            <SectionTitle>Required certificates</SectionTitle>
+            <div className="flex flex-col gap-2 rounded-xl bg-grey-50 px-3.5 py-3 text-sm text-on-surface">
+              {workOrder.requiredCertificatesAllWorkers.length > 0 && (
+                <p>
+                  <span className="font-medium">Every worker:</span>{" "}
+                  {workOrder.requiredCertificatesAllWorkers
+                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .join(", ")}
+                </p>
+              )}
+              {workOrder.requiredCertificatesAnyWorker.length > 0 && (
+                <p>
+                  <span className="font-medium">At least one worker:</span>{" "}
+                  {workOrder.requiredCertificatesAnyWorker
+                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .join(", ")}
+                </p>
+              )}
+            </div>
           </section>
         )}
 

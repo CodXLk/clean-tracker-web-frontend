@@ -80,6 +80,20 @@ interface NewAssignmentModalProps {
   editData?: AssignmentFormInput | null;
   /** When set, restrict the form to just this task (no add/remove of tasks/groups). */
   editTaskId?: string;
+  /**
+   * When set, show only this area's floor/area group (its tasks stay editable), while the
+   * assignment's other areas remain in form state so they're preserved on save.
+   */
+  editAreaId?: string;
+  /**
+   * When set, the modal hands the validated form to this callback instead of creating/updating,
+   * so the caller can persist across several assignments (scope-view area edit).
+   */
+  onSubmitOverride?: (data: AssignmentFormInput) => void;
+  /** Pending flag for {@link onSubmitOverride}. */
+  overrideSubmitting?: boolean;
+  /** Hide assignment-level date/time/recurrence controls (area edit keeps each series' own). */
+  hideSchedule?: boolean;
   /** When set, load this draft's saved form state instead of a blank form. */
   loadedDraft?: { id: string; payload: unknown } | null;
   /**
@@ -1036,6 +1050,10 @@ export function NewAssignmentModal({
   editAssignmentId,
   editData,
   editTaskId,
+  editAreaId,
+  onSubmitOverride,
+  overrideSubmitting,
+  hideSchedule,
   loadedDraft,
   workOrderMode,
 }: NewAssignmentModalProps) {
@@ -1072,10 +1090,15 @@ export function NewAssignmentModal({
   });
 
   // Single-task edit: the group index that holds the task being edited.
+  // Area edit: the group index for the area whose tasks are being edited.
   const singleGroupIndex =
     editTaskId && editData
       ? editData.groups.findIndex((g) => g.tasks.some((t) => t.id === editTaskId))
-      : -1;
+      : editAreaId && editData
+        ? editData.groups.findIndex((g) => g.areaIds.includes(editAreaId))
+        : -1;
+  // Show only one floor/area group (task or area edit), hiding the rest but keeping them in state.
+  const restrictGroups = !!editTaskId || !!editAreaId;
 
   const workType = watch("workType");
   const siteId = watch("siteId");
@@ -1432,6 +1455,10 @@ export function NewAssignmentModal({
   }
 
   function handleFormSubmit(data: AssignmentFormInput) {
+    if (onSubmitOverride) {
+      onSubmitOverride(data);
+      return;
+    }
     if (editAssignmentId) {
       updateMutation.mutate(
         { id: editAssignmentId, input: data },
@@ -1647,6 +1674,7 @@ export function NewAssignmentModal({
               )}
 
               {/* Row 2: Date + Expected Start Time */}
+              {!hideSchedule && (
               <div className={cn("mt-4 grid gap-4", hideDate ? "grid-cols-1" : "grid-cols-2")}>
                 {!hideDate && (
                   <div className="flex flex-col gap-1.5">
@@ -1682,6 +1710,7 @@ export function NewAssignmentModal({
                   )}
                 </div>
               </div>
+              )}
 
               {/* Work Order: PO reference (hidden in work-order add-tasks mode — fixed by the order). */}
               {workType === "WORK_ORDER" && !workOrderMode && (
@@ -1730,7 +1759,7 @@ export function NewAssignmentModal({
               )}
 
               {/* General: opt into a custom recurrence rule instead of working days */}
-              {workType === "GENERAL_TASK" && !scopeOneOff && (
+              {workType === "GENERAL_TASK" && !scopeOneOff && !hideSchedule && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
                   <label className="flex items-center gap-2 text-sm text-on-surface">
                     <input
@@ -1775,7 +1804,7 @@ export function NewAssignmentModal({
               )}
 
               {/* Periodical (or Other + recurrence): recurrence settings */}
-              {showRecurrence && !scopeOneOff && (
+              {showRecurrence && !scopeOneOff && !hideSchedule && (
                 <div className="mt-4 rounded-2xl border border-grey-200 bg-grey-100/40 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <p className="text-sm font-medium text-on-surface">Recurrence</p>
@@ -2025,7 +2054,7 @@ export function NewAssignmentModal({
                   <>
                     <div className="flex flex-col gap-3">
                       {groupFields.map((field, index) => {
-                        if (editTaskId && singleGroupIndex >= 0 && index !== singleGroupIndex) return null;
+                        if (restrictGroups && singleGroupIndex >= 0 && index !== singleGroupIndex) return null;
                         return (
                           <LocationGroupCard
                             key={field.id}
@@ -2033,7 +2062,7 @@ export function NewAssignmentModal({
                             siteId={siteId}
                             floorOptions={floorOptions}
                             floorsLoading={floorsQuery.isLoading}
-                            canRemove={!editTaskId && groupFields.length > 1}
+                            canRemove={!restrictGroups && groupFields.length > 1}
                             onRemove={() => removeGroup(index)}
                             assignPerTask={assignPerTask}
                             cleaners={cleaners}
@@ -2044,7 +2073,7 @@ export function NewAssignmentModal({
                       })}
                     </div>
 
-                    {!editTaskId && !defaultAreaId && (
+                    {!restrictGroups && !defaultAreaId && (
                       <button
                         type="button"
                         onClick={() => appendGroup(emptyGroup())}
@@ -2406,18 +2435,20 @@ export function NewAssignmentModal({
                 )}
                 <button
                   type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={createMutation.isPending || updateMutation.isPending || overrideSubmitting}
                   className="h-11 flex-1 rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {editAssignmentId
-                    ? updateMutation.isPending
-                      ? "Updating…"
-                      : "Update Assignment"
-                    : createMutation.isPending
-                      ? "Creating…"
-                      : workOrderMode
-                        ? `Add Tasks${totalTasks > 0 ? ` (${totalTasks})` : ""}`
-                        : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
+                  {overrideSubmitting
+                    ? "Saving…"
+                    : editAssignmentId
+                      ? updateMutation.isPending
+                        ? "Updating…"
+                        : "Update Assignment"
+                      : createMutation.isPending
+                        ? "Creating…"
+                        : workOrderMode
+                          ? `Add Tasks${totalTasks > 0 ? ` (${totalTasks})` : ""}`
+                          : `Create Assignment${totalTasks > 0 ? ` (${totalTasks} task${totalTasks === 1 ? "" : "s"})` : ""}`}
                 </button>
               </div>
             </div>

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CertificateTypeSchema, type CertificateType } from "@/features/users/schemas/document.schema";
+
 // Mirrors backend WorkOrderStatus.
 export const WORK_ORDER_STATUS_VALUES = [
   "PENDING",
@@ -78,6 +80,8 @@ export const WorkOrderSchema = z.object({
   priceType: WorkOrderPriceTypeSchema.nullable().optional(),
   priceAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
+  requiredCertificatesAllWorkers: z.array(CertificateTypeSchema).default([]),
+  requiredCertificatesAnyWorker: z.array(CertificateTypeSchema).default([]),
   cleanerProfiles: z.array(WorkOrderCleanerProfileSchema).default([]),
   supervisorProfiles: z.array(WorkOrderSupervisorProfileSchema).default([]),
   photos: z.array(WorkOrderPhotoSchema).default([]),
@@ -97,6 +101,8 @@ export interface CreateWorkOrderInput {
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
+  requiredCertificatesAllWorkers?: CertificateType[];
+  requiredCertificatesAnyWorker?: CertificateType[];
 }
 
 // Outbound update payload — matches UpdateWorkOrderRequest (site is fixed).
@@ -108,4 +114,6 @@ export interface UpdateWorkOrderInput {
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
   status?: WorkOrderStatus;
+  requiredCertificatesAllWorkers?: CertificateType[];
+  requiredCertificatesAnyWorker?: CertificateType[];
 }

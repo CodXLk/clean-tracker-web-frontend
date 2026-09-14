@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { X, Upload } from "lucide-react";
+import { X, Upload, ShieldCheck } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import {
+  CERTIFICATE_TYPES,
+  CERTIFICATE_TYPE_LABELS,
+  type CertificateType,
+} from "@/features/users/schemas/document.schema";
 import {
   useCreateWorkOrder,
   useUpdateWorkOrder,
@@ -50,6 +55,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [priceAmount, setPriceAmount] = useState<string>(
     workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
   );
+  const [certsAll, setCertsAll] = useState<CertificateType[]>(workOrder?.requiredCertificatesAllWorkers ?? []);
+  const [certsAny, setCertsAny] = useState<CertificateType[]>(workOrder?.requiredCertificatesAnyWorker ?? []);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +72,17 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   );
 
   const previews = useMemo(() => pendingFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [pendingFiles]);
+
+  /** Toggle a certificate within one requirement group, keeping the two groups mutually exclusive. */
+  function toggleCert(type: CertificateType, group: "all" | "any") {
+    if (group === "all") {
+      setCertsAll((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+      setCertsAny((prev) => prev.filter((t) => t !== type));
+    } else {
+      setCertsAny((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+      setCertsAll((prev) => prev.filter((t) => t !== type));
+    }
+  }
 
   function handleClose() {
     if (pending || uploadPhotos.isPending) return;
@@ -112,6 +130,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             numberOfCleaners,
             numberOfSupervisors,
             ...pricePayload,
+            requiredCertificatesAllWorkers: certsAll,
+            requiredCertificatesAnyWorker: certsAny,
             status: workOrder.status,
           },
         },
@@ -136,6 +156,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
         numberOfCleaners,
         numberOfSupervisors,
         ...pricePayload,
+        requiredCertificatesAllWorkers: certsAll,
+        requiredCertificatesAnyWorker: certsAny,
       },
       {
         onSuccess: async (created) => {
@@ -244,6 +266,58 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             placeholder="e.g. Clean the outside fence along the north boundary."
             className="rounded-xl border border-grey-300 bg-white px-3.5 py-2.5 text-sm text-on-surface outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
+        </div>
+
+        {/* Required certificates */}
+        <div className="flex flex-col gap-3 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={16} className="text-primary" aria-hidden="true" />
+            <span className="text-sm font-medium text-on-surface">Required certificates</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-grey-500">
+              Mandatory for all workers
+            </span>
+            <p className="text-xs text-grey-500">
+              Every cleaner and supervisor assigned to this work order must hold a verified, non-expired
+              copy of each certificate below.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {CERTIFICATE_TYPES.map((type) => (
+                <label key={`all-${type}`} className="flex items-center gap-2 text-sm text-on-surface">
+                  <input
+                    type="checkbox"
+                    checked={certsAll.includes(type)}
+                    onChange={() => toggleCert(type, "all")}
+                    className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
+                  />
+                  <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 border-t border-grey-200 pt-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-grey-500">
+              At least one worker
+            </span>
+            <p className="text-xs text-grey-500">
+              At least one assigned worker (cleaner or supervisor) must hold each certificate below. A
+              supervisor holding it also satisfies it for the cleaners.
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {CERTIFICATE_TYPES.map((type) => (
+                <label key={`any-${type}`} className="flex items-center gap-2 text-sm text-on-surface">
+                  <input
+                    type="checkbox"
+                    checked={certsAny.includes(type)}
+                    onChange={() => toggleCert(type, "any")}
+                    className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
+                  />
+                  <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Photos */}

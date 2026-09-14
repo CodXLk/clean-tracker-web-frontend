@@ -1,6 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
@@ -10,6 +11,7 @@ import {
   SiteTaskStatusCountsSchema,
   WorkforceStatsSchema,
   toCreateAssignmentPayload,
+  type Assignment,
   type AssignmentFormInput,
   type OccurrenceScope,
   type SiteTaskSummary,
@@ -239,6 +241,30 @@ export function useAssignment(id: string | undefined) {
       return AssignmentSchema.parse(data);
     },
   });
+}
+
+/** Full details for several assignments at once (shares cache with {@link useAssignment}). */
+export function useAssignmentsByIds(ids: string[]) {
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["assignment", id],
+      enabled: !!id,
+      queryFn: async () => {
+        const { data } = await clientApi.get(ENDPOINTS.assignments.byId(id));
+        return AssignmentSchema.parse(data);
+      },
+    })),
+  });
+  const loaded = ids.length > 0 && results.every((r) => r.data);
+  const isLoading = results.some((r) => r.isLoading);
+  // Keep the returned array referentially stable while the underlying data is unchanged.
+  const signature = results.map((r) => r.dataUpdatedAt).join(",");
+  const data = useMemo(
+    () => (loaded ? (results.map((r) => r.data) as Assignment[]) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loaded, signature],
+  );
+  return { data, isLoading };
 }
 
 /** Update an existing assignment/series in place (whole assignment). */
