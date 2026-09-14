@@ -10,11 +10,9 @@ import {
   useDeleteDocument,
   useVerifyDocument,
 } from "@/features/users/hooks/useUserDocuments";
+import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
 import {
-  CERTIFICATE_TYPES,
-  CERTIFICATE_TYPE_LABELS,
   certificateNumberLabel,
-  type CertificateType,
   type UserDocument,
 } from "@/features/users/schemas/document.schema";
 
@@ -130,13 +128,14 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
   const isManagement = MANAGEMENT_ROLES.has(me.data?.role ?? "");
 
   const documentsQuery = useUserDocuments(userId);
+  const certOptions = useCertificateTypes();
   const upload = useUploadDocument();
   const remove = useDeleteDocument();
   const verify = useVerifyDocument();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [certificateType, setCertificateType] = useState<CertificateType>("VEVO_CHECK");
+  const [certificateType, setCertificateType] = useState<string>("");
   const [otherLabel, setOtherLabel] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
   const [issueDate, setIssueDate] = useState("");
@@ -154,7 +153,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
 
   function resetForm() {
     setFile(null);
-    setCertificateType("VEVO_CHECK");
+    setCertificateType("");
     setOtherLabel("");
     setDocumentNumber("");
     setIssueDate("");
@@ -172,6 +171,10 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
     }
     if (file.size > MAX_BYTES) {
       setLocalError("File is too large (max 10MB).");
+      return;
+    }
+    if (!certificateType) {
+      setLocalError("Please select the document type from the drop down.");
       return;
     }
     if (certificateType === "OTHER" && otherLabel.trim().length === 0) {
@@ -235,11 +238,14 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
               <select
                 className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
                 value={certificateType}
-                onChange={(e) => setCertificateType(e.target.value as CertificateType)}
+                onChange={(e) => setCertificateType(e.target.value)}
               >
-                {CERTIFICATE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {CERTIFICATE_TYPE_LABELS[t]}
+                <option value="" disabled>
+                  Select the document type from the drop down
+                </option>
+                {(certOptions.data ?? []).map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
                   </option>
                 ))}
               </select>

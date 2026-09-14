@@ -57,6 +57,7 @@ export const UserSchema = z.object({
   active: z.boolean(),
   setupComplete: z.boolean(),
   hasPhoto: z.boolean().optional().default(false),
+  validCertificates: z.array(z.string()).optional().default([]),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });

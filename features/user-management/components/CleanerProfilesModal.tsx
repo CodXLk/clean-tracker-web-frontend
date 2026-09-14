@@ -16,7 +16,8 @@ import {
   type ProfileAssignmentInput,
 } from "@/features/user-management/hooks/useSiteAssignments";
 import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
-import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { candidateCertMeta } from "@/features/users/components/CertificateBadge";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Site, SiteCleanerProfile, DayOfWeek } from "@/features/user-management/schemas/site.schema";
 
@@ -67,14 +68,10 @@ export function CleanerProfilesModal({
   restrictToAssignOnly,
 }: CleanerProfilesModalProps) {
   const profilesQuery = useSiteCleanerProfiles(open ? site?.id : undefined);
-  const requiresCerts = (site?.requiredCertificates?.length ?? 0) > 0;
-  // When a site gates on certificates, only offer cleaners who satisfy them.
-  const allCleanersQuery = useCleaners();
-  const eligibleCleanersQuery = useEligibleSiteCleaners(
-    open && requiresCerts ? site?.id : undefined,
-    requiresCerts,
-  );
-  const cleanersQuery = requiresCerts ? eligibleCleanersQuery : allCleanersQuery;
+  // Always list every cleaner (with the certificates each holds); ineligible ones are view-only.
+  const cleanersQuery = useEligibleSiteCleaners(open ? site?.id : undefined, open);
+  const certLabel = useCertificateLabels();
+  const requiredKeys = useMemo(() => site?.requiredCertificates ?? [], [site?.requiredCertificates]);
   const assign = useAssignCleanerProfiles();
   const addProfile = useAddCleanerProfile();
   const removeProfile = useRemoveCleanerProfile();
@@ -135,9 +132,10 @@ export function CleanerProfilesModal({
         value: c.id,
         label: personName(c.firstName, c.lastName),
         sublabel: c.email ?? undefined,
+        ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel),
       })),
     ],
-    [cleanersQuery.data],
+    [cleanersQuery.data, requiredKeys, certLabel],
   );
 
   const copySourceOptions: SelectOption[] = useMemo(

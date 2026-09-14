@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ListChecks, Hash, X, ChevronLeft, ChevronRight, ImageOff, DollarSign } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
-import { CERTIFICATE_TYPE_LABELS } from "@/features/users/schemas/document.schema";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
 import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRICE_TYPE_LABELS,
@@ -56,6 +56,7 @@ interface WorkOrderDetailModalProps {
 
 export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDetailModalProps) {
   const [lightbox, setLightbox] = useState<number | null>(null);
+  const certLabel = useCertificateLabels();
   if (!workOrder) return null;
 
   const photos = workOrder.photos;
@@ -109,7 +110,7 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
                 <p>
                   <span className="font-medium">Every worker:</span>{" "}
                   {workOrder.requiredCertificatesAllWorkers
-                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .map((c) => certLabel(c))
                     .join(", ")}
                 </p>
               )}
@@ -117,7 +118,7 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
                 <p>
                   <span className="font-medium">At least one worker:</span>{" "}
                   {workOrder.requiredCertificatesAnyWorker
-                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .map((c) => certLabel(c))
                     .join(", ")}
                 </p>
               )}

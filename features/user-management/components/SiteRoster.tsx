@@ -17,6 +17,9 @@ import { useSiteOutsourceProjects } from "@/features/outsource/hooks/useOutsourc
 import { OutsourceProfilesModal } from "@/features/outsource/components/OutsourceProfilesModal";
 import { useSiteWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
 import { WorkOrderProfilesModal } from "@/features/work-orders/components/WorkOrderProfilesModal";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { CertificateBadgeRow, type CertBadge } from "@/features/users/components/CertificateBadge";
+import { certificateAbbreviation, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import type { Site } from "@/features/user-management/schemas/site.schema";
 
 interface RosterEntry {
@@ -101,6 +104,17 @@ export function SiteRoster({
     [workOrder],
   );
 
+  // Site-specific required certificates (mandatory VEVO/Police/ABN excluded to save space).
+  const certLabel = useCertificateLabels();
+  const siteCertBadges = useMemo<CertBadge[]>(() => {
+    const keys = (site?.requiredCertificates ?? []).filter((k) => !isMandatoryCertificate(k));
+    return keys.map((k) => ({
+      text: certificateAbbreviation(k, certLabel(k)),
+      title: certLabel(k),
+      tone: "neutral" as const,
+    }));
+  }, [site?.requiredCertificates, certLabel]);
+
   if (!site) return null;
 
   function handleConfirmRemove() {
@@ -146,6 +160,12 @@ export function SiteRoster({
 
   return (
     <div className="mb-6 rounded-2xl border border-line bg-white p-4 sm:p-5">
+      {siteCertBadges.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-grey-50 px-3 py-2">
+          <span className="text-xs font-medium text-grey-600">Site certificates</span>
+          <CertificateBadgeRow badges={siteCertBadges} />
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
       <RosterGroup
         title="Cleaners"

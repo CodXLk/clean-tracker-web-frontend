@@ -13,6 +13,7 @@ import {
   LogOut,
   MessageSquareWarning,
   RefreshCw,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -37,6 +38,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   CHECKOUT_WITH_PENDING_TASKS: LogOut,
   COMPLAINT_RAISED: MessageSquareWarning,
   TASK_REDO_ASSIGNED: RefreshCw,
+  DOCUMENT_UPLOADED: FileText,
   OTHER: Bell,
 };
 
@@ -50,6 +52,7 @@ const ICON_TONES: Record<NotificationType, string> = {
   CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
   COMPLAINT_RAISED: "bg-error/10 text-error",
   TASK_REDO_ASSIGNED: "bg-primary/10 text-ink",
+  DOCUMENT_UPLOADED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
 
@@ -118,6 +121,14 @@ function NotificationRow({ n }: { n: Notification }) {
           {(n.type === "CHECKOUT_WITH_PENDING_TASKS" || n.type === "TASK_REDO_ASSIGNED") && (
             <Link href="/admin/cleaner-logs" className="text-xs font-medium text-ink hover:underline">
               View cleaner logs
+            </Link>
+          )}
+          {n.type === "DOCUMENT_UPLOADED" && (
+            <Link
+              href={n.refId ? `/admin/workforce?docUser=${n.refId}` : "/admin/workforce"}
+              className="text-xs font-medium text-ink hover:underline"
+            >
+              Review document
             </Link>
           )}
           {!n.read && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FileText } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
@@ -14,8 +14,10 @@ import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesT
 import { WorkOrdersSection } from "@/features/work-orders/components/WorkOrdersSection";
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
 import { SiteRoster } from "@/features/user-management/components/SiteRoster";
+import { isSelectableInOperations } from "@/features/user-management/schemas/site.schema";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
 import { StaffManagement } from "@/features/users/components/StaffManagement";
+import { DocumentReviewModal } from "@/features/users/components/DocumentReviewModal";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useDrafts } from "@/features/workforce/hooks/useDrafts";
@@ -72,14 +74,18 @@ function WorkforceContent() {
 
   // Operations shares one selected site between the header picker and the calendar.
   const sitesQuery = useSites();
+  // Completed one-time work-order sites are hidden from the Operations picker.
+  const operationsSites = useMemo(
+    () => (sitesQuery.data ?? []).filter(isSelectableInOperations),
+    [sitesQuery.data],
+  );
   const [operationsSiteId, setOperationsSiteId] = useState("");
   useEffect(() => {
-    const list = sitesQuery.data;
-    if (list && list.length > 0 && !list.some((s) => s.id === operationsSiteId)) {
-      setOperationsSiteId(list[0]!.id);
+    if (operationsSites.length > 0 && !operationsSites.some((s) => s.id === operationsSiteId)) {
+      setOperationsSiteId(operationsSites[0]!.id);
     }
-  }, [sitesQuery.data, operationsSiteId]);
-  const selectedSite = sitesQuery.data?.find((s) => s.id === operationsSiteId) ?? null;
+  }, [operationsSites, operationsSiteId]);
+  const selectedSite = operationsSites.find((s) => s.id === operationsSiteId) ?? null;
 
   const [newAssignmentOpen, setNewAssignmentOpen] = useState(false);
   const [prefill, setPrefill] = useState<AssignmentPrefill>({});
@@ -127,6 +133,15 @@ function WorkforceContent() {
     setLoadedDraft(null);
   }
 
+  // Notification deep-link: ?docUser=<userId> opens that person's compliance documents to verify.
+  const docUserId = searchParams.get("docUser");
+  function closeDocReview() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("docUser");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
   return (
     <>
       {!useDrawerNav && (
@@ -146,7 +161,7 @@ function WorkforceContent() {
             <>
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <SiteFilterSelect
-                  sites={sitesQuery.data ?? []}
+                  sites={operationsSites}
                   value={operationsSiteId}
                   onChange={setOperationsSiteId}
                   loading={sitesQuery.isLoading}
@@ -218,6 +233,9 @@ function WorkforceContent() {
 
         {/* Drafts Modal */}
         <DraftsModal open={draftsOpen} onClose={() => setDraftsOpen(false)} onLoad={handleLoadDraft} />
+
+        {/* Notification deep-link: review a person's compliance documents. */}
+        <DocumentReviewModal userId={docUserId} onClose={closeDocReview} />
       </div>
     </>
   );

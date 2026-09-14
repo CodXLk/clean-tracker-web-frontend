@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { CertificateTypeSchema, type CertificateType } from "@/features/users/schemas/document.schema";
-
 // Mirrors backend WorkOrderStatus.
 export const WORK_ORDER_STATUS_VALUES = [
   "PENDING",
@@ -80,8 +78,8 @@ export const WorkOrderSchema = z.object({
   priceType: WorkOrderPriceTypeSchema.nullable().optional(),
   priceAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
-  requiredCertificatesAllWorkers: z.array(CertificateTypeSchema).default([]),
-  requiredCertificatesAnyWorker: z.array(CertificateTypeSchema).default([]),
+  requiredCertificatesAllWorkers: z.array(z.string()).default([]),
+  requiredCertificatesAnyWorker: z.array(z.string()).default([]),
   cleanerProfiles: z.array(WorkOrderCleanerProfileSchema).default([]),
   supervisorProfiles: z.array(WorkOrderSupervisorProfileSchema).default([]),
   photos: z.array(WorkOrderPhotoSchema).default([]),
@@ -93,16 +91,33 @@ export type WorkOrder = z.infer<typeof WorkOrderSchema>;
 export const WorkOrderListSchema = z.array(WorkOrderSchema);
 
 // Outbound create payload — matches CreateWorkOrderRequest. Work-order dates come from its tasks.
+export interface OneTimeSiteInput {
+  clientCompanyId: string;
+  clientId: string;
+  contactPersonName?: string;
+  contactNumber?: string;
+  googleMapsLink?: string;
+  streetAddress?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofenceRadiusMeters?: number | null;
+  nfcTagId?: string;
+}
+
 export interface CreateWorkOrderInput {
   poId: string;
-  siteId: string;
+  /** Existing site to attach the work order to. Omit when creating a one-time site. */
+  siteId?: string;
+  /** When true, create a one-time (temporary) site named after the PO ID. */
+  oneTimeSite?: boolean;
+  oneTimeSiteDetails?: OneTimeSiteInput;
   description?: string;
   numberOfCleaners?: number;
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
-  requiredCertificatesAllWorkers?: CertificateType[];
-  requiredCertificatesAnyWorker?: CertificateType[];
+  requiredCertificatesAllWorkers?: string[];
+  requiredCertificatesAnyWorker?: string[];
 }
 
 // Outbound update payload — matches UpdateWorkOrderRequest (site is fixed).
@@ -114,6 +129,6 @@ export interface UpdateWorkOrderInput {
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
   status?: WorkOrderStatus;
-  requiredCertificatesAllWorkers?: CertificateType[];
-  requiredCertificatesAnyWorker?: CertificateType[];
+  requiredCertificatesAllWorkers?: string[];
+  requiredCertificatesAnyWorker?: string[];
 }

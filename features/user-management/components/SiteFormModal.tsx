@@ -41,10 +41,9 @@ import {
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { useCreateSite, useUpdateSite } from "@/features/user-management/hooks/useSites";
-import {
-  CERTIFICATE_TYPES,
-  CERTIFICATE_TYPE_LABELS,
-} from "@/features/users/schemas/document.schema";
+import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
+import { AddCertificateTypeButton } from "@/features/users/components/AddCertificateTypeButton";
+import { MANDATORY_CERTIFICATE_KEYS, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import { isNfcSupported, readNfcTag, NfcError } from "@/lib/nfc";
 import { cn } from "@/lib/utils/cn";
 
@@ -133,7 +132,7 @@ const EMPTY: SiteFormInput = {
   generalTaskStartTime: "",
   generalTaskEndTime: "",
   generalTaskDayTimes: [],
-  requiredCertificates: [],
+  requiredCertificates: [...MANDATORY_CERTIFICATE_KEYS],
   clientSiteManagementEnabled: false,
   worksOnPublicHolidays: false,
   workOrderSite: false,
@@ -147,6 +146,7 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
   const companiesQuery = useClientCompanies();
   const createMutation = useCreateSite();
   const updateMutation = useUpdateSite();
+  const certOptions = useCertificateTypes();
   const active = isEdit ? updateMutation : createMutation;
 
   // On create, chain straight into a dedicated Floors modal (whose own "manage areas"
@@ -218,7 +218,9 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
               startTime: (d.startTime ?? "").slice(0, 5),
               endTime: (d.endTime ?? "").slice(0, 5),
             })),
-            requiredCertificates: site.requiredCertificates ?? [],
+            requiredCertificates: Array.from(
+              new Set([...MANDATORY_CERTIFICATE_KEYS, ...(site.requiredCertificates ?? [])]),
+            ),
             clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
             worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
             workOrderSite: site.workOrderSite ?? false,
@@ -520,37 +522,54 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
         <div className="flex flex-col gap-2">
           <p className="text-xs text-grey-500">
             Only cleaners and supervisors holding a verified, non-expired copy of every selected
-            certificate can be assigned to this site.
+            certificate can be assigned to this site. VEVO / Working Rights, Police Check and ABN
+            Registration are mandatory for everyone and always required.
           </p>
           <Controller
             control={control}
             name="requiredCertificates"
             render={({ field }) => {
               const selected = new Set(field.value ?? []);
+              const toggle = (key: string, on: boolean) => {
+                if (isMandatoryCertificate(key)) return;
+                const next = new Set(selected);
+                if (on) next.add(key);
+                else next.delete(key);
+                field.onChange([...next]);
+              };
               return (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {CERTIFICATE_TYPES.map((type) => {
-                    const checked = selected.has(type);
-                    return (
-                      <label
-                        key={type}
-                        className="flex items-center gap-2 rounded-lg border border-grey-200 px-3 py-2 text-sm text-on-surface hover:bg-grey-50"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-grey-300"
-                          checked={checked}
-                          onChange={(e) => {
-                            const next = new Set(selected);
-                            if (e.target.checked) next.add(type);
-                            else next.delete(type);
-                            field.onChange([...next]);
-                          }}
-                        />
-                        <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
-                      </label>
-                    );
-                  })}
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {(certOptions.data ?? []).map((opt) => {
+                      const mandatory = isMandatoryCertificate(opt.key);
+                      return (
+                        <label
+                          key={opt.key}
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-on-surface",
+                            mandatory ? "border-grey-200 bg-grey-50" : "border-grey-200 hover:bg-grey-50",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-grey-300"
+                            checked={mandatory || selected.has(opt.key)}
+                            disabled={mandatory}
+                            onChange={(e) => toggle(opt.key, e.target.checked)}
+                          />
+                          <span className="flex items-center gap-1.5">
+                            {opt.label}
+                            {mandatory && (
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                Mandatory
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <AddCertificateTypeButton onCreated={(key) => toggle(key, true)} />
                 </div>
               );
             }}

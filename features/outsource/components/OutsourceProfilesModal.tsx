@@ -7,6 +7,8 @@ import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { candidateCertMeta } from "@/features/users/components/CertificateBadge";
 import {
   useOutsourceCleanerProfiles,
   useAssignOutsourceCleaners,
@@ -37,6 +39,7 @@ interface OutsourceProfilesModalProps {
 export function OutsourceProfilesModal({ open, onClose, project, kind }: OutsourceProfilesModalProps) {
   const isCleaner = kind === "cleaner";
   const projectId = open ? project?.id : undefined;
+  const certLabel = useCertificateLabels();
 
   const cleanerProfilesQuery = useOutsourceCleanerProfiles(isCleaner ? projectId : undefined);
   const supervisorProfilesQuery = useOutsourceSupervisorProfiles(!isCleaner ? projectId : undefined);
@@ -95,15 +98,25 @@ export function OutsourceProfilesModal({ open, onClose, project, kind }: Outsour
     const base: SelectOption[] = [{ value: UNASSIGNED, label: "— Unassigned —" }];
     if (isCleaner) {
       for (const c of eligibleCleaners.data ?? []) {
-        base.push({ value: c.id, label: personName(c.firstName, c.lastName), sublabel: c.email ?? undefined });
+        base.push({
+          value: c.id,
+          label: personName(c.firstName, c.lastName),
+          sublabel: c.email ?? undefined,
+          ...candidateCertMeta([], c.validCertificates ?? [], certLabel),
+        });
       }
     } else {
       for (const s of eligibleSupervisors.data ?? []) {
-        base.push({ value: s.id, label: personName(s.firstName, s.lastName), sublabel: s.email ?? undefined });
+        base.push({
+          value: s.id,
+          label: personName(s.firstName, s.lastName),
+          sublabel: s.email ?? undefined,
+          ...candidateCertMeta([], s.validCertificates ?? [], certLabel),
+        });
       }
     }
     return base;
-  }, [isCleaner, eligibleCleaners.data, eligibleSupervisors.data]);
+  }, [isCleaner, eligibleCleaners.data, eligibleSupervisors.data, certLabel]);
 
   const duplicate = useMemo(() => {
     const counts = new Map<string, number>();

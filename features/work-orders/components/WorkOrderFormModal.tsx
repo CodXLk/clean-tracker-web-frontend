@@ -1,17 +1,18 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { X, Upload, ShieldCheck } from "lucide-react";
+import { X, Upload, ShieldCheck, MapPin } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
+import { LocationPicker } from "@/features/user-management/components/LocationPicker";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
+import { useClients } from "@/features/user-management/hooks/useClients";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import {
-  CERTIFICATE_TYPES,
-  CERTIFICATE_TYPE_LABELS,
-  type CertificateType,
-} from "@/features/users/schemas/document.schema";
+import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
+import { AddCertificateTypeButton } from "@/features/users/components/AddCertificateTypeButton";
+import { MANDATORY_CERTIFICATE_KEYS, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import {
   useCreateWorkOrder,
   useUpdateWorkOrder,
@@ -48,6 +49,18 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
   const [poId, setPoId] = useState(workOrder?.poId ?? "");
   const [siteId, setSiteId] = useState(workOrder?.siteId ?? "");
+  // Site selection mode — a temporary "one-time" site (default on create) vs picking an existing one.
+  const [siteMode, setSiteMode] = useState<"one-time" | "existing">(isEdit ? "existing" : "one-time");
+  const [otClientCompanyId, setOtClientCompanyId] = useState("");
+  const [otClientId, setOtClientId] = useState("");
+  const [otContactPersonName, setOtContactPersonName] = useState("");
+  const [otContactNumber, setOtContactNumber] = useState("");
+  const [otGoogleMapsLink, setOtGoogleMapsLink] = useState("");
+  const [otStreetAddress, setOtStreetAddress] = useState("");
+  const [otLatitude, setOtLatitude] = useState<number | null>(null);
+  const [otLongitude, setOtLongitude] = useState<number | null>(null);
+  const [otGeofenceRadius, setOtGeofenceRadius] = useState("");
+  const [otNfcTagId, setOtNfcTagId] = useState("");
   const [description, setDescription] = useState(workOrder?.description ?? "");
   const [numberOfCleaners, setNumberOfCleaners] = useState(workOrder?.numberOfCleaners ?? 1);
   const [numberOfSupervisors, setNumberOfSupervisors] = useState(workOrder?.numberOfSupervisors ?? 1);
@@ -55,8 +68,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [priceAmount, setPriceAmount] = useState<string>(
     workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
   );
-  const [certsAll, setCertsAll] = useState<CertificateType[]>(workOrder?.requiredCertificatesAllWorkers ?? []);
-  const [certsAny, setCertsAny] = useState<CertificateType[]>(workOrder?.requiredCertificatesAnyWorker ?? []);
+  const [certsAll, setCertsAll] = useState<string[]>(
+    Array.from(new Set([...MANDATORY_CERTIFICATE_KEYS, ...(workOrder?.requiredCertificatesAllWorkers ?? [])])),
+  );
+  const [certsAny, setCertsAny] = useState<string[]>(
+    (workOrder?.requiredCertificatesAnyWorker ?? []).filter((k) => !isMandatoryCertificate(k)),
+  );
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,15 +83,33 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const isError = isEdit ? update.isError : create.isError;
 
   const sitesQuery = useSites();
+  const certOptions = useCertificateTypes();
+  const companiesQuery = useClientCompanies();
+  const clientsQuery = useClients(otClientCompanyId || undefined, { enabled: !!otClientCompanyId });
   const siteOptions: SelectOption[] = useMemo(
     () => (sitesQuery.data ?? []).map((s) => ({ value: s.id, label: s.name })),
     [sitesQuery.data],
   );
+  const companyOptions: SelectOption[] = useMemo(
+    () => (companiesQuery.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.email ?? undefined })),
+    [companiesQuery.data],
+  );
+  const clientOptions: SelectOption[] = useMemo(
+    () => (clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+    [clientsQuery.data],
+  );
+
+  function handleOtCompanyChange(id: string) {
+    setOtClientCompanyId(id);
+    setOtClientId("");
+  }
 
   const previews = useMemo(() => pendingFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [pendingFiles]);
 
   /** Toggle a certificate within one requirement group, keeping the two groups mutually exclusive. */
-  function toggleCert(type: CertificateType, group: "all" | "any") {
+  function toggleCert(type: string, group: "all" | "any") {
+    // Mandatory certs are always required for every worker and cannot be moved or removed.
+    if (isMandatoryCertificate(type)) return;
     if (group === "all") {
       setCertsAll((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
       setCertsAny((prev) => prev.filter((t) => t !== type));
@@ -90,6 +125,19 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     create.reset();
     update.reset();
     setPendingFiles([]);
+    if (!isEdit) {
+      setSiteMode("one-time");
+      setOtClientCompanyId("");
+      setOtClientId("");
+      setOtContactPersonName("");
+      setOtContactNumber("");
+      setOtGoogleMapsLink("");
+      setOtStreetAddress("");
+      setOtLatitude(null);
+      setOtLongitude(null);
+      setOtGeofenceRadius("");
+      setOtNfcTagId("");
+    }
     onClose();
   }
 
@@ -100,7 +148,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
   function validate(): string | null {
     if (!poId.trim()) return "Enter the PO ID.";
-    if (!siteId) return "Select a site.";
+    if (!isEdit && siteMode === "one-time") {
+      if (!otClientCompanyId) return "Select a client company for the one-time site.";
+      if (!otClientId) return "Select a client contact for the one-time site.";
+    } else if (!siteId) {
+      return "Select a site.";
+    }
     if (priceAmount.trim() && !(Number(priceAmount) > 0)) return "Enter a valid price greater than zero.";
     return null;
   }
@@ -148,10 +201,27 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       return;
     }
 
+    const oneTime = siteMode === "one-time";
     create.mutate(
       {
         poId: trimmedPo,
-        siteId,
+        ...(oneTime
+          ? {
+              oneTimeSite: true,
+              oneTimeSiteDetails: {
+                clientCompanyId: otClientCompanyId,
+                clientId: otClientId,
+                contactPersonName: otContactPersonName.trim() || undefined,
+                contactNumber: otContactNumber.trim() || undefined,
+                googleMapsLink: otGoogleMapsLink.trim() || undefined,
+                streetAddress: otStreetAddress.trim() || undefined,
+                latitude: otLatitude,
+                longitude: otLongitude,
+                geofenceRadiusMeters: otGeofenceRadius.trim() ? Number(otGeofenceRadius) : undefined,
+                nfcTagId: otNfcTagId.trim() || undefined,
+              },
+            }
+          : { siteId }),
         description: description.trim() || undefined,
         numberOfCleaners,
         numberOfSupervisors,
@@ -180,29 +250,158 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       maxWidthClassName="max-w-xl"
     >
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
-            label="PO ID"
-            name="wo-po"
-            required
-            value={poId}
-            onChange={(e) => setPoId(e.target.value)}
-            placeholder="e.g. PO-2025-0142"
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-on-surface">
-              Site<span className="ml-0.5 text-error">*</span>
-            </label>
+        <TextField
+          label="PO ID"
+          name="wo-po"
+          required
+          value={poId}
+          onChange={(e) => setPoId(e.target.value)}
+          placeholder="e.g. PO-2025-0142"
+        />
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-on-surface">
+            Site<span className="ml-0.5 text-error">*</span>
+          </label>
+
+          {isEdit ? (
             <SearchableSelect
               options={siteOptions}
               value={siteId || null}
               onChange={setSiteId}
-              disabled={isEdit}
+              disabled
               loading={sitesQuery.isLoading}
               placeholder="Select site"
               searchPlaceholder="Search sites…"
             />
-          </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["one-time", "One-time site"],
+                  ["existing", "Existing site"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSiteMode(value)}
+                    className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                      siteMode === value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-grey-300 text-on-surface hover:bg-grey-100"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {siteMode === "existing" ? (
+                <SearchableSelect
+                  options={siteOptions}
+                  value={siteId || null}
+                  onChange={setSiteId}
+                  loading={sitesQuery.isLoading}
+                  placeholder="Select site"
+                  searchPlaceholder="Search sites…"
+                />
+              ) : (
+                <div className="flex flex-col gap-4 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
+                  <p className="text-xs text-grey-500">
+                    A temporary site is saved from the details below and named after the PO ID. It appears in
+                    Operations until this work order is completed.
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <SearchableSelect
+                      label="Client company"
+                      required
+                      options={companyOptions}
+                      value={otClientCompanyId || null}
+                      onChange={handleOtCompanyChange}
+                      loading={companiesQuery.isLoading}
+                      placeholder="Select a client company"
+                      searchPlaceholder="Search client companies…"
+                      emptyMessage="No client companies found."
+                    />
+                    <SearchableSelect
+                      label="Client contact"
+                      required
+                      options={clientOptions}
+                      value={otClientId || null}
+                      onChange={setOtClientId}
+                      disabled={!otClientCompanyId}
+                      loading={!!otClientCompanyId && clientsQuery.isLoading}
+                      placeholder={otClientCompanyId ? "Select a client" : "Select a client company first"}
+                      searchPlaceholder="Search clients…"
+                      emptyMessage="This client company has no clients yet."
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-primary" aria-hidden="true" />
+                      <span className="text-sm font-medium text-on-surface">Location</span>
+                    </div>
+                    <TextField
+                      label="Google Maps location link"
+                      name="wo-ot-maps"
+                      value={otGoogleMapsLink}
+                      onChange={(e) => setOtGoogleMapsLink(e.target.value)}
+                      placeholder="Paste a Google Maps URL or pick on the map"
+                    />
+                    <div className="rounded-xl border border-grey-200 bg-white p-3">
+                      <LocationPicker
+                        value={otGoogleMapsLink}
+                        onChange={setOtGoogleMapsLink}
+                        onCoordsChange={(coords) => {
+                          setOtLatitude(coords.lat);
+                          setOtLongitude(coords.lng);
+                        }}
+                      />
+                    </div>
+                    <TextField
+                      label="Street address"
+                      name="wo-ot-address"
+                      value={otStreetAddress}
+                      onChange={(e) => setOtStreetAddress(e.target.value)}
+                    />
+                    <TextField
+                      label="Check-in geofence radius (m)"
+                      name="wo-ot-geofence"
+                      type="number"
+                      min={0}
+                      value={otGeofenceRadius}
+                      onChange={(e) => setOtGeofenceRadius(e.target.value)}
+                      placeholder="Defaults to 100m"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <TextField
+                      label="Contact person name"
+                      name="wo-ot-contact-name"
+                      value={otContactPersonName}
+                      onChange={(e) => setOtContactPersonName(e.target.value)}
+                    />
+                    <TextField
+                      label="Contact number"
+                      name="wo-ot-contact-number"
+                      value={otContactNumber}
+                      onChange={(e) => setOtContactNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <TextField
+                    label="NFC tag id (optional)"
+                    name="wo-ot-nfc"
+                    value={otNfcTagId}
+                    onChange={(e) => setOtNfcTagId(e.target.value)}
+                    placeholder="Scan or enter the site's NFC tag id"
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -280,21 +479,34 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             </span>
             <p className="text-xs text-grey-500">
               Every cleaner and supervisor assigned to this work order must hold a verified, non-expired
-              copy of each certificate below.
+              copy of each certificate below. VEVO / Working Rights, Police Check and ABN Registration are
+              mandatory and always required.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CERTIFICATE_TYPES.map((type) => (
-                <label key={`all-${type}`} className="flex items-center gap-2 text-sm text-on-surface">
-                  <input
-                    type="checkbox"
-                    checked={certsAll.includes(type)}
-                    onChange={() => toggleCert(type, "all")}
-                    className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
-                  />
-                  <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
-                </label>
-              ))}
+              {(certOptions.data ?? []).map((opt) => {
+                const mandatory = isMandatoryCertificate(opt.key);
+                return (
+                  <label key={`all-${opt.key}`} className="flex items-center gap-2 text-sm text-on-surface">
+                    <input
+                      type="checkbox"
+                      checked={mandatory || certsAll.includes(opt.key)}
+                      disabled={mandatory}
+                      onChange={() => toggleCert(opt.key, "all")}
+                      className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      {opt.label}
+                      {mandatory && (
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          Mandatory
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
+            <AddCertificateTypeButton onCreated={(key) => toggleCert(key, "all")} />
           </div>
           <div className="flex flex-col gap-1.5 border-t border-grey-200 pt-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-grey-500">
@@ -305,18 +517,19 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               supervisor holding it also satisfies it for the cleaners.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {CERTIFICATE_TYPES.map((type) => (
-                <label key={`any-${type}`} className="flex items-center gap-2 text-sm text-on-surface">
+              {(certOptions.data ?? []).filter((opt) => !isMandatoryCertificate(opt.key)).map((opt) => (
+                <label key={`any-${opt.key}`} className="flex items-center gap-2 text-sm text-on-surface">
                   <input
                     type="checkbox"
-                    checked={certsAny.includes(type)}
-                    onChange={() => toggleCert(type, "any")}
+                    checked={certsAny.includes(opt.key)}
+                    onChange={() => toggleCert(opt.key, "any")}
                     className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
                   />
-                  <span>{CERTIFICATE_TYPE_LABELS[type]}</span>
+                  <span>{opt.label}</span>
                 </label>
               ))}
             </div>
+            <AddCertificateTypeButton onCreated={(key) => toggleCert(key, "any")} />
           </div>
         </div>
 

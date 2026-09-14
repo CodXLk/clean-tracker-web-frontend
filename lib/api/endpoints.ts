@@ -28,6 +28,10 @@ export const ENDPOINTS = {
     verify: (id: string) => `/documents/${id}/verify`,
     file:   (id: string) => `/documents/${id}/file`,
   },
+  certificateTypes: {
+    list:   "/certificate-types",
+    create: "/certificate-types",
+  },
   companies: {
     list:   "/companies",
     create: "/companies",
@@ -268,6 +272,10 @@ export const BACKEND = {
     byId:   (id: string) => `/api/v1/documents/${id}`,
     verify: (id: string) => `/api/v1/documents/${id}/verify`,
     file:   (id: string) => `/api/v1/documents/${id}/file`,
+  },
+  certificateTypes: {
+    list:   "/api/v1/certificate-types",
+    create: "/api/v1/certificate-types",
   },
   companies: {
     list:   "/api/v1/companies",

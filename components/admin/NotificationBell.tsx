@@ -13,6 +13,7 @@ import {
   LogOut,
   MessageSquareWarning,
   RefreshCw,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -34,6 +35,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   CHECKOUT_WITH_PENDING_TASKS: LogOut,
   COMPLAINT_RAISED: MessageSquareWarning,
   TASK_REDO_ASSIGNED: RefreshCw,
+  DOCUMENT_UPLOADED: FileText,
   OTHER: Bell,
 };
 
@@ -47,17 +49,20 @@ const ICON_TONES: Record<NotificationType, string> = {
   CHECKOUT_WITH_PENDING_TASKS: "bg-[#ED5F25]/10 text-[#ED5F25]",
   COMPLAINT_RAISED: "bg-error/10 text-error",
   TASK_REDO_ASSIGNED: "bg-primary/10 text-ink",
+  DOCUMENT_UPLOADED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
 
-/** Deep-link target per notification type for the admin console. */
-function linkFor(type: NotificationType): string {
-  switch (type) {
+/** Deep-link target per notification for the admin console. */
+function linkFor(n: { type: NotificationType; refId?: string | null }): string {
+  switch (n.type) {
     case "COMPLAINT_RAISED":
       return "/admin/complaints";
     case "CHECKOUT_WITH_PENDING_TASKS":
     case "TASK_REDO_ASSIGNED":
       return "/admin/cleaner-logs";
+    case "DOCUMENT_UPLOADED":
+      return n.refId ? `/admin/workforce?docUser=${n.refId}` : "/admin/workforce";
     default:
       return "/admin/inventory";
   }
@@ -170,7 +175,7 @@ export function NotificationBell() {
                   return (
                     <li key={n.id}>
                       <Link
-                        href={linkFor(n.type)}
+                        href={linkFor(n)}
                         onClick={() => {
                           if (!n.read) markRead.mutate(n.id);
                           setOpen(false);
