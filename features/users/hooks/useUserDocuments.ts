@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
-  CertificateType,
   UserDocumentListSchema,
   type UserDocument,
 } from "@/features/users/schemas/document.schema";
@@ -32,7 +31,8 @@ export function useUserDocuments(userId: string | undefined, enabled = true) {
 export interface UploadDocumentInput {
   userId: string;
   file: File;
-  certificateType: CertificateType;
+  /** Certificate key: a built-in CertificateType name or a custom certificate code. */
+  certificateType: string;
   otherLabel?: string;
   documentNumber?: string;
   issueDate?: string;

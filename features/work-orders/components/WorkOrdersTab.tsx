@@ -262,6 +262,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
       </div>
 
       <WorkOrderFormModal
+        key={formModal?.workOrder?.id ?? "new"}
         open={!!formModal}
         onClose={() => setFormModal(null)}
         workOrder={formModal?.workOrder ?? null}

@@ -18,7 +18,7 @@ import {
   type DayOfWeek,
   type Site,
 } from "@/features/user-management/schemas/site.schema";
-import { CERTIFICATE_TYPE_LABELS } from "@/features/users/schemas/document.schema";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
 
 interface SiteDetailViewProps {
   open: boolean;
@@ -72,6 +72,7 @@ function Section({
 }
 
 export function SiteDetailView({ open, onClose, site }: SiteDetailViewProps) {
+  const certLabel = useCertificateLabels();
   const generalWindow =
     site.generalTaskTimeMode === "PER_DAY"
       ? site.generalTaskDayTimes ?? []
@@ -192,7 +193,7 @@ export function SiteDetailView({ open, onClose, site }: SiteDetailViewProps) {
                   key={c}
                   className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-ink"
                 >
-                  {CERTIFICATE_TYPE_LABELS[c]}
+                  {certLabel(c)}
                 </span>
               ))}
             </div>

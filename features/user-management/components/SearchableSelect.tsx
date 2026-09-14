@@ -3,11 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { CertificateBadgeRow, type CertBadge } from "@/features/users/components/CertificateBadge";
 
 export interface SelectOption {
   value: string;
   label: string;
   sublabel?: string;
+  /** When true the option is shown but cannot be selected (view only). */
+  disabled?: boolean;
+  /** Reason shown when a disabled option is present (e.g. "Missing required certificates"). */
+  disabledReason?: string;
+  /** Compact certificate badges rendered next to the option label. */
+  badges?: CertBadge[];
 }
 
 interface SearchableSelectProps {
@@ -124,23 +131,40 @@ export function SearchableSelect({
               ) : (
                 filtered.map((option) => {
                   const isSelected = option.value === value;
+                  const isOptionDisabled = !!option.disabled;
                   return (
-                    <li key={option.value} role="option" aria-selected={isSelected}>
+                    <li key={option.value} role="option" aria-selected={isSelected} aria-disabled={isOptionDisabled}>
                       <button
                         type="button"
+                        disabled={isOptionDisabled}
+                        title={isOptionDisabled ? option.disabledReason : undefined}
                         onClick={() => {
+                          if (isOptionDisabled) return;
                           onChange(option.value);
                           setOpen(false);
                         }}
                         className={cn(
-                          "flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-sm transition-colors hover:bg-grey-100",
+                          "flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-sm transition-colors",
+                          isOptionDisabled
+                            ? "cursor-not-allowed opacity-60"
+                            : "hover:bg-grey-100",
                           isSelected && "bg-primary/5",
                         )}
                       >
-                        <span className="min-w-0">
-                          <span className="block truncate text-on-surface">{option.label}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate text-on-surface">{option.label}</span>
+                            {option.badges && option.badges.length > 0 && (
+                              <CertificateBadgeRow badges={option.badges} />
+                            )}
+                          </span>
                           {option.sublabel && (
                             <span className="block truncate text-xs text-grey-500">{option.sublabel}</span>
+                          )}
+                          {isOptionDisabled && option.disabledReason && (
+                            <span className="block truncate text-xs font-medium text-error">
+                              {option.disabledReason}
+                            </span>
                           )}
                         </span>
                         {isSelected && <Check size={16} className="shrink-0 text-ink" aria-hidden="true" />}

@@ -39,7 +39,7 @@ import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS, assignmentToFormInput, type AssignmentFormInput, type WorkType, type Assignment } from "@/features/workforce/schemas/assignment.schema";
-import { DAY_OF_WEEK_VALUES, type DayOfWeek } from "@/features/user-management/schemas/site.schema";
+import { DAY_OF_WEEK_VALUES, isSelectableInOperations, type DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
 
@@ -1731,9 +1731,13 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
 
   const sitesQuery = useSites();
   // Exactly one site is always selected (no "all sites"). Auto-pick the first once
-  // sites load, or if the current selection is no longer present.
-  const sites = sitesQuery.data;
-  if (!siteControlled && sites && sites.length > 0 && !sites.some((s) => s.id === siteFilter)) {
+  // sites load, or if the current selection is no longer present. Completed one-time
+  // work-order sites are hidden from the picker.
+  const sites = useMemo(
+    () => (sitesQuery.data ?? []).filter(isSelectableInOperations),
+    [sitesQuery.data],
+  );
+  if (!siteControlled && sites.length > 0 && !sites.some((s) => s.id === siteFilter)) {
     setSiteFilter(sites[0]!.id);
   }
   const selectedSite = useMemo(
@@ -2352,7 +2356,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
         {/* Site selector — hidden when the Operations header supplies its own. */}
         {!siteControlled && (
           <SiteFilterSelect
-            sites={sitesQuery.data ?? []}
+            sites={sites}
             value={siteFilter}
             onChange={setSiteFilter}
             loading={sitesQuery.isLoading}

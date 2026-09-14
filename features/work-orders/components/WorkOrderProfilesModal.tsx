@@ -5,7 +5,8 @@ import { Modal } from "@/components/shared/Modal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import { CERTIFICATE_TYPE_LABELS } from "@/features/users/schemas/document.schema";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { candidateCertMeta } from "@/features/users/components/CertificateBadge";
 import {
   useWorkOrderCleanerProfiles,
   useAssignWorkOrderCleaners,
@@ -32,6 +33,7 @@ interface WorkOrderProfilesModalProps {
 export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkOrderProfilesModalProps) {
   const isCleaner = kind === "cleaner";
   const id = open ? workOrder?.id : undefined;
+  const certLabel = useCertificateLabels();
 
   const cleanerProfilesQuery = useWorkOrderCleanerProfiles(isCleaner ? id : undefined);
   const supervisorProfilesQuery = useWorkOrderSupervisorProfiles(!isCleaner ? id : undefined);
@@ -83,17 +85,29 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
 
   const staffOptions: SelectOption[] = useMemo(() => {
     const base: SelectOption[] = [{ value: UNASSIGNED, label: "— Unassigned —" }];
+    // Every work-order worker must hold the all-workers certificates.
+    const requiredKeys = workOrder?.requiredCertificatesAllWorkers ?? [];
     if (isCleaner) {
       for (const c of eligibleCleaners.data ?? []) {
-        base.push({ value: c.id, label: personName(c.firstName, c.lastName), sublabel: c.email ?? undefined });
+        base.push({
+          value: c.id,
+          label: personName(c.firstName, c.lastName),
+          sublabel: c.email ?? undefined,
+          ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel),
+        });
       }
     } else {
       for (const s of eligibleSupervisors.data ?? []) {
-        base.push({ value: s.id, label: personName(s.firstName, s.lastName), sublabel: s.email ?? undefined });
+        base.push({
+          value: s.id,
+          label: personName(s.firstName, s.lastName),
+          sublabel: s.email ?? undefined,
+          ...candidateCertMeta(requiredKeys, s.validCertificates ?? [], certLabel),
+        });
       }
     }
     return base;
-  }, [isCleaner, eligibleCleaners.data, eligibleSupervisors.data]);
+  }, [isCleaner, eligibleCleaners.data, eligibleSupervisors.data, workOrder?.requiredCertificatesAllWorkers, certLabel]);
 
   const duplicate = useMemo(() => {
     const counts = new Map<string, number>();
@@ -138,7 +152,7 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
                 <p>
                   <span className="font-medium">Every worker</span> must hold:{" "}
                   {workOrder!.requiredCertificatesAllWorkers
-                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .map((c) => certLabel(c))
                     .join(", ")}
                   .
                 </p>
@@ -147,7 +161,7 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
                 <p>
                   <span className="font-medium">At least one worker</span> (cleaner or supervisor) must hold:{" "}
                   {workOrder!.requiredCertificatesAnyWorker
-                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .map((c) => certLabel(c))
                     .join(", ")}
                   .
                 </p>

@@ -14,7 +14,8 @@ import {
   useEligibleSiteSupervisors,
   type SupervisorProfileAssignmentInput,
 } from "@/features/user-management/hooks/useSiteAssignments";
-import { useUsers } from "@/features/users/hooks/useUsers";
+import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { candidateCertMeta } from "@/features/users/components/CertificateBadge";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Site, SiteSupervisorProfile } from "@/features/user-management/schemas/site.schema";
 
@@ -38,12 +39,10 @@ interface SupervisorProfilesModalProps {
 
 export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfilesModalProps) {
   const profilesQuery = useSiteSupervisorProfiles(open ? site?.id : undefined);
-  const requiresCerts = (site?.requiredCertificates?.length ?? 0) > 0;
-  const usersQuery = useUsers();
-  const eligibleQuery = useEligibleSiteSupervisors(
-    open && requiresCerts ? site?.id : undefined,
-    requiresCerts,
-  );
+  // Always list every active supervisor (with certificates); ineligible ones are view-only.
+  const eligibleQuery = useEligibleSiteSupervisors(open ? site?.id : undefined, open);
+  const certLabel = useCertificateLabels();
+  const requiredKeys = useMemo(() => site?.requiredCertificates ?? [], [site?.requiredCertificates]);
   const assign = useAssignSupervisorProfiles();
   const addProfile = useAddSupervisorProfile();
   const removeProfile = useRemoveSupervisorProfile();
@@ -79,18 +78,16 @@ export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfi
   }
 
   const supervisorOptions: SelectOption[] = useMemo(() => {
-    const people = requiresCerts
-      ? (eligibleQuery.data ?? [])
-      : (usersQuery.data ?? []).filter((u) => u.role === "SUPERVISOR");
     return [
       { value: UNASSIGNED, label: "— Unassigned —" },
-      ...people.map((u) => ({
+      ...(eligibleQuery.data ?? []).map((u) => ({
         value: u.id,
         label: personName(u.firstName, u.lastName),
         sublabel: u.email ?? undefined,
+        ...candidateCertMeta(requiredKeys, u.validCertificates ?? [], certLabel),
       })),
     ];
-  }, [requiresCerts, eligibleQuery.data, usersQuery.data]);
+  }, [eligibleQuery.data, requiredKeys, certLabel]);
 
   const duplicateSupervisor = useMemo(() => {
     const counts = new Map<string, number>();
@@ -133,7 +130,7 @@ export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfi
     setView("remove");
   }
 
-  const isLoading = profilesQuery.isLoading || usersQuery.isLoading;
+  const isLoading = profilesQuery.isLoading || eligibleQuery.isLoading;
 
   const title =
     view === "add"

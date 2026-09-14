@@ -16,6 +16,8 @@ export const NotificationTypeSchema = z
     "CHECKOUT_WITH_PENDING_TASKS",
     "COMPLAINT_RAISED",
     "TASK_REDO_ASSIGNED",
+    // Compliance
+    "DOCUMENT_UPLOADED",
     // Forward-compat fallback (never sent by the backend)
     "OTHER",
   ])

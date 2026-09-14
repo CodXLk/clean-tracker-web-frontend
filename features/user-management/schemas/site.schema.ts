@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { optionalAuPhoneSchema } from "@/lib/validators/phone";
-import { CertificateTypeSchema } from "@/features/users/schemas/document.schema";
 
 // Java DayOfWeek names, ordered Monday-first to match the backend enum.
 export const DAY_OF_WEEK_VALUES = [
@@ -133,10 +132,12 @@ export const SiteSchema = z.object({
   generalTaskStartTime: z.string().nullable().optional(),
   generalTaskEndTime: z.string().nullable().optional(),
   generalTaskDayTimes: z.array(GeneralTaskDayTimeSchema).default([]),
-  requiredCertificates: z.array(CertificateTypeSchema).default([]),
+  requiredCertificates: z.array(z.string()).default([]),
   clientSiteManagementEnabled: z.boolean().optional().default(false),
   worksOnPublicHolidays: z.boolean().optional().default(false),
   workOrderSite: z.boolean().optional().default(false),
+  oneTimeSite: z.boolean().optional().default(false),
+  oneTimeSiteCompleted: z.boolean().optional().default(false),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
@@ -144,6 +145,14 @@ export const SiteSchema = z.object({
 });
 
 export const SiteListSchema = z.array(SiteSchema);
+
+/**
+ * Sites offered in the Operations site picker: hides one-time (temporary) work-order sites once
+ * their work order is completed, to avoid cluttering the dropdown.
+ */
+export function isSelectableInOperations(site: Site): boolean {
+  return !(site.oneTimeSite && site.oneTimeSiteCompleted);
+}
 
 // Outbound create/update payload — matches Create/UpdateSiteRequest.
 export const SiteFormSchema = z
@@ -183,7 +192,7 @@ export const SiteFormSchema = z
         endTime: z.string().optional().or(z.literal("")),
       }),
     ),
-    requiredCertificates: z.array(CertificateTypeSchema),
+    requiredCertificates: z.array(z.string()),
     clientSiteManagementEnabled: z.boolean().optional(),
     worksOnPublicHolidays: z.boolean().optional(),
     workOrderSite: z.boolean().optional(),

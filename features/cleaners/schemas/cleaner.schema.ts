@@ -11,6 +11,7 @@ export const CleanerSchema = z.object({
   lastName: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   phoneNumber: z.string().nullable().optional(),
+  validCertificates: z.array(z.string()).optional().default([]),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
