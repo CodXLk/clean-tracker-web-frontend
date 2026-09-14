@@ -73,14 +73,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
-  {
-    label: "Client Management",
-    icon: ContactRound,
-    children: [
-      { label: "Client-Company", href: "/admin/user-management/client-companies" },
-      { label: "Client-Contact", href: "/admin/user-management/clients" },
-    ],
-  },
+  { label: "Clients", href: "/admin/clients", icon: ContactRound },
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
@@ -166,6 +159,7 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/user-management/client-companies", "Client-Company Management"],
   ["/admin/user-management/clients", "Client-Contact"],
   ["/admin/user-management/sites", "Site Management"],
+  ["/admin/clients", "Clients"],
   ["/admin/dashboard", "Dashboard"],
   ["/admin/users", "Users"],
   ["/admin/cleaner-management", "Cleaner Management"],

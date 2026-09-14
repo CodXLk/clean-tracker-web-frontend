@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, GripVertical, Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Building2, GripVertical, ListChecks, Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -437,6 +437,8 @@ interface WeekScheduleGridProps {
   onDeleteFloor?: (floor: Floor) => void;
   onAddArea?: (floor: Floor) => void;
   onEditArea?: (area: Area) => void;
+  /** Edit every general task of an area at once (scope-view area "Edit tasks"). */
+  onEditAreaTasks?: (areaId: string) => void;
   onDeleteArea?: (area: Area) => void;
 }
 
@@ -476,6 +478,7 @@ export function WeekScheduleGrid({
   onDeleteFloor,
   onAddArea,
   onEditArea,
+  onEditAreaTasks,
   onDeleteArea,
 }: WeekScheduleGridProps) {
   const managed = !!siteId && !!floors;
@@ -1138,6 +1141,9 @@ export function WeekScheduleGrid({
                       ) : (
                         floorAreas.map((area) => {
                           const rows = managedRowsByArea.get(area.id) ?? [];
+                          const hasGeneralTasks = rows.some(
+                            (r) => r.assignmentType === "GENERAL_TASK" && r.status !== "DELETED",
+                          );
                           const isAreaDragTarget =
                             canReorderAreas &&
                             dragOverAreaId === area.id &&
@@ -1220,6 +1226,17 @@ export function WeekScheduleGrid({
                                       <Plus size={12} aria-hidden="true" />
                                       Assign
                                     </button>
+                                    {hasGeneralTasks && onEditAreaTasks && (
+                                      <button
+                                        type="button"
+                                        aria-label={`Edit general tasks in ${area.name}`}
+                                        title="Edit general tasks"
+                                        onClick={() => onEditAreaTasks(area.id)}
+                                        className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      >
+                                        <ListChecks size={12} aria-hidden="true" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       aria-label={`Rename ${area.name}`}

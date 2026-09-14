@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils/cn";
 import {
   useOccurrences,
   useSiteTasks,
+  useAssignmentsByIds,
+  useUpdateAssignment,
   useEditOccurrence,
   useDeleteOccurrence,
   useReorderTasks,
@@ -36,7 +38,7 @@ import { usePublicHolidays } from "@/features/workforce/hooks/usePublicHolidays"
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
-import { WORK_TYPE_LABELS, assignmentToFormInput, type WorkType, type Assignment } from "@/features/workforce/schemas/assignment.schema";
+import { WORK_TYPE_LABELS, assignmentToFormInput, type AssignmentFormInput, type WorkType, type Assignment } from "@/features/workforce/schemas/assignment.schema";
 import { DAY_OF_WEEK_VALUES, type DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
@@ -1691,6 +1693,9 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const [infoOccurrence, setInfoOccurrence] = useState<TaskOccurrence | null>(null);
   const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
+  // Area + floor behind an area "Edit tasks" click — opens a multi-task editor across its assignments.
+  const [areaEdit, setAreaEdit] = useState<{ areaId: string; floorId: string } | null>(null);
+  const [areaSaving, setAreaSaving] = useState(false);
   const [editOccurrence, setEditOccurrence] = useState<TaskOccurrence | null>(null);
   // Calendar work-type rectangle → details for that type on that day.
   const [typeDetail, setTypeDetail] = useState<{
@@ -2137,6 +2142,88 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     onNewAssignment?.({ date: dateObj, time: quickAdd.time });
   }
 
+  // ── Scope view: edit every general task of an area together ────────────────
+  // An area's general tasks may span several assignments; load them all, merge their
+  // area tasks into one editable list, and save each assignment separately on submit.
+  const areaAssignmentIds = useMemo(() => {
+    if (!areaEdit) return [] as string[];
+    const ids = new Set<string>();
+    for (const t of siteTasksQuery.data ?? []) {
+      if (
+        t.areaId === areaEdit.areaId &&
+        t.assignmentType === "GENERAL_TASK" &&
+        t.status !== "DELETED" &&
+        t.assignmentId
+      ) {
+        ids.add(t.assignmentId);
+      }
+    }
+    return [...ids];
+  }, [areaEdit, siteTasksQuery.data]);
+
+  const areaAssignments = useAssignmentsByIds(areaAssignmentIds);
+  const updateAssignment = useUpdateAssignment();
+
+  // Merged form: one area group holding every general task of the area, across its assignments.
+  const areaEditData = useMemo<AssignmentFormInput | null>(() => {
+    const list = areaAssignments.data;
+    if (!areaEdit || !list || list.length === 0) return null;
+    const tasks = list.flatMap((a) =>
+      assignmentToFormInput(a).groups
+        .filter((g) => g.areaIds.includes(areaEdit.areaId))
+        .flatMap((g) => g.tasks),
+    );
+    const base = assignmentToFormInput(list[0]);
+    return { ...base, groups: [{ floorId: areaEdit.floorId, areaIds: [areaEdit.areaId], tasks }] };
+  }, [areaEdit, areaAssignments.data]);
+
+  function handleEditAreaTasks(areaId: string) {
+    const general = (siteTasksQuery.data ?? []).filter(
+      (t) => t.areaId === areaId && t.assignmentType === "GENERAL_TASK" && t.status !== "DELETED",
+    );
+    if (general.length === 0) return;
+    setAreaEdit({ areaId, floorId: general[0]!.floorId ?? "" });
+  }
+
+  // Persist the merged edits back to each source assignment (its own schedule/other areas kept).
+  async function handleAreaEditSave(data: AssignmentFormInput) {
+    const list = areaAssignments.data;
+    if (!areaEdit || !list || list.length === 0) return;
+    const areaGroup = data.groups.find((g) => g.areaIds.includes(areaEdit.areaId));
+    const edited = areaGroup?.tasks ?? [];
+    const editedById = new Map(edited.filter((t) => t.id).map((t) => [t.id as string, t]));
+    const newTasks = edited.filter((t) => !t.id);
+    const primaryId = list[0]!.id;
+
+    setAreaSaving(true);
+    try {
+      for (const a of list) {
+        const base = assignmentToFormInput(a);
+        const groups: AssignmentFormInput["groups"] = [];
+        for (const g of base.groups) {
+          if (g.areaIds.includes(areaEdit.areaId)) {
+            const t = g.tasks[0];
+            const e = t?.id ? editedById.get(t.id) : undefined;
+            if (e) groups.push({ ...g, tasks: [e] }); // else the task was removed → dropped
+          } else {
+            groups.push(g);
+          }
+        }
+        if (a.id === primaryId) {
+          for (const nt of newTasks) {
+            groups.push({ floorId: areaEdit.floorId, areaIds: [areaEdit.areaId], tasks: [nt] });
+          }
+        }
+        // Never leave an assignment with zero tasks — keep it unchanged if all its tasks were cleared.
+        if (groups.length === 0) continue;
+        await updateAssignment.mutateAsync({ id: a.id, input: { ...base, groups } });
+      }
+      setAreaEdit(null);
+    } finally {
+      setAreaSaving(false);
+    }
+  }
+
   // ── Scope view: add assignment prefilled with floor/area/date ──────────────
   function handleScopeAddAssignment(target: AddAssignmentTarget) {
     const dateObj = new Date(target.date + "T00:00:00");
@@ -2429,6 +2516,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           onDeleteFloor={(floor) => setDeleteTarget({ kind: "floor", floor })}
           onAddArea={(floor) => setAreaModal({ mode: "add", floor })}
           onEditArea={(area) => setAreaModal({ mode: "edit", area })}
+          onEditAreaTasks={handleEditAreaTasks}
           onDeleteArea={(area) => setDeleteTarget({ kind: "area", area })}
         />
       ) : viewMode === "week" ? (
@@ -2538,6 +2626,21 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
             setEditAssignment(null);
             setEditTaskId(null);
           }}
+        />
+      )}
+
+      {/* Scope-view area "Edit tasks": every general task of the area, edited together */}
+      {areaEdit && areaEditData && areaAssignments.data && (
+        <NewAssignmentModal
+          open
+          editAssignmentId={areaAssignments.data[0]?.id}
+          editData={areaEditData}
+          editAreaId={areaEdit.areaId}
+          hideSchedule
+          onSubmitOverride={handleAreaEditSave}
+          overrideSubmitting={areaSaving}
+          onClose={() => setAreaEdit(null)}
+          onCreated={() => setAreaEdit(null)}
         />
       )}
 

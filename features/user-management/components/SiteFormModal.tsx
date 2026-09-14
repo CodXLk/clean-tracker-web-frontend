@@ -516,7 +516,7 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
         </div>
         </FormSection>
 
-        <FormSection icon={ShieldCheck} title="Required certificates" className="lg:col-span-2">
+        <FormSection icon={ShieldCheck} title="Required certificates" className={cn("lg:col-span-2", isWorkOrderSite && "hidden")}>
         <div className="flex flex-col gap-2">
           <p className="text-xs text-grey-500">
             Only cleaners and supervisors holding a verified, non-expired copy of every selected

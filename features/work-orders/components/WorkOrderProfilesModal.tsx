@@ -5,6 +5,7 @@ import { Modal } from "@/components/shared/Modal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { CERTIFICATE_TYPE_LABELS } from "@/features/users/schemas/document.schema";
 import {
   useWorkOrderCleanerProfiles,
   useAssignWorkOrderCleaners,
@@ -128,6 +129,31 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
             Each slot holds one {noun}. Assigned {noun}s are attached to every task added to this work
             order, so they see it on the day.
           </p>
+
+          {((workOrder?.requiredCertificatesAllWorkers?.length ?? 0) > 0 ||
+            (workOrder?.requiredCertificatesAnyWorker?.length ?? 0) > 0) && (
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+              <span className="font-semibold">Certificate requirements</span>
+              {(workOrder?.requiredCertificatesAllWorkers?.length ?? 0) > 0 && (
+                <p>
+                  <span className="font-medium">Every worker</span> must hold:{" "}
+                  {workOrder!.requiredCertificatesAllWorkers
+                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .join(", ")}
+                  .
+                </p>
+              )}
+              {(workOrder?.requiredCertificatesAnyWorker?.length ?? 0) > 0 && (
+                <p>
+                  <span className="font-medium">At least one worker</span> (cleaner or supervisor) must hold:{" "}
+                  {workOrder!.requiredCertificatesAnyWorker
+                    .map((c) => CERTIFICATE_TYPE_LABELS[c])
+                    .join(", ")}
+                  .
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             {profiles.map((p) => (
