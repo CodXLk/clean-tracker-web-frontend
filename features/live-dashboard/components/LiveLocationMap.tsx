@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { cn } from "@/lib/utils/cn";
 import { loadGoogleMaps } from "@/features/user-management/lib/googleMaps";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useAttendanceLogs } from "@/features/attendance/hooks/useAttendance";
@@ -72,8 +71,11 @@ export function LiveLocationMap({ audience }: LiveLocationMapProps) {
     () =>
       (logsQuery.data ?? [])
         .filter((l) => l.actorRole === role && ON_SHIFT.has(l.status))
-        .map((l) => ({ log: l, coords: actorCoords(l) }))
-        .filter((a): a is { log: AttendanceLog; coords: { lat: number; lng: number } } => a.coords !== null),
+        .map((l) => ({ log: l, coords: actorCoords(l), paused: l.status === "PAUSED" }))
+        .filter(
+          (a): a is { log: AttendanceLog; coords: { lat: number; lng: number }; paused: boolean } =>
+            a.coords !== null,
+        ),
     [logsQuery.data, role],
   );
 
@@ -83,6 +85,18 @@ export function LiveLocationMap({ audience }: LiveLocationMapProps) {
     for (const a of actors) map.set(a.log.siteId, (map.get(a.log.siteId) ?? 0) + 1);
     return map;
   }, [actors]);
+
+  // Per-site paused counts, and the day's forced-checkout total (off-shift, not mapped).
+  const pausedBySite = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of actors) if (a.paused) map.set(a.log.siteId, (map.get(a.log.siteId) ?? 0) + 1);
+    return map;
+  }, [actors]);
+  const pausedTotal = useMemo(() => actors.filter((a) => a.paused).length, [actors]);
+  const forcedCheckoutCount = useMemo(
+    () => (logsQuery.data ?? []).filter((l) => l.actorRole === role && l.status === "FORCED_CHECKOUT").length,
+    [logsQuery.data, role],
+  );
 
   const dataLoading = sitesQuery.isLoading || logsQuery.isLoading;
 
@@ -148,20 +162,21 @@ export function LiveLocationMap({ audience }: LiveLocationMapProps) {
           hasPoint = true;
         }
 
-        // Actors: pin tinted to their site.
-        for (const { log, coords } of actors) {
+        // Actors: pin tinted to their site. Paused actors are drawn as a white pin with an
+        // orange ring so they stand out from actively checked-in staff.
+        for (const { log, coords, paused } of actors) {
           const color = colorBySite.get(log.siteId) ?? "#111827";
           const marker = new maps.Marker({
             position: coords,
             map,
-            title: `${log.cleanerName ?? "On shift"} · ${log.siteName}`,
+            title: `${log.cleanerName ?? "On shift"} · ${log.siteName}${paused ? " · paused" : ""}`,
             icon: {
               path: maps.SymbolPath.CIRCLE,
               scale: 7,
-              fillColor: color,
-              fillOpacity: 0.95,
-              strokeColor: "#ffffff",
-              strokeWeight: 2,
+              fillColor: paused ? "#ffffff" : color,
+              fillOpacity: paused ? 1 : 0.95,
+              strokeColor: paused ? "#ED5F25" : "#ffffff",
+              strokeWeight: paused ? 3 : 2,
             },
           });
           overlaysRef.current.push(marker);
@@ -211,9 +226,22 @@ export function LiveLocationMap({ audience }: LiveLocationMapProps) {
 
           {/* Legend */}
           <div className="rounded-2xl border border-grey-200 bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-grey-500">
-              On shift now ({actors.length})
-            </p>
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-grey-500">
+                On shift now ({actors.length})
+              </p>
+              {pausedTotal > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ED5F25]">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-[#ED5F25] bg-white" />
+                  {pausedTotal} paused
+                </span>
+              )}
+              {forcedCheckoutCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-error">
+                  {forcedCheckoutCount} force checked out today
+                </span>
+              )}
+            </div>
             {sitesWithActors.length === 0 ? (
               <p className="text-sm text-grey-500">
                 No {audience === "cleaners" ? "cleaners" : "supervisors"} are checked in right now.
@@ -227,9 +255,14 @@ export function LiveLocationMap({ audience }: LiveLocationMapProps) {
                       style={{ backgroundColor: colorBySite.get(s.id) }}
                     />
                     <span className="font-medium">{s.name}</span>
-                    <span className={cn("rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-600")}>
+                    <span className="rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-600">
                       {countsBySite.get(s.id)}
                     </span>
+                    {(pausedBySite.get(s.id) ?? 0) > 0 && (
+                      <span className="rounded-full border border-[#ED5F25]/40 bg-[#ED5F25]/10 px-2 py-0.5 text-xs font-medium text-[#ED5F25]">
+                        {pausedBySite.get(s.id)} paused
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

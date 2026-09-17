@@ -3,33 +3,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
+  Check,
   ChevronDown,
+  Flag,
   ImagePlus,
+  Info,
   Square,
   SquareCheck,
   X,
 } from "lucide-react";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { useCompleteTasks } from "@/features/tasks/hooks/useTasks";
+import { PRIORITY_META } from "@/features/workforce/components/PriorityFlagMenu";
+import { TaskInfoPopup } from "@/features/tasks/components/TaskInfoPopup";
 import { assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
-import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
+import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  SCHEDULED: "Scheduled",
-  ACTIVE: "Active",
-  IN_PROGRESS: "In Progress",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
-
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  SCHEDULED: "bg-[#ED5F25]/15 text-[#ED5F25]",
-  ACTIVE: "bg-[#ED5F25]/15 text-[#ED5F25]",
-  IN_PROGRESS: "bg-primary/15 text-ink",
-  COMPLETED: "bg-success/15 text-success",
-  CANCELLED: "bg-grey-200 text-grey-600",
-};
 
 /** Stable selection key: redos are keyed by their redoId, regular tasks by taskId. */
 function occKey(task: TaskOccurrence): string {
@@ -39,7 +28,12 @@ function occKey(task: TaskOccurrence): string {
 interface AreaGroup {
   areaId: string;
   areaName: string;
+  /** Display tasks (a group collapses identical per-area copies into one). */
   tasks: TaskOccurrence[];
+  /** Every underlying occurrence (all member areas) — used for cross-area completion. */
+  allTasks: TaskOccurrence[];
+  /** Set when this row represents an area group. */
+  areaGroupId?: string;
 }
 
 interface TaskListViewProps {
@@ -47,11 +41,13 @@ interface TaskListViewProps {
   selectedFloor: string | null;
   /** Cleaners checked in to the site may select and complete; otherwise the list is read-only. */
   canComplete: boolean;
+  /** Cleaner mode: collapse a floor's area groups into one row and complete across all member areas. */
+  groupAreas?: boolean;
 }
 
 /** Floor-grouped list of areas with their tasks as a nested sub-list, with area-wise and
  *  individual task completion for cleaners. */
-export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskListViewProps) {
+export function TaskListView({ occurrences, selectedFloor, canComplete, groupAreas = false }: TaskListViewProps) {
   const completeTasks = useCompleteTasks();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -60,6 +56,8 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Task whose details popup is open (info icon).
+  const [infoTask, setInfoTask] = useState<TaskOccurrence | null>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -68,18 +66,54 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
     const map = new Map<string, AreaGroup>();
     for (const o of occurrences) {
       if (o.floorName !== selectedFloor || !o.areaId || !o.areaName) continue;
-      const group = map.get(o.areaId) ?? { areaId: o.areaId, areaName: o.areaName, tasks: [] };
-      group.tasks.push(o);
-      map.set(o.areaId, group);
+      // Cleaners see a group's areas as one row; others stay area-wise.
+      const grouped = groupAreas && !!o.areaGroupId && !!o.areaGroupName;
+      const key = grouped ? o.areaGroupId! : o.areaId;
+      const name = grouped ? o.areaGroupName! : o.areaName;
+      const group = map.get(key) ?? {
+        areaId: key,
+        areaName: name,
+        tasks: [],
+        allTasks: [],
+        areaGroupId: grouped ? o.areaGroupId! : undefined,
+      };
+      group.allTasks.push(o);
+      map.set(key, group);
     }
-    // Incomplete tasks first within each area (stable), completed pushed to the bottom.
     for (const group of map.values()) {
+      if (group.areaGroupId) {
+        // Collapse a group task's per-area copies into one row. Older tasks may lack a
+        // groupTaskKey, so fall back to the (shared) task name within the group.
+        const byKey = new Map<string, TaskOccurrence[]>();
+        for (const o of group.allTasks) {
+          const k = o.groupTaskKey ?? o.name ?? o.taskId ?? "";
+          const list = byKey.get(k) ?? [];
+          list.push(o);
+          byKey.set(k, list);
+        }
+        group.tasks = Array.from(byKey.values()).map((list) => {
+          const allDone = list.every((o) => o.status === "COMPLETED");
+          // Represent the row with a still-pending copy (if any) so it stays selectable.
+          const rep = list.find((o) => o.status !== "COMPLETED") ?? list[0]!;
+          return { ...rep, status: allDone ? ("COMPLETED" as const) : rep.status };
+        });
+      } else {
+        group.tasks = group.allTasks;
+      }
+      // Incomplete tasks first within each area (stable), completed pushed to the bottom.
       group.tasks.sort(
         (a, b) => (a.status === "COMPLETED" ? 1 : 0) - (b.status === "COMPLETED" ? 1 : 0),
       );
     }
-    return Array.from(map.values());
-  }, [occurrences, selectedFloor]);
+    // Areas with pending work rise to the top; fully-completed areas sink to the bottom (stable).
+    const groups = Array.from(map.values());
+    groups.sort((a, b) => {
+      const aDone = a.tasks.length > 0 && a.tasks.every((t) => t.status === "COMPLETED");
+      const bDone = b.tasks.length > 0 && b.tasks.every((t) => t.status === "COMPLETED");
+      return (aDone ? 1 : 0) - (bDone ? 1 : 0);
+    });
+    return groups;
+  }, [occurrences, selectedFloor, groupAreas]);
 
   // Switching floors clears any in-progress selection so tasks are never completed cross-floor.
   useEffect(() => {
@@ -140,9 +174,30 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
   }
 
   function handleComplete() {
-    const selected = occurrences.filter(
-      (t) => t.floorName === selectedFloor && selectedIds.has(occKey(t)),
-    );
+    const displayRows = areaGroups.flatMap((g) => g.tasks).filter((t) => selectedIds.has(occKey(t)));
+    if (displayRows.length === 0) return;
+    // A grouped task belongs to every member area, so one completion (shared note/photos)
+    // covers all of them. Match copies by area group + shared identity (groupTaskKey, or the
+    // task name for older tasks without a key). Non-grouped tasks complete just themselves.
+    const targets = new Map<string, TaskOccurrence>();
+    for (const row of displayRows) {
+      if (row.areaGroupId) {
+        const identity = row.groupTaskKey ?? row.name;
+        for (const o of occurrences) {
+          if (
+            o.floorName === selectedFloor &&
+            o.status !== "COMPLETED" &&
+            o.areaGroupId === row.areaGroupId &&
+            (o.groupTaskKey ?? o.name) === identity
+          ) {
+            targets.set(`${o.taskId}|${o.occurrenceDate}`, o);
+          }
+        }
+      } else {
+        targets.set(`${row.taskId}|${row.occurrenceDate}`, row);
+      }
+    }
+    const selected = Array.from(targets.values());
     if (selected.length === 0) return;
     completeTasks.mutate(
       {
@@ -172,24 +227,39 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
           const areaSelected = keys.length > 0 && keys.every((k) => selectedIds.has(k));
           const completedCount = group.tasks.filter((t) => t.status === "COMPLETED").length;
           const isCollapsed = !expandedAreas.has(group.areaId);
+          // High/Medium tasks are always visible under the area; low tasks show once expanded.
+          const priorityTasks = group.tasks.filter(
+            (t) => t.criticalLevel === "HIGH" || t.criticalLevel === "MEDIUM",
+          );
+          const shownTasks = isCollapsed ? priorityTasks : group.tasks;
+          const allCompleted =
+            group.tasks.length > 0 && group.tasks.every((t) => t.status === "COMPLETED");
 
           return (
             <section
               key={group.areaId}
-              className="overflow-hidden rounded-2xl border border-grey-200 bg-white shadow-sm"
+              className={cn(
+                "overflow-hidden rounded-2xl border shadow-sm",
+                allCompleted ? "border-success/30 bg-success/10" : "border-grey-200 bg-white",
+              )}
             >
-              <div className="flex items-center gap-3 border-b border-grey-100 px-4 py-3">
+              <div
+                className={cn(
+                  "flex items-center gap-3 border-b px-4 py-3",
+                  allCompleted ? "border-success/20" : "border-grey-100",
+                )}
+              >
                 {canComplete && (
                   <button
                     type="button"
                     onClick={() => toggleArea(group)}
                     disabled={keys.length === 0}
-                    aria-pressed={areaSelected}
+                    aria-pressed={areaSelected || allCompleted}
                     aria-label={`Select all tasks in ${group.areaName}`}
-                    className="shrink-0 disabled:opacity-40"
+                    className={cn("shrink-0", keys.length === 0 && !allCompleted && "opacity-40")}
                   >
-                    {areaSelected ? (
-                      <SquareCheck size={20} className="text-ink" />
+                    {areaSelected || allCompleted ? (
+                      <SquareCheck size={20} className={allCompleted ? "text-success" : "text-ink"} />
                     ) : (
                       <Square size={20} className="text-grey-400" />
                     )}
@@ -215,9 +285,9 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
                 </button>
               </div>
 
-              {!isCollapsed && (
+              {shownTasks.length > 0 && (
                 <ul className="divide-y divide-grey-100">
-                  {group.tasks.map((task) => {
+                  {shownTasks.map((task) => {
                     const key = occKey(task);
                     const isCompleted = task.status === "COMPLETED";
                     const isRedo = Boolean(task.isRedo);
@@ -278,42 +348,55 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
                               </span>
                             )}
                           </span>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                              STATUS_COLOR[task.status],
+                          <span className="flex shrink-0 items-center gap-2">
+                            {(task.criticalLevel === "HIGH" || task.criticalLevel === "MEDIUM") && (
+                              <Flag
+                                size={14}
+                                fill={PRIORITY_META[task.criticalLevel].fill}
+                                strokeWidth={1.75}
+                                className={PRIORITY_META[task.criticalLevel].text}
+                                aria-label={`${PRIORITY_META[task.criticalLevel].label} priority`}
+                              />
                             )}
-                          >
-                            {STATUS_LABEL[task.status]}
+                            {isCompleted && (
+                              <Check size={16} className="text-success" aria-label="Completed" />
+                            )}
                           </span>
                         </span>
                       </>
                     );
 
                     return (
-                      <li key={key}>
+                      <li
+                        key={key}
+                        className={cn("flex items-stretch pl-4", isCompleted && "bg-success/10")}
+                      >
                         {selectable ? (
                           <button
                             type="button"
                             onClick={() => toggleTask(key)}
                             aria-pressed={selected}
                             className={cn(
-                              "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-grey-50",
+                              "flex flex-1 items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-grey-50",
                               selected && "bg-primary/5",
                             )}
                           >
                             {rowInner}
                           </button>
                         ) : (
-                          <div
-                            className={cn(
-                              "flex items-start gap-3 px-4 py-3",
-                              isCompleted && "bg-success/5",
-                            )}
-                          >
+                          <div className="flex flex-1 items-start gap-3 px-4 py-3">
                             {rowInner}
                           </div>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setInfoTask(task)}
+                          aria-label={`Details for ${task.name}`}
+                          title="Task details"
+                          className="flex shrink-0 items-center px-3 text-grey-400 transition-colors hover:bg-grey-50 hover:text-primary"
+                        >
+                          <Info size={18} aria-hidden="true" />
+                        </button>
                       </li>
                     );
                   })}
@@ -444,6 +527,29 @@ export function TaskListView({ occurrences, selectedFloor, canComplete }: TaskLi
       )}
 
       <ImageLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+
+      {infoTask && (
+        <TaskInfoPopup
+          task={infoTask}
+          memberAreas={
+            infoTask.areaGroupId
+              ? Array.from(
+                  new Set(
+                    occurrences
+                      .filter(
+                        (o) =>
+                          o.areaGroupId === infoTask.areaGroupId &&
+                          (o.groupTaskKey ?? o.name) === (infoTask.groupTaskKey ?? infoTask.name) &&
+                          !!o.areaName,
+                      )
+                      .map((o) => o.areaName as string),
+                  ),
+                )
+              : []
+          }
+          onClose={() => setInfoTask(null)}
+        />
+      )}
     </>
   );
 }

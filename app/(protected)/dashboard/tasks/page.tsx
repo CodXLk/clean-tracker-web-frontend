@@ -13,6 +13,7 @@ import { TaskSummaryCard } from "@/components/shared/TaskSummaryCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
+import { PausedResumeBanner } from "@/features/attendance/components/PausedResumeBanner";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
@@ -20,6 +21,7 @@ import { useTaskViewStore } from "@/features/tasks/store/taskView.store";
 import { TaskViewToggle } from "@/features/tasks/components/TaskViewToggle";
 import { TaskListView } from "@/features/tasks/components/TaskListView";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
+import { useMe } from "@/features/auth/hooks/useMe";
 import {
   assignmentTypeLabel,
   formatTaskTime,
@@ -34,20 +36,26 @@ interface AreaCount {
   area: string;
   completed: number;
   total: number;
+  /** Set when this card represents an area group (cleaners see grouped areas as one). */
+  areaGroupId?: string;
 }
 
 export default function TasksPage() {
   const useDrawerNav = useIsDrawerNav();
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const { data: allOccurrences = [], isLoading } = useMyTasks(today);
-  const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId } = useSiteScope(today, {
+  const { isAdmin, sites, selectedSiteId, setSelectedSiteId, checkedInSiteId, pausedSiteId } = useSiteScope(today, {
     defaultToLatestSite: true,
   });
+  const isCleaner = useMe().data?.role === "CLEANER";
 
-  // Cleaners/supervisors only see the site they are currently checked in to; admins see
-  // the selected (or all) site. Until check-in there are no tasks, areas or floors.
-  const gatedSiteId = isAdmin ? selectedSiteId : checkedInSiteId;
-  const mustCheckIn = !isAdmin && !checkedInSiteId;
+  // Cleaners/supervisors only see the site they are working at; admins see the selected (or all)
+  // site. A paused site is shown read-only (tasks visible, completion disabled) until they resume.
+  const workingSiteId = checkedInSiteId ?? pausedSiteId;
+  const gatedSiteId = isAdmin ? selectedSiteId : workingSiteId;
+  const mustCheckIn = !isAdmin && !checkedInSiteId && !pausedSiteId;
+  const isPausedReadOnly = !isAdmin && !checkedInSiteId && !!pausedSiteId;
+  const pausedSite = pausedSiteId ? sites.find((s) => s.siteId === pausedSiteId) ?? null : null;
   const occurrences = useMemo(() => {
     if (mustCheckIn) return [];
     return gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences;
@@ -85,25 +93,30 @@ export default function TasksPage() {
 
   const areas = useMemo<AreaCount[]>(() => {
     if (!selectedFloor) return [];
-    const byArea = new Map<string, AreaCount>();
+    const byKey = new Map<string, AreaCount>();
     for (const o of occurrences) {
       if (o.floorName !== selectedFloor || !o.areaId || !o.areaName) continue;
+      // Cleaners see a group's classrooms as one card; supervisors/admins stay area-wise.
+      const grouped = isCleaner && !!o.areaGroupId && !!o.areaGroupName;
+      const key = grouped ? o.areaGroupId! : o.areaId;
+      const label = grouped ? o.areaGroupName! : o.areaName;
       const isCompleted = o.status === "COMPLETED";
-      const existing = byArea.get(o.areaId);
+      const existing = byKey.get(key);
       if (existing) {
         existing.total += 1;
         if (isCompleted) existing.completed += 1;
       } else {
-        byArea.set(o.areaId, {
+        byKey.set(key, {
           areaId: o.areaId,
-          area: o.areaName,
+          area: label,
           total: 1,
           completed: isCompleted ? 1 : 0,
+          areaGroupId: grouped ? o.areaGroupId! : undefined,
         });
       }
     }
-    return Array.from(byArea.values());
-  }, [occurrences, selectedFloor]);
+    return Array.from(byKey.values());
+  }, [occurrences, selectedFloor, isCleaner]);
 
   const periodicalTasks = useMemo(
     () => occurrences.filter((o) => o.assignmentType === "PERIODICAL_TASK"),
@@ -140,6 +153,12 @@ export default function TasksPage() {
             <AdminStatCard icon={ClipboardList} iconBg="bg-primary/10" iconColor="text-ink" value={kpis.inProgress} label="In Progress" />
             <AdminStatCard icon={ClipboardList} iconBg="bg-success/10" iconColor="text-success" value={kpis.completed} label="Completed" />
           </div>
+
+          {isPausedReadOnly && pausedSite && (
+            <div className="mb-6">
+              <PausedResumeBanner site={pausedSite} />
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex justify-center py-16">
@@ -188,7 +207,7 @@ export default function TasksPage() {
                         {areas.map((item) => (
                           <Link
                             key={item.areaId}
-                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?${item.areaGroupId ? `areaGroupId=${item.areaGroupId}` : `areaId=${item.areaId}`}&date=${today}`}
                             className="flex flex-col items-center justify-center gap-1 rounded-xl border border-grey-200 bg-grey-50 p-3 text-center transition-shadow hover:shadow-md"
                           >
                             <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
@@ -203,7 +222,8 @@ export default function TasksPage() {
                         <TaskListView
                           occurrences={occurrences}
                           selectedFloor={selectedFloor}
-                          canComplete={!isAdmin}
+                          canComplete={!isAdmin && !isPausedReadOnly}
+                          groupAreas={isCleaner}
                         />
                       </div>
                     )}
@@ -237,6 +257,12 @@ export default function TasksPage() {
             <KpiCard label="Pending" value={kpis.pending} color="orange" />
             <KpiCard label="Completed" value={kpis.completed} color="green" />
           </div>
+
+          {isPausedReadOnly && pausedSite && (
+            <div className="mb-6">
+              <PausedResumeBanner site={pausedSite} />
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex justify-center py-16">
@@ -291,7 +317,7 @@ export default function TasksPage() {
                         {areas.map((item) => (
                           <Link
                             key={item.areaId}
-                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+                            href={`/dashboard/tasks/${encodeURIComponent(item.area)}?${item.areaGroupId ? `areaGroupId=${item.areaGroupId}` : `areaId=${item.areaId}`}&date=${today}`}
                             className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
                           >
                             <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
@@ -305,7 +331,8 @@ export default function TasksPage() {
                       <TaskListView
                         occurrences={occurrences}
                         selectedFloor={selectedFloor}
-                        canComplete={!isAdmin}
+                        canComplete={!isAdmin && !isPausedReadOnly}
+                        groupAreas={isCleaner}
                       />
                     )}
                   </>

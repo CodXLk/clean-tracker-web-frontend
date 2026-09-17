@@ -10,6 +10,8 @@ export interface ActiveSiteContext {
   isLoading: boolean;
   /** Site the user is currently checked in to today, if any. */
   checkedInSiteId: string | null;
+  /** Site whose shift is paused today (view-only until the user slides to start), if any. */
+  pausedSiteId: string | null;
   /** The site whose data should be shown — the selection, falling back to check-in. */
   selectedSiteId: string | null;
   setSelectedSiteId: (siteId: string | null) => void;
@@ -28,23 +30,28 @@ export function useActiveSite(date?: string): ActiveSiteContext {
     () => sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null,
     [sites],
   );
+  const pausedSiteId = useMemo(
+    () => sites.find((s) => s.status === "PAUSED")?.siteId ?? null,
+    [sites],
+  );
 
   const selectedSiteId = useActiveSiteStore((s) => s.selectedSiteId);
   const touched = useActiveSiteStore((s) => s.touched);
   const setSelectedSiteId = useActiveSiteStore((s) => s.setSelectedSiteId);
   const setDefaultSiteId = useActiveSiteStore((s) => s.setDefaultSiteId);
 
-  // Until the user manually picks a site, track the checked-in site (or the first one).
+  // Until the user manually picks a site, track the checked-in (or paused) site, else the first one.
   useEffect(() => {
     if (touched) return;
-    const fallback = checkedInSiteId ?? sites[0]?.siteId ?? null;
+    const fallback = checkedInSiteId ?? pausedSiteId ?? sites[0]?.siteId ?? null;
     setDefaultSiteId(fallback);
-  }, [checkedInSiteId, sites, touched, setDefaultSiteId]);
+  }, [checkedInSiteId, pausedSiteId, sites, touched, setDefaultSiteId]);
 
   return {
     sites,
     isLoading,
     checkedInSiteId,
+    pausedSiteId,
     selectedSiteId,
     setSelectedSiteId,
   };

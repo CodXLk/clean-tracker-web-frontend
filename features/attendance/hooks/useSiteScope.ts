@@ -11,6 +11,8 @@ export interface SiteScope {
   isAdmin: boolean;
   sites: CleanerSite[];
   checkedInSiteId: string | null;
+  /** Site whose shift is paused today (view-only until resumed), if any. */
+  pausedSiteId: string | null;
   /** null = all sites (admins default here); a specific id otherwise. */
   selectedSiteId: string | null;
   setSelectedSiteId: (siteId: string | null) => void;
@@ -46,6 +48,7 @@ export function useSiteScope(date?: string, options?: SiteScopeOptions): SiteSco
     isAdmin,
     sites: active.sites,
     checkedInSiteId: active.checkedInSiteId,
+    pausedSiteId: active.pausedSiteId,
     selectedSiteId: isAdmin ? adminSelected : active.selectedSiteId,
     setSelectedSiteId: isAdmin ? setAdminSiteId : active.setSelectedSiteId,
   };

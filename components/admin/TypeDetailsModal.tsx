@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Repeat, UserCog, Users } from "lucide-react";
+import { CalendarClock, ClipboardList, FileText, Repeat, UserCog, Users } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import {
@@ -56,6 +56,11 @@ interface TypeDetailsModalProps {
 export function TypeDetailsModal({ type, date, occurrences, hex, onClose }: TypeDetailsModalProps) {
   const label = WORK_TYPE_LABELS[type as WorkType] ?? type;
   const sorted = [...occurrences].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const isWorkOrder = type === "WORK_ORDER";
+  const poIds = Array.from(new Set(occurrences.map((o) => o.poId).filter(Boolean))) as string[];
+  const workOrderScope = Array.from(
+    new Set(occurrences.map((o) => o.workOrderDescription).filter(Boolean)),
+  ) as string[];
 
   return (
     <Modal
@@ -65,6 +70,30 @@ export function TypeDetailsModal({ type, date, occurrences, hex, onClose }: Type
       description={`${occurrences.length} task${occurrences.length === 1 ? "" : "s"} · ${formatDateLong(date)}`}
     >
       <div className="flex flex-col gap-3">
+        {isWorkOrder && (poIds.length > 0 || workOrderScope.length > 0) && (
+          <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface-muted px-3 py-2.5">
+            {poIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <FileText size={15} className="shrink-0 text-body-2" aria-hidden="true" />
+                <span className="text-xs font-medium text-body-2">PO ID</span>
+                <span className="truncate text-sm font-semibold text-ink">{poIds.join(", ")}</span>
+              </div>
+            )}
+            {workOrderScope.length > 0 && (
+              <div className="flex items-start gap-2">
+                <ClipboardList size={15} className="mt-0.5 shrink-0 text-body-2" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-body-2">What needs to be done</p>
+                  {workOrderScope.map((s, i) => (
+                    <p key={i} className="whitespace-pre-line text-sm text-ink">
+                      {s}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {sorted.map((o) => {
           const cleaners = (o.cleaners ?? []).filter((c) => personName(c));
           const supervisors = (o.supervisors ?? []).filter((s) => personName(s));
@@ -87,6 +116,16 @@ export function TypeDetailsModal({ type, date, occurrences, hex, onClose }: Type
                       {recurrenceLabel(o)}
                     </span>
                   </div>
+
+                  {!isWorkOrder && o.description && (
+                    <div className="mt-2 flex items-start gap-1.5 text-xs">
+                      <ClipboardList size={13} className="mt-0.5 shrink-0 text-body-2" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink">What needs to be done</p>
+                        <p className="whitespace-pre-line text-body-2">{o.description}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-2 flex flex-col gap-1.5">
                     <div className="flex items-start gap-1.5 text-xs">

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const CheckInMethodSchema = z.enum(["NFC", "GEO"]);
 export type CheckInMethod = z.infer<typeof CheckInMethodSchema>;
 
-export const AttendanceStatusSchema = z.enum(["CHECKED_IN", "PAUSED", "CHECKED_OUT"]);
+export const AttendanceStatusSchema = z.enum(["CHECKED_IN", "PAUSED", "CHECKED_OUT", "FORCED_CHECKOUT"]);
 export type AttendanceStatus = z.infer<typeof AttendanceStatusSchema>;
 
 // A site's work shift window — used to gate/label check-in by shift.
@@ -83,12 +83,16 @@ export interface CheckInPayload {
   accuracyMeters?: number;
   /** Cleaner consents to checking out with incomplete tasks. */
   acknowledgeIncomplete?: boolean;
+  /** Cleaner confirms a forced check-out (incomplete tasks and/or before the shift ends). */
+  force?: boolean;
 }
 
-/** Periodic location heartbeat sent while checked in. */
+/** Periodic location heartbeat sent while checked in. When the location can't be obtained,
+ *  send {@link HeartbeatPayload.unreachable} = true (no coordinates) to pause the shift. */
 export interface HeartbeatPayload {
   siteId: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   accuracyMeters?: number;
+  unreachable?: boolean;
 }

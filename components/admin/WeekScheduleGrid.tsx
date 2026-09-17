@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, GripVertical, ListChecks, Plus, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Building2, GripVertical, Layers, ListChecks, Plus, Pencil, RotateCcw, Trash2, Flag } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { PriorityFlagMenu, PRIORITY_META, type CriticalLevel } from "@/features/workforce/components/PriorityFlagMenu";
 import type { SiteTaskSummary, TaskOccurrence, WorkType, AssignmentTaskStatus, RecurrenceType } from "@/features/workforce/schemas/assignment.schema";
 import { WORK_TYPE_LABELS } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
+import type { AreaGroup as AreaGroupModel } from "@/features/user-management/schemas/area.schema";
 
 // Default colour per work type (matches the calendar's mapping).
 const TYPE_HEX: Record<string, string> = {
@@ -150,6 +152,9 @@ function formatTimeShort(time: string): string {
   return m === "00" ? `${h12}${ampm}` : `${h12}:${m}${ampm}`;
 }
 
+// ── Priority flag + dropdown ──────────────────────────────────────────────────
+// (Shared PriorityFlagMenu + PRIORITY_META live in features/workforce/components.)
+
 // ── Row model ─────────────────────────────────────────────────────────────────
 
 interface TaskRow {
@@ -175,6 +180,8 @@ interface TaskRow {
   nextDate?: string | null;
   /** Lifecycle status (managed mode). */
   status?: AssignmentTaskStatus;
+  /** Task priority (LOW/MEDIUM/HIGH) — drives the scope-view priority badge. */
+  criticalLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
 }
 
 /** Nearest occurrence on each weekday (day view maps the recurrence pattern to Mon–Sun). */
@@ -196,6 +203,7 @@ function occurrenceToRow(row: TaskRow | undefined, occurrence: TaskOccurrence): 
       assignmentType: occurrence.assignmentType,
       hex: occurrenceHex(occurrence),
       orderIndex: occurrence.orderIndex,
+      criticalLevel: occurrence.criticalLevel ?? null,
       byDate: new Map<string, TaskOccurrence[]>(),
       byWeekday: new Map<DayOfWeek, TaskOccurrence[]>(),
     };
@@ -275,6 +283,7 @@ function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]
         recurrenceType: t.recurrenceType ?? null,
         recurrenceInterval: t.recurrenceInterval ?? null,
         recurrenceDays: t.recurrenceDays ?? [],
+        criticalLevel: t.criticalLevel ?? null,
         byDate,
         byWeekday: new Map<DayOfWeek, TaskOccurrence[]>(),
         nextDate: t.nextDate ?? null,
@@ -302,6 +311,7 @@ function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]
         existing.hex = TYPE_HEX[t.assignmentType] ?? existing.hex;
         existing.recurrenceLabel = t.recurrenceLabel ?? existing.recurrenceLabel ?? null;
         existing.status = t.status;
+        existing.criticalLevel = t.criticalLevel ?? existing.criticalLevel ?? null;
         primaryCount.set(key, count);
       }
       existing.orderIndex = Math.min(existing.orderIndex, t.orderIndex);
@@ -318,8 +328,7 @@ function managedRows(siteTasks: SiteTaskSummary[], occurrences: TaskOccurrence[]
 interface AreaGroup {
   areaName: string;
   rows: TaskRow[];
-}
-interface FloorGroup {
+}interface FloorGroup {
   floorName: string;
   areas: AreaGroup[];
 }
@@ -376,9 +385,36 @@ function buildSiteGroups(occurrences: TaskOccurrence[]): SiteGroup[] {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+/** A display unit in a floor: a standalone area, or an area group (collapsing its member areas). */
+type AreaUnit =
+  | { kind: "area"; area: Area }
+  | { kind: "group"; group: AreaGroupModel; areas: Area[]; rep: Area };
+
+/** Collapse a floor's grouped areas into one unit per group; ungrouped areas pass through. */
+function buildAreaUnits(floorAreas: Area[], groups: AreaGroupModel[]): AreaUnit[] {
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const emitted = new Set<string>();
+  const units: AreaUnit[] = [];
+  for (const area of floorAreas) {
+    const gid = area.areaGroupId;
+    if (gid && groupById.has(gid)) {
+      if (emitted.has(gid)) continue;
+      emitted.add(gid);
+      const members = floorAreas.filter((a) => a.areaGroupId === gid);
+      units.push({ kind: "group", group: groupById.get(gid)!, areas: members, rep: members[0]! });
+    } else {
+      units.push({ kind: "area", area });
+    }
+  }
+  return units;
+}
+
 export interface AddAssignmentTarget {
   floorId: string;
   areaId: string;
+  /** When the target is an area group: the group id and all its member area ids (task fans out to all). */
+  areaGroupId?: string;
+  areaIds?: string[];
   date: string;
   /** Day-view quick add: prefill the New Assignment with this task's name. */
   taskName?: string;
@@ -430,6 +466,10 @@ interface WeekScheduleGridProps {
   onAddAssignment?: (target: AddAssignmentTarget) => void;
   /** Toggle a task active/inactive (managed mode). */
   onToggleTaskStatus?: (taskId: string, status: "ACTIVE" | "INACTIVE") => void;
+  /** Update a task's critical level inline (managed mode). */
+  onSetTaskCriticalLevel?: (taskId: string, level: "LOW" | "MEDIUM" | "HIGH") => void;
+  /** Open the edit popup for a task (rename, and HIGH note/photos). */
+  onEditTask?: (taskId: string, name: string) => void;
   /** Restore a soft-deleted task back to active (managed mode). */
   onRestoreTask?: (taskId: string) => void;
   onAddFloor?: () => void;
@@ -437,6 +477,11 @@ interface WeekScheduleGridProps {
   onDeleteFloor?: (floor: Floor) => void;
   onAddArea?: (floor: Floor) => void;
   onEditArea?: (area: Area) => void;
+  /** floorId → its area groups. */
+  areaGroupsByFloor?: Map<string, AreaGroupModel[]>;
+  onAddAreaGroup?: (floor: Floor) => void;
+  onEditAreaGroup?: (group: AreaGroupModel) => void;
+  onDeleteAreaGroup?: (group: AreaGroupModel) => void;
   /** Edit every general task of an area at once (scope-view area "Edit tasks"). */
   onEditAreaTasks?: (areaId: string) => void;
   onDeleteArea?: (area: Area) => void;
@@ -472,12 +517,18 @@ export function WeekScheduleGrid({
   onReorderTasks,
   onAddAssignment,
   onToggleTaskStatus,
+  onSetTaskCriticalLevel,
+  onEditTask,
   onRestoreTask,
   onAddFloor,
   onEditFloor,
   onDeleteFloor,
   onAddArea,
   onEditArea,
+  areaGroupsByFloor,
+  onAddAreaGroup,
+  onEditAreaGroup,
+  onDeleteAreaGroup,
   onEditAreaTasks,
   onDeleteArea,
 }: WeekScheduleGridProps) {
@@ -507,6 +558,8 @@ export function WeekScheduleGrid({
   // Area drag-reorder is scoped to a single floor: the dragged area's id plus its floor.
   const [draggingArea, setDraggingArea] = useState<{ floorId: string; areaId: string } | null>(null);
   const [dragOverAreaId, setDragOverAreaId] = useState<string | null>(null);
+  // Area-group rows whose member area names are expanded (the "view" toggle).
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   function handleAreaDrop(floorId: string, targetAreaId: string) {
     const dragging = draggingArea;
@@ -581,7 +634,7 @@ export function WeekScheduleGrid({
     return workingDays === null || workingDays.includes(dayOfWeekOf(date));
   }
 
-  const gridTemplate = "minmax(260px, 1.6fr) repeat(7, minmax(64px, 1fr))";
+  const gridTemplate = "minmax(340px, 2fr) repeat(7, minmax(64px, 1fr))";
 
   /** Empty day-cell strip to complete a band row (site/floor headers). */
   function bandCells(className?: string) {
@@ -754,17 +807,12 @@ export function WeekScheduleGrid({
         </button>
       ) : null;
 
-    const statusPill =
-      isInactive || isDeleted ? (
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            isDeleted ? "bg-error/10 text-error" : "bg-grey-200 text-grey-600",
-          )}
-        >
-          {isDeleted ? "Deleted" : "Inactive"}
-        </span>
-      ) : null;
+    // Only deleted tasks keep a pill; inactive state is shown by the toggle alone.
+    const statusPill = isDeleted ? (
+      <span className="inline-flex shrink-0 items-center rounded-full bg-error/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-error">
+        Deleted
+      </span>
+    ) : null;
 
     const restoreControl =
       floorId && areaId && isDeleted && onRestoreTask ? (
@@ -782,12 +830,49 @@ export function WeekScheduleGrid({
         </button>
       ) : null;
 
-    const statusControl = (
-      <>
+    const editControl =
+      floorId && areaId && !isDeleted && onEditTask ? (
+        <button
+          type="button"
+          title={`Edit ${row.name}`}
+          aria-label={`Edit ${row.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditTask(row.taskId, row.name);
+          }}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-grey-100 hover:text-ink focus-visible:opacity-100 group-hover/trow:opacity-100"
+        >
+          <Pencil size={13} aria-hidden="true" />
+        </button>
+      ) : null;
+
+    // Priority flag shown for every task; managed rows can click it to change the level.
+    const canEditPriority = !!floorId && !!areaId && !!onSetTaskCriticalLevel && !isDeleted;
+    const level = (row.criticalLevel ?? "LOW") as CriticalLevel;
+    const priorityFlag = canEditPriority ? (
+      <PriorityFlagMenu
+        level={level}
+        taskName={row.name}
+        onChange={(l) => onSetTaskCriticalLevel?.(row.taskId, l)}
+      />
+    ) : (
+      <span
+        title={`Priority: ${PRIORITY_META[level].label}`}
+        className={cn("flex h-6 w-6 shrink-0 items-center justify-center", PRIORITY_META[level].text)}
+      >
+        <Flag size={14} fill={PRIORITY_META[level].fill} strokeWidth={1.75} aria-hidden="true" />
+      </span>
+    );
+
+    // Row controls pinned to the right edge of the task-name column (edit · flag · status).
+    const rightControls = (
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+        {editControl}
+        {priorityFlag}
         {statusToggle}
         {statusPill}
         {restoreControl}
-      </>
+      </div>
     );
 
     // A task with no occurrence in the visible window: highlight the whole row and show its
@@ -801,7 +886,7 @@ export function WeekScheduleGrid({
           : "No upcoming date";
       return (
         <div
-          className="grid border-b border-grey-200"
+          className="group/trow grid border-b border-grey-200"
           style={{ gridTemplateColumns: gridTemplate, backgroundColor: `${row.hex}12` }}
         >
           <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5 pl-6">
@@ -812,7 +897,7 @@ export function WeekScheduleGrid({
             />
             <span
               className={cn(
-                "truncate text-sm",
+                "min-w-0 flex-1 truncate text-sm",
                 nameMuted ? "text-grey-500" : "text-on-surface",
                 isDeleted && "line-through",
               )}
@@ -820,7 +905,7 @@ export function WeekScheduleGrid({
             >
               {row.name}
             </span>
-            {statusControl}
+            {rightControls}
           </div>
           <div className="col-span-7 flex items-center gap-2 border-l border-grey-200 px-4 py-2.5">
             <span
@@ -857,7 +942,7 @@ export function WeekScheduleGrid({
           />
           <span
             className={cn(
-              "truncate text-sm",
+              "min-w-0 flex-1 truncate text-sm",
               nameMuted ? "text-grey-500" : "text-on-surface",
               isDeleted && "line-through",
             )}
@@ -865,7 +950,7 @@ export function WeekScheduleGrid({
           >
             {row.name}
           </span>
-          {statusControl}
+          {rightControls}
         </div>
         {weekDates.map((dateStr) => {
           const cellOccurrences = dayView
@@ -1001,7 +1086,7 @@ export function WeekScheduleGrid({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[900px]">
+        <div className="min-w-[960px]">
           <div className="sticky top-0 z-10 flex bg-surface">
             {managed && <div className="w-11 shrink-0 border-b-2 border-grey-300" aria-hidden="true" />}
             <div className="min-w-0 flex-1">
@@ -1088,6 +1173,17 @@ export function WeekScheduleGrid({
                           >
                             <Plus size={12} aria-hidden="true" />
                           </button>
+                          {onAddAreaGroup && (
+                            <button
+                              type="button"
+                              aria-label={`New area group on ${floor.name}`}
+                              title="New area group"
+                              onClick={() => onAddAreaGroup(floor)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              <Layers size={11} aria-hidden="true" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             aria-label={`Rename ${floor.name}`}
@@ -1139,22 +1235,33 @@ export function WeekScheduleGrid({
                           ))}
                         </div>
                       ) : (
-                        floorAreas.map((area) => {
+                        buildAreaUnits(floorAreas, areaGroupsByFloor?.get(floor.id) ?? []).map((unit) => {
+                          const isGroup = unit.kind === "group";
+                          const area = isGroup ? unit.rep : unit.area;
+                          const displayName = isGroup ? unit.group.name : area.name;
+                          const unitKey = isGroup ? unit.group.id : area.id;
+                          const groupExpanded = isGroup && expandedGroups.has(unit.group.id);
+                          const group = unit.kind === "group" ? unit.group : null;
+                          const memberAreas = unit.kind === "group" ? unit.areas : [];
+                          const groupExtra = group
+                            ? { areaGroupId: group.id, areaIds: memberAreas.map((a) => a.id) }
+                            : {};
                           const rows = managedRowsByArea.get(area.id) ?? [];
                           const hasGeneralTasks = rows.some(
                             (r) => r.assignmentType === "GENERAL_TASK" && r.status !== "DELETED",
                           );
+                          const canDragThis = canReorderAreas && !isGroup;
                           const isAreaDragTarget =
-                            canReorderAreas &&
+                            canDragThis &&
                             dragOverAreaId === area.id &&
                             draggingArea != null &&
                             draggingArea.areaId !== area.id &&
                             draggingArea.floorId === floor.id;
                           return (
                             <div
-                              key={area.id}
+                              key={unitKey}
                               onDragOver={
-                                canReorderAreas && draggingArea?.floorId === floor.id
+                                canDragThis && draggingArea?.floorId === floor.id
                                   ? (e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
@@ -1163,7 +1270,7 @@ export function WeekScheduleGrid({
                                   : undefined
                               }
                               onDrop={
-                                canReorderAreas && draggingArea?.floorId === floor.id
+                                canDragThis && draggingArea?.floorId === floor.id
                                   ? (e) => {
                                       e.stopPropagation();
                                       handleAreaDrop(floor.id, area.id);
@@ -1178,9 +1285,9 @@ export function WeekScheduleGrid({
                               {/* Area band — name + actions + hover-add day cells */}
                               <div
                                 className="group/area grid border-y border-grey-200 bg-surface-muted"
-                                draggable={canReorderAreas}
+                                draggable={canDragThis}
                                 onDragStart={
-                                  canReorderAreas
+                                  canDragThis
                                     ? (e) => {
                                         e.stopPropagation();
                                         setDraggingArea({ floorId: floor.id, areaId: area.id });
@@ -1188,7 +1295,7 @@ export function WeekScheduleGrid({
                                     : undefined
                                 }
                                 onDragEnd={
-                                  canReorderAreas
+                                  canDragThis
                                     ? () => {
                                         setDraggingArea(null);
                                         setDragOverAreaId(null);
@@ -1197,65 +1304,92 @@ export function WeekScheduleGrid({
                                 }
                                 style={{ gridTemplateColumns: gridTemplate }}
                               >
-                                <div className="flex items-center gap-1.5 px-4 py-1.5">
-                                  {canReorderAreas && (
-                                    <GripVertical
-                                      size={12}
-                                      className="cursor-grab text-ink/60"
-                                      aria-label="Drag to reorder area"
-                                    />
-                                  )}
-                                  <span className="text-[13px] font-semibold text-ink">
-                                    {area.name}
-                                  </span>
-                                  <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100">
-                                    <button
-                                      type="button"
-                                      aria-label={`Add assignment to ${area.name}`}
-                                      title="Add assignment (Monday)"
-                                      onClick={() =>
-                                        mondayDate &&
-                                        onAddAssignment?.({
-                                          floorId: floor.id,
-                                          areaId: area.id,
-                                          date: mondayDate,
-                                        })
-                                      }
-                                      className="flex items-center gap-1 rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                                    >
-                                      <Plus size={12} aria-hidden="true" />
-                                      Assign
-                                    </button>
-                                    {hasGeneralTasks && onEditAreaTasks && (
+                                <div className="flex flex-col gap-0.5 px-4 py-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    {canDragThis && (
+                                      <GripVertical
+                                        size={12}
+                                        className="cursor-grab text-ink/60"
+                                        aria-label="Drag to reorder area"
+                                      />
+                                    )}
+                                    {isGroup && <Layers size={13} className="text-primary" aria-hidden="true" />}
+                                    <span className="text-[13px] font-semibold text-ink">{displayName}</span>
+                                    {isGroup && group && (
                                       <button
                                         type="button"
-                                        aria-label={`Edit general tasks in ${area.name}`}
-                                        title="Edit general tasks"
-                                        onClick={() => onEditAreaTasks(area.id)}
-                                        className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                        onClick={() =>
+                                          setExpandedGroups((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(group.id)) next.delete(group.id);
+                                            else next.add(group.id);
+                                            return next;
+                                          })
+                                        }
+                                        className="rounded-md border border-primary/30 px-1.5 py-0.5 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10"
                                       >
-                                        <ListChecks size={12} aria-hidden="true" />
+                                        {groupExpanded ? "Hide" : `View ${memberAreas.length}`}
                                       </button>
                                     )}
-                                    <button
-                                      type="button"
-                                      aria-label={`Rename ${area.name}`}
-                                      title="Rename area"
-                                      onClick={() => onEditArea?.(area)}
-                                      className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                                    >
-                                      <Pencil size={12} aria-hidden="true" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      aria-label={`Delete ${area.name}`}
-                                      title="Delete area"
-                                      onClick={() => onDeleteArea?.(area)}
-                                      className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                                    >
-                                      <Trash2 size={12} aria-hidden="true" />
-                                    </button>
+                                    <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100">
+                                      <button
+                                        type="button"
+                                        aria-label={`Add assignment to ${displayName}`}
+                                        title="Add assignment (Monday)"
+                                        onClick={() =>
+                                          mondayDate &&
+                                          onAddAssignment?.({
+                                            floorId: floor.id,
+                                            areaId: area.id,
+                                            ...groupExtra,
+                                            date: mondayDate,
+                                          })
+                                        }
+                                        className="flex items-center gap-1 rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-primary-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      >
+                                        <Plus size={12} aria-hidden="true" />
+                                        Assign
+                                      </button>
+                                      {hasGeneralTasks && onEditAreaTasks && !isGroup && (
+                                        <button
+                                          type="button"
+                                          aria-label={`Edit general tasks in ${displayName}`}
+                                          title="Edit general tasks"
+                                          onClick={() => onEditAreaTasks(area.id)}
+                                          className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                        >
+                                          <ListChecks size={12} aria-hidden="true" />
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        aria-label={isGroup ? `Edit ${displayName}` : `Rename ${displayName}`}
+                                        title={isGroup ? "Edit area group" : "Rename area"}
+                                        onClick={() =>
+                                          isGroup && group ? onEditAreaGroup?.(group) : onEditArea?.(area)
+                                        }
+                                        className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      >
+                                        <Pencil size={12} aria-hidden="true" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label={`Delete ${displayName}`}
+                                        title={isGroup ? "Delete area group" : "Delete area"}
+                                        onClick={() =>
+                                          isGroup && group ? onDeleteAreaGroup?.(group) : onDeleteArea?.(area)
+                                        }
+                                        className="flex h-6 w-6 items-center justify-center rounded-md text-ink transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                      >
+                                        <Trash2 size={12} aria-hidden="true" />
+                                      </button>
+                                    </div>
                                   </div>
+                                  {isGroup && groupExpanded && (
+                                    <p className="pl-1 text-[11px] text-body-2">
+                                      {memberAreas.map((a) => a.name).join(" · ")}
+                                    </p>
+                                  )}
                                 </div>
                                 {weekDates.map((dateStr) => {
                                   const working = isWorkingDate(dateStr);
@@ -1269,12 +1403,13 @@ export function WeekScheduleGrid({
                                     >
                                       <button
                                         type="button"
-                                        aria-label={dayView ? `Add assignment in ${area.name} on ${formatWeekdayLong(dateStr)}` : `Add assignment in ${area.name} on ${dateStr}`}
+                                        aria-label={dayView ? `Add assignment in ${displayName} on ${formatWeekdayLong(dateStr)}` : `Add assignment in ${displayName} on ${dateStr}`}
                                         title={dayView ? `Add assignment on ${formatWeekdayLong(dateStr)}` : `Add assignment on ${dateStr}`}
                                         onClick={() =>
                                           onAddAssignment?.({
                                             floorId: floor.id,
                                             areaId: area.id,
+                                            ...groupExtra,
                                             date: dateStr,
                                             mode: dayView ? "DAY_WEEKLY" : "ONE_OFF",
                                           })

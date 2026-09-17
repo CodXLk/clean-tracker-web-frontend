@@ -10,6 +10,7 @@ import {
   SiteTaskSummaryListSchema,
   SiteTaskStatusCountsSchema,
   WorkforceStatsSchema,
+  TaskEditDetailSchema,
   toCreateAssignmentPayload,
   type Assignment,
   type AssignmentFormInput,
@@ -18,6 +19,7 @@ import {
   type SiteTaskStatusCounts,
   type TaskOccurrence,
   type TaskStatus,
+  type TaskEditDetail,
   type WorkforceStats,
 } from "@/features/workforce/schemas/assignment.schema";
 import { assignmentKeys } from "./assignmentKeys";
@@ -231,6 +233,45 @@ export function useDeleteAssignment() {
   });
 }
 
+/** One occurrence reference — the task and the date it falls on. */
+export interface OccurrenceRefInput {
+  taskId: string;
+  occurrenceDate: string; // yyyy-MM-dd (the series date shown on the calendar)
+}
+
+/**
+ * Copy a day's occurrences (e.g. every task of one work type) onto another date. Each is
+ * duplicated as a standalone one-day task carrying all its content — cleaner/supervisor slots,
+ * items, colour, duration — so only the date changes. Cleaners/supervisors are notified.
+ */
+export function useCopyOccurrences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      targetDate,
+      occurrences,
+    }: {
+      targetDate: string;
+      occurrences: OccurrenceRefInput[];
+    }) => {
+      await clientApi.post(ENDPOINTS.assignments.occurrencesCopy, { targetDate, occurrences });
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
+/** Delete a set of occurrences for their dates only (e.g. all tasks of one work type on a day). */
+export function useDeleteOccurrencesBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ occurrences }: { occurrences: OccurrenceRefInput[] }) => {
+      await clientApi.post(ENDPOINTS.assignments.occurrencesDelete, { occurrences });
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
+
 /** Full assignment detail (all tasks, recurrence, cleaners, supervisors, items). */
 export function useAssignment(id: string | undefined) {
   return useQuery({
@@ -315,6 +356,28 @@ export function useRestoreTask() {
   });
 }
 
+/** Update a task's critical level inline from the scope view. */
+export function useSetTaskCriticalLevel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      level,
+      note,
+    }: {
+      taskId: string;
+      level: "LOW" | "MEDIUM" | "HIGH";
+      note?: string;
+    }) => {
+      await clientApi.patch(ENDPOINTS.assignments.taskCriticalLevel(taskId), {
+        level,
+        note: note ?? null,
+      });
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
 /** Task counts per lifecycle status at a site (drives the filter badges). */
 export function useSiteTaskStatusCounts(query: OccurrenceQuery | undefined) {
   return useQuery({
@@ -338,4 +401,59 @@ export async function fetchTaskCompletionCount(taskId: string): Promise<number> 
   const { data } = await clientApi.get(ENDPOINTS.assignments.taskCompletionCount(taskId));
   const count = (data as { count?: number } | null)?.count;
   return typeof count === "number" ? count : 0;
+}
+
+/** Upload reference photos for a HIGH-critical task (multipart). Returns new photo IDs. */
+export async function uploadTaskReferencePhotos(
+  taskId: string,
+  files: File[],
+): Promise<string[]> {
+  if (files.length === 0) return [];
+  const form = new FormData();
+  for (const file of files) form.append("photos", file);
+  const { data } = await clientApi.post(
+    ENDPOINTS.assignments.taskReferencePhotos(taskId),
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return Array.isArray(data) ? (data as string[]) : [];
+}
+
+/** Load a task's editable details (name, priority, note, reference photo ids). */
+export function useTaskEditDetail(taskId: string | undefined) {
+  return useQuery({
+    queryKey: ["task-edit-detail", taskId ?? "none"],
+    enabled: !!taskId,
+    queryFn: async (): Promise<TaskEditDetail> => {
+      const { data } = await clientApi.get(ENDPOINTS.assignments.taskById(taskId!));
+      return TaskEditDetailSchema.parse(data);
+    },
+  });
+}
+
+/** Rename a task and (for HIGH tasks) update its note. */
+export function useUpdateTaskDetails() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      name,
+      criticalNote,
+    }: {
+      taskId: string;
+      name: string;
+      criticalNote?: string | null;
+    }) => {
+      await clientApi.patch(ENDPOINTS.assignments.taskById(taskId), {
+        name,
+        criticalNote: criticalNote ?? null,
+      });
+    },
+    onSuccess: () => invalidateAll(queryClient),
+  });
+}
+
+/** Delete a single reference photo. */
+export async function deleteTaskReferencePhoto(photoId: string): Promise<void> {
+  await clientApi.delete(ENDPOINTS.assignments.referencePhoto(photoId));
 }

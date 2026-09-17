@@ -56,6 +56,20 @@ export const AssignmentCleanerSchema = z.object({
 });
 export type AssignmentCleaner = z.infer<typeof AssignmentCleanerSchema>;
 
+/** Task criticality (backend TaskCriticalLevel). */
+export const CriticalLevelSchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
+export type CriticalLevel = z.infer<typeof CriticalLevelSchema>;
+
+/** Editable task details for the scope-view edit popup (backend TaskEditDetailResponse). */
+export const TaskEditDetailSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  criticalLevel: CriticalLevelSchema,
+  criticalNote: z.string().nullable().optional(),
+  referencePhotoIds: z.array(z.string().uuid()).default([]),
+});
+export type TaskEditDetail = z.infer<typeof TaskEditDetailSchema>;
+
 /** One expanded calendar occurrence (backend TaskOccurrenceResponse). */
 export const TaskOccurrenceSchema = z.object({
   assignmentId: z.string().uuid(),
@@ -71,11 +85,15 @@ export const TaskOccurrenceSchema = z.object({
   floorName: z.string(),
   areaId: z.string().uuid(),
   areaName: z.string(),
+  areaGroupId: z.string().uuid().nullable().optional(),
+  areaGroupName: z.string().nullable().optional(),
+  groupTaskKey: z.string().uuid().nullable().optional(),
   floorSortOrder: z.number().default(0),
   areaSortOrder: z.number().default(0),
   orderIndex: z.number().default(0),
   assignmentType: WorkTypeSchema,
   poId: z.string().nullable().optional(),
+  workOrderDescription: z.string().nullable().optional(),
   templateName: z.string().nullable().optional(),
   shiftId: z.string().uuid().nullable().optional(),
   shiftName: z.string().nullable().optional(),
@@ -86,6 +104,9 @@ export const TaskOccurrenceSchema = z.object({
   durationMinutes: z.number(),
   status: TaskStatusSchema,
   description: z.string().nullable().optional(),
+  criticalLevel: CriticalLevelSchema.nullish(),
+  criticalNote: z.string().nullable().optional(),
+  referencePhotoIds: z.array(z.string().uuid()).default([]),
   colorHex: z.string().nullable().optional(),
   cleaners: z.array(AssignmentCleanerSchema),
   supervisors: z.array(AssignmentCleanerSchema).default([]),
@@ -140,6 +161,9 @@ export const SiteTaskSummarySchema = z.object({
   floorName: z.string().nullish(),
   areaId: z.string().uuid().nullish(),
   areaName: z.string().nullish(),
+  areaGroupId: z.string().uuid().nullish(),
+  areaGroupName: z.string().nullish(),
+  groupTaskKey: z.string().uuid().nullish(),
   assignmentType: WorkTypeSchema,
   orderIndex: z.number().default(0),
   nextDate: z.string().nullish(),
@@ -147,6 +171,7 @@ export const SiteTaskSummarySchema = z.object({
   recurrenceType: RecurrenceTypeSchema.nullish(),
   recurrenceInterval: z.number().nullish(),
   recurrenceDays: z.array(DayOfWeekSchema).default([]),
+  criticalLevel: CriticalLevelSchema.nullish(),
   status: AssignmentTaskStatusSchema.default("ACTIVE"),
 });
 export const SiteTaskSummaryListSchema = z.array(SiteTaskSummarySchema);
@@ -195,6 +220,8 @@ export const AssignmentSchema = z.object({
       areaId: z.string().uuid(),
       areaName: z.string(),
       description: z.string().nullable().optional(),
+      criticalLevel: CriticalLevelSchema.nullish(),
+      criticalNote: z.string().nullable().optional(),
       colorHex: z.string().nullable().optional(),
       orderIndex: z.number(),
       endDate: z.string().nullable().optional(),
@@ -256,6 +283,12 @@ export const GroupTaskFormSchema = z.object({
     .max(24 * 60, "Maximum 24 hours")
     .optional(),
   description: z.string().max(2048, "Description is too long").optional().or(z.literal("")),
+  /** Criticality — HIGH tasks require a note + optional reference photos. */
+  criticalLevel: CriticalLevelSchema,
+  /** Instructions shown to the cleaner at check-in for HIGH tasks. */
+  criticalNote: z.string().max(4000, "Note is too long").optional().or(z.literal("")),
+  /** Client-only key linking this task to its pending reference-photo File[] (not sent to API). */
+  refPhotoKey: z.string().optional(),
   /** Per-task cleaners — only used when assignPerTask is on and the site has no profiles. */
   cleanerIds: z.array(z.string().uuid()),
   /** Per-task responsible cleaner profiles (slots) — only used when assignPerTask is on. */
@@ -283,6 +316,8 @@ export type GroupTaskFormInput = z.infer<typeof GroupTaskFormSchema>;
 export const LocationGroupFormSchema = z.object({
   floorId: z.string().uuid("Please select a floor"),
   areaIds: z.array(z.string().uuid()).min(1, "Please select at least one area"),
+  /** Set when the selection targets an area group — tasks are tagged so they group/complete together. */
+  areaGroupId: z.string().uuid().optional(),
   tasks: z.array(GroupTaskFormSchema),
 });
 export type LocationGroupFormInput = z.infer<typeof LocationGroupFormSchema>;
@@ -434,6 +469,8 @@ export function assignmentToFormInput(a: Assignment): AssignmentFormInput {
         name: t.name,
         durationMinutes: t.durationMinutes ?? undefined,
         description: t.description ?? "",
+        criticalLevel: t.criticalLevel ?? "LOW",
+        criticalNote: t.criticalNote ?? "",
         cleanerIds: t.cleaners.map((c) => c.id),
         profileIds: [],
         items: t.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
@@ -589,13 +626,20 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
     tasks: input.groups.flatMap((group) =>
       group.tasks.flatMap((task) => {
         const selectedProfileIds = input.assignPerTask ? task.profileIds : input.profileIds;
+        // For an area-group task, all per-area copies share one key so they group + complete together.
+        const groupTaskKey = group.areaGroupId ? crypto.randomUUID() : undefined;
         return group.areaIds.map((areaId) => ({
           ...(task.id ? { id: task.id } : {}),
           name: task.name.trim(),
           ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
           floorId: group.floorId,
           areaId,
+          ...(group.areaGroupId ? { areaGroupId: group.areaGroupId, groupTaskKey } : {}),
           ...(task.description?.trim() ? { description: task.description.trim() } : {}),
+          criticalLevel: task.criticalLevel ?? "LOW",
+          ...(task.criticalLevel === "HIGH" && task.criticalNote?.trim()
+            ? { criticalNote: task.criticalNote.trim() }
+            : {}),
           cleanerIds: isWorkOrder ? [] : input.assignPerTask ? task.cleanerIds : input.cleanerIds,
           ...(!isWorkOrder && selectedProfileIds.length > 0
             ? { profileIds: selectedProfileIds }
