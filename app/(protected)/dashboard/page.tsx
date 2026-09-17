@@ -7,6 +7,7 @@ import { Bell, Calendar, Clock, AlertTriangle, MapPin, CheckCircle2, CalendarClo
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
+import { UserAvatar } from "@/components/shared/UserAvatar";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -19,9 +20,10 @@ import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
 function greetingFor(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 21) return "Good evening";
+  return "Good to see you tonight"; // night shift — "good night" isn't apt for someone on the clock
 }
 
 interface UpcomingShift {
@@ -330,7 +332,14 @@ function DashboardContent() {
             <div className="flex items-center justify-between">
               {/* Left: avatar + greeting */}
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 shrink-0 rounded-full bg-grey-300" aria-label="User avatar" />
+                <UserAvatar
+                  userId={me?.id ?? ""}
+                  hasPhoto={me?.hasPhoto}
+                  firstName={me?.firstName}
+                  lastName={me?.lastName}
+                  size={48}
+                  className="bg-white/20 text-white"
+                />
                 <div>
                   <p className="text-xs text-white/70">{greeting}</p>
                   <p className="text-lg font-bold text-white leading-tight">Hello, {firstName} 👋</p>

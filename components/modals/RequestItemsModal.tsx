@@ -11,7 +11,8 @@ import {
   useSiteInventory,
   useMyCleanerInventory,
 } from "@/features/inventory/hooks/useInventory";
-import type { RequestType } from "@/features/inventory/schemas/inventory.schema";
+import { REQUEST_SOURCE_LABELS } from "@/features/inventory/schemas/inventory.schema";
+import type { RequestType, RequestSource } from "@/features/inventory/schemas/inventory.schema";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 
 interface RequestItemsModalProps {
@@ -34,6 +35,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
   const [step,        setStep]        = useState<Step>("confirm");
   const [siteId,      setSiteId]      = useState("");
   const [requestType, setRequestType] = useState<RequestType>("SITE");
+  const [source,      setSource]      = useState<RequestSource>("WAREHOUSE");
   const [search,      setSearch]      = useState("");
   const [note,        setNote]        = useState("");
   const [confirmQty,  setConfirmQty]  = useState<Record<string, number>>({});
@@ -69,6 +71,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       setRequestQty({});
       setError(null);
       setRequestType("SITE");
+      setSource("WAREHOUSE");
       createMutation.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,6 +137,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
       {
         siteId,
         requestType,
+        source,
         // CLEANER requests default to the requester's own cleaner profile on the backend.
         note: note.trim() || undefined,
         confirmedStock,
@@ -233,8 +237,8 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           </p>
         </div>
 
-        {/* Site selector (shown when the cleaner covers more than one site) */}
-        {sites.length > 1 && step === "confirm" && (
+        {/* Site selector — only for site requests, and when the cleaner covers more than one site */}
+        {requestType === "SITE" && sites.length > 1 && step === "confirm" && (
           <div className="mb-4">
             <label htmlFor="request-site" className="mb-1 block text-xs font-medium text-grey-700">
               Site
@@ -318,7 +322,31 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
           )}
         </div>
 
-        {/* Note (request step only) */}
+        {/* Request source — site requests only (cleaner stock is always from the warehouse) */}
+        {step === "request" && requestType === "SITE" && (
+          <div className="mb-3">
+            <span className="mb-1.5 block text-xs font-medium text-grey-700">Request from</span>
+            <div className="flex gap-2">
+              {(Object.keys(REQUEST_SOURCE_LABELS) as RequestSource[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSource(s)}
+                  aria-pressed={source === s}
+                  className={cn(
+                    "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                    source === s
+                      ? "border-primary bg-primary text-white"
+                      : "border-grey-300 text-on-surface hover:bg-grey-100",
+                  )}
+                >
+                  {REQUEST_SOURCE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {step === "request" && (
           <textarea
             value={note}
@@ -342,7 +370,7 @@ export function RequestItemsModal({ open, onClose }: RequestItemsModalProps) {
             variant="teal"
             className="w-full"
             onClick={() => {
-              if (!siteId) {
+              if (requestType === "SITE" && !siteId) {
                 setError("Select a site first.");
                 return;
               }

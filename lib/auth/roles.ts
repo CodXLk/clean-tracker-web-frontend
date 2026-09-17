@@ -32,6 +32,30 @@ export function roleFromToken(token: string | undefined | null): string | null {
 }
 
 /**
+ * True when the access JWT's `exp` claim is in the past (or unreadable). The access cookie
+ * outlives the JWT so full-page navigations can self-heal via a silent refresh — but an expired
+ * token must NOT count as a live session when deciding whether to bounce a user off the login page.
+ */
+export function isAccessTokenExpired(token: string | undefined | null): boolean {
+  if (!token) return true;
+  const payload = token.split(".")[1];
+  if (!payload) return true;
+  try {
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json =
+      typeof atob === "function"
+        ? atob(padded)
+        : Buffer.from(padded, "base64").toString("utf8");
+    const claims = JSON.parse(json) as { exp?: number };
+    if (typeof claims.exp !== "number") return false; // no exp → let the backend decide
+    return claims.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Root hrefs of the only Admin Panel sections a SUPERVISOR may access. This is the
  * single source of truth for that restriction — AppNav.tsx filters the nav against
  * it, and proxy.ts enforces it at the route level so a Supervisor can't reach a

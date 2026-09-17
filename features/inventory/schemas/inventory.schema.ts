@@ -258,8 +258,9 @@ const DeliveryLineSchema = z.object({
 
 export const InventoryDeliverySchema = z.object({
   id: z.string().uuid(),
-  siteId: z.string().uuid(),
-  siteName: z.string(),
+  siteId: z.string().uuid().nullable().optional(),
+  siteName: z.string().nullable().optional(),
+  targetCleanerId: z.string().uuid().nullable().optional(),
   requestId: z.string().uuid().nullable().optional(),
   status: DeliveryStatusSchema,
   dispatchedBy: z.string().uuid(),

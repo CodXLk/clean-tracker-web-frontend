@@ -16,11 +16,13 @@ interface SiteFilterSelectProps {
   loading?: boolean;
   /** "field" matches the SearchInput size/font; "compact" is the calendar toolbar pill. */
   variant?: "compact" | "field";
+  /** Show the type-ahead search box in the panel. Default true. */
+  searchable?: boolean;
   className?: string;
 }
 
 /** Compact typeahead site picker for the workforce toolbar (wildcard name search). */
-export function SiteFilterSelect({ sites, value, onChange, loading, variant = "compact", className }: SiteFilterSelectProps) {
+export function SiteFilterSelect({ sites, value, onChange, loading, variant = "compact", searchable = true, className }: SiteFilterSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,11 +48,11 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
   }, [open]);
 
   useEffect(() => {
-    if (open) {
+    if (open && searchable) {
       setQuery("");
       requestAnimationFrame(() => searchRef.current?.focus());
     }
-  }, [open]);
+  }, [open, searchable]);
 
   const isField = variant === "field";
 
@@ -84,23 +86,25 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
             isField ? "inset-x-0" : "right-0 w-64",
           )}
         >
-          <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
-            <Search size={isField ? 16 : 14} className="shrink-0 text-grey-500" aria-hidden="true" />
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search sites…"
-              className={cn(
-                "w-full text-on-surface outline-none placeholder:text-grey-500",
-                isField ? "text-sm" : "text-xs",
-              )}
-            />
-          </div>
+          {searchable && (
+            <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
+              <Search size={isField ? 16 : 14} className="shrink-0 text-grey-500" aria-hidden="true" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search sites…"
+                className={cn(
+                  "w-full text-on-surface outline-none placeholder:text-grey-500",
+                  isField ? "text-sm" : "text-xs",
+                )}
+              />
+            </div>
+          )}
           <ul role="listbox" className={cn("overflow-y-auto py-1", isField ? "max-h-64" : "max-h-56")}>
             {filtered.length === 0 ? (
               <li className={cn("px-3 py-2.5 text-grey-500", isField ? "text-sm" : "text-xs")}>
-                No sites match your search.
+                {query.trim() ? "No sites match your search." : "No sites available."}
               </li>
             ) : (
               filtered.map((s) => {
