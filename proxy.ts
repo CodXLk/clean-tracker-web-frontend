@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "@/lib/constants";
-import { landingPath, roleFromToken, isSupervisorRouteAllowed } from "@/lib/auth/roles";
+import { landingPath, roleFromToken, isSupervisorRouteAllowed, isAccessTokenExpired } from "@/lib/auth/roles";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
@@ -37,7 +37,10 @@ export function proxy(request: NextRequest) {
 
     // Already-authenticated users hitting an auth page go to their role's home. The role-selection
     // screen stays reachable so a multi-role user can switch roles after logging in.
+    // An expired access token (cookie outlives the JWT) is NOT a live session — let those users
+    // reach the login form to re-authenticate instead of bouncing them to a page that can't load.
     if (isAuthPage) {
+      if (isAccessTokenExpired(token)) return NextResponse.next();
       return NextResponse.redirect(new URL(landingPath(role), request.url));
     }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, MapPin, X } from "lucide-react";
+import { CalendarDays, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import {
@@ -158,31 +159,24 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
 
         {/* Filters: date + site */}
         <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-          <label className="flex flex-1 items-center gap-2 rounded-xl border border-grey-300 px-3 py-2 text-sm">
-            <CalendarDays size={16} className="text-grey-500" aria-hidden="true" />
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-grey-300 px-3 py-2 text-sm">
+            <CalendarDays size={16} className="shrink-0 text-grey-500" aria-hidden="true" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value || today)}
-              className="w-full bg-transparent text-on-surface outline-none"
+              className="w-full min-w-0 bg-transparent text-on-surface outline-none"
               aria-label="Pick a date"
             />
           </label>
-          <label className="flex flex-1 items-center gap-2 rounded-xl border border-grey-300 px-3 py-2 text-sm">
-            <MapPin size={16} className="text-grey-500" aria-hidden="true" />
-            <select
-              value={effectiveSiteId}
-              onChange={(e) => setActiveSiteId(e.target.value)}
-              className="w-full bg-transparent text-on-surface outline-none"
-              aria-label="Filter by site"
-            >
-              {sites.map((s) => (
-                <option key={s.siteId} value={s.siteId}>
-                  {s.siteName}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SiteFilterSelect
+            sites={sites.map((s) => ({ id: s.siteId, name: s.siteName }))}
+            value={effectiveSiteId}
+            onChange={setActiveSiteId}
+            variant="field"
+            searchable={false}
+            className="sm:flex-1 sm:max-w-none"
+          />
         </div>
 
         {/* Week strip */}

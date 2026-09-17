@@ -9,6 +9,7 @@ import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { RequestItemsModal } from "@/components/modals/RequestItemsModal";
 import { RequestedItemsModal } from "@/components/modals/RequestedItemsModal";
+import { CleanerIncomingDeliveries } from "@/features/inventory/components/CleanerIncomingDeliveries";
 import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { StatusBadge } from "@/features/inventory/components/StatusBadge";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -187,6 +188,10 @@ function CleanerInventory() {
             <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
           </div>
 
+          <div className="mb-6">
+            <CleanerIncomingDeliveries />
+          </div>
+
           <section aria-labelledby="requests-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
             <h2 id="requests-heading" className="mb-4 text-sm font-semibold text-on-surface">
               Recent Requests
@@ -223,6 +228,8 @@ function CleanerInventory() {
         <main className={cn("mx-auto max-w-2xl px-5 pb-28", !useDrawerNav ? "" : "pt-5")}>
           <div className="flex flex-col gap-4">
             <FilterTabs options={[...MOBILE_STATUS_TABS]} value={activeFilter} onChange={setActiveFilter} />
+
+            <CleanerIncomingDeliveries />
 
             <PillButton variant="orange" onClick={() => setRequestModalOpen(true)}>
               <Package size={18} className="mr-2" />

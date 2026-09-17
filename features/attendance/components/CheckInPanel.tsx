@@ -5,6 +5,7 @@ import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X, Clock, Info } from "
 import { SlideButton } from "@/components/shared/SlideButton";
 import { SiteSelector } from "@/components/shared/SiteSelector";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { ModalPortal } from "@/components/shared/ModalPortal";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
 import { cn } from "@/lib/utils/cn";
 import { acquireCheckInPayload as acquirePayload } from "@/features/attendance/lib/acquireCheckInPayload";
@@ -109,6 +110,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const [criticalAck, setCriticalAck] = useState<
     { site: CleanerSite; tasks: TaskOccurrence[] } | null
   >(null);
+  // HIGH-priority tasks acknowledged (with completion status) before check-out.
+  const [checkoutAck, setCheckoutAck] = useState<
+    { site: CleanerSite; tasks: TaskOccurrence[] } | null
+  >(null);
   const [confirming, setConfirming] = useState(false);
   // NFC support is resolved after mount to avoid an SSR/hydration mismatch.
   const [nfcSupported, setNfcSupported] = useState(false);
@@ -180,10 +185,35 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
+  // Every HIGH-priority task at the site (any type, any status) — for the checkout acknowledgement.
+  function highAllFor(siteId: string): TaskOccurrence[] {
+    return todayTasks.filter(
+      (t) => t.siteId === siteId && t.criticalLevel === "HIGH" && t.status !== "CANCELLED",
+    );
+  }
+
   // After a successful check-in, surface the site's HIGH-priority tasks for acknowledgement.
   function maybeShowCriticalAck(site: CleanerSite) {
     const high = highTasksFor(site.siteId);
     if (high.length > 0) setCriticalAck({ site, tasks: high });
+  }
+
+  // The normal check-out flow after the HIGH-task acknowledgement: warn on unfinished tasks
+  // and/or checking out before the shift ends, otherwise check out.
+  async function finishCheckout(site: CleanerSite) {
+    const pending = pendingTasksFor(site.siteId);
+    const early = isWithinAnyShift(site);
+    if (pending.length > 0 || early) {
+      setPendingPrompt({ site, tasks: pending, early });
+      bumpReset(site.siteId);
+      return;
+    }
+    try {
+      await executeCheckout(site, false);
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [site.siteId]: getMessage(err, "Check-out failed.") }));
+      bumpReset(site.siteId);
+    }
   }
 
   // Tap-to-scan NFC and check in automatically to whichever assigned site the tag belongs
@@ -234,15 +264,15 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         maybeShowCriticalAck(site);
         return;
       }
-      // Check-out: warn on unfinished tasks and/or checking out before the shift ends.
-      const pending = pendingTasksFor(site.siteId);
-      const early = isWithinAnyShift(site);
-      if (pending.length > 0 || early) {
-        setPendingPrompt({ site, tasks: pending, early });
+      // Check-out: acknowledge the site's HIGH-priority tasks (all types) first, then run the
+      // normal unfinished/early check-out flow.
+      const highs = highAllFor(site.siteId);
+      if (highs.length > 0) {
+        setCheckoutAck({ site, tasks: highs });
         bumpReset(site.siteId);
         return;
       }
-      await executeCheckout(site, false);
+      await finishCheckout(site);
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -511,6 +541,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       </div>
 
       {pendingPrompt && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
@@ -604,9 +635,11 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {shiftAckPrompt && (
+        <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
@@ -669,13 +702,29 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {criticalAck && (
         <CriticalTaskAckModal
           siteName={criticalAck.site.siteName}
           tasks={criticalAck.tasks}
-          onAcknowledge={() => setCriticalAck(null)}
+          onDone={() => setCriticalAck(null)}
+        />
+      )}
+
+      {checkoutAck && (
+        <CriticalTaskAckModal
+          siteName={checkoutAck.site.siteName}
+          tasks={checkoutAck.tasks}
+          showCompletionStatus
+          confirmLabel="Confirm & check out"
+          onCancel={() => setCheckoutAck(null)}
+          onDone={() => {
+            const site = checkoutAck.site;
+            setCheckoutAck(null);
+            void finishCheckout(site);
+          }}
         />
       )}
     </div>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Bell, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { UserAvatar } from "@/components/shared/UserAvatar";
+import { useMe } from "@/features/auth/hooks/useMe";
 import { useUnreadCount } from "@/features/notifications/hooks/useNotifications";
 
 interface PageHeaderProps {
@@ -21,6 +23,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const { data: unreadCount = 0 } = useUnreadCount();
+  const { data: me } = useMe();
 
   return (
     <header
@@ -36,9 +39,13 @@ export function PageHeader({
         {/* Right actions */}
         <div className="flex items-center gap-2">
           {showAvatar && (
-            <div
-              aria-label="User avatar"
-              className="h-10 w-10 rounded-full bg-grey-300"
+            <UserAvatar
+              userId={me?.id ?? ""}
+              hasPhoto={me?.hasPhoto}
+              firstName={me?.firstName}
+              lastName={me?.lastName}
+              size={40}
+              className="bg-white/20 text-white"
             />
           )}
 

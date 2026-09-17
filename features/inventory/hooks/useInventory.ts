@@ -186,7 +186,7 @@ export function useCreateRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      siteId: string;
+      siteId?: string;
       requestType?: RequestType;
       source?: RequestSource;
       cleanerId?: string;
