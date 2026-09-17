@@ -30,3 +30,9 @@ export const areaKeys = {
   list: (floorId: string | undefined) => [...areaKeys.lists(), floorId ?? "all"] as const,
   detail: (id: string) => [...areaKeys.all, "detail", id] as const,
 };
+
+export const areaGroupKeys = {
+  all: ["area-groups"] as const,
+  lists: () => [...areaGroupKeys.all, "list"] as const,
+  list: (floorId: string | undefined) => [...areaGroupKeys.lists(), floorId ?? "all"] as const,
+};

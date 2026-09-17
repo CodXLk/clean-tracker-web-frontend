@@ -81,13 +81,16 @@ const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000;
 
 /**
  * While the cleaner is checked in at a geolocated site, sends a location heartbeat every
- * 15 minutes. If a ping lands outside the geofence the server auto-pauses the shift, which
- * this surfaces by invalidating the attendance queries. Only runs while the app is open.
+ * 15 minutes. If a ping lands outside the geofence — or the location can't be obtained — the
+ * server pauses the shift. Also pauses (best-effort) when the app/tab is closed or backgrounded,
+ * so reopening shows the shift as paused. Only runs while the app is open.
  */
 export function useAttendanceHeartbeat(sites: CleanerSite[]) {
   const heartbeat = useHeartbeat();
   const activeSiteId =
     sites.find((s) => s.status === "CHECKED_IN" && s.hasCoordinates)?.siteId ?? null;
+  // Any actively checked-in site (even without coordinates) — used for the close/pause beacon.
+  const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
 
   useEffect(() => {
     if (!activeSiteId) return;
@@ -103,7 +106,13 @@ export function useAttendanceHeartbeat(sites: CleanerSite[]) {
           accuracyMeters: pos.accuracy,
         });
       } catch {
-        // Best-effort: a failed/denied ping doesn't pause the shift.
+        // Location unreachable (permission/timeout) — pause the shift.
+        if (cancelled) return;
+        try {
+          await heartbeat.mutateAsync({ siteId: activeSiteId, unreachable: true });
+        } catch {
+          /* best-effort */
+        }
       }
     };
     const id = setInterval(tick, HEARTBEAT_INTERVAL_MS);
@@ -114,6 +123,27 @@ export function useAttendanceHeartbeat(sites: CleanerSite[]) {
     // heartbeat mutation identity is stable enough; re-run only when the active site changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSiteId]);
+
+  // Pause the shift when the app/tab is closed or sent to the background (best-effort beacon).
+  useEffect(() => {
+    if (!checkedInSiteId) return;
+    const pauseBeacon = () => {
+      if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
+      const blob = new Blob([JSON.stringify({ siteId: checkedInSiteId })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon(`/api${ENDPOINTS.attendance.pause}`, blob);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") pauseBeacon();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", pauseBeacon);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", pauseBeacon);
+    };
+  }, [checkedInSiteId]);
 }
 
 async function fetchLogs(filters: AttendanceLogFilters): Promise<AttendanceLog[]> {

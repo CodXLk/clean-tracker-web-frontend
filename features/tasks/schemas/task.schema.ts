@@ -18,6 +18,9 @@ export const TaskStatusSchema = z.enum([
 ]);
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 
+export const CriticalLevelSchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
+export type CriticalLevel = z.infer<typeof CriticalLevelSchema>;
+
 export const CleanerSummarySchema = z.object({
   id: z.string().uuid(),
   firstName: z.string().nullable().optional(),
@@ -37,6 +40,9 @@ export const TaskOccurrenceSchema = z.object({
   floorName: z.string().nullable().optional(),
   areaId: z.string().uuid().nullable().optional(),
   areaName: z.string().nullable().optional(),
+  areaGroupId: z.string().uuid().nullable().optional(),
+  areaGroupName: z.string().nullable().optional(),
+  groupTaskKey: z.string().uuid().nullable().optional(),
   assignmentType: AssignmentTypeSchema.nullable().optional(),
   shiftId: z.string().uuid().nullable().optional(),
   shiftName: z.string().nullable().optional(),
@@ -47,6 +53,9 @@ export const TaskOccurrenceSchema = z.object({
   durationMinutes: z.number().nullable().optional(),
   status: TaskStatusSchema,
   description: z.string().nullable().optional(),
+  criticalLevel: CriticalLevelSchema.nullable().optional(),
+  criticalNote: z.string().nullable().optional(),
+  referencePhotoIds: z.array(z.string().uuid()).default([]),
   colorHex: z.string().nullable().optional(),
   cleaners: z.array(CleanerSummarySchema).default([]),
   recurring: z.boolean(),

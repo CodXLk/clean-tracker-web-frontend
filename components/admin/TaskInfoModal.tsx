@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, MapPin, Pencil, Repeat, Trash2, UserCog, Users } from "lucide-react";
+import { CalendarClock, Layers, MapPin, Pencil, Repeat, Trash2, UserCog, Users } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { cn } from "@/lib/utils/cn";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { useAreaGroups } from "@/features/user-management/hooks/useAreaGroups";
 import {
   useAssignment,
   useSoftDeleteTask,
@@ -67,6 +68,13 @@ export function TaskInfoModal({ occurrence, onClose, onEditTask }: TaskInfoModal
   const open = !!occurrence;
   const assignmentQuery = useAssignment(open ? occurrence!.assignmentId : undefined);
   const assignment = assignmentQuery.data;
+  // When the task belongs to an area group, load the group's member areas to list them.
+  const areaGroupsQuery = useAreaGroups(
+    open && occurrence?.areaGroupId ? occurrence.floorId ?? undefined : undefined,
+  );
+  const areaGroup = occurrence?.areaGroupId
+    ? (areaGroupsQuery.data ?? []).find((g) => g.id === occurrence.areaGroupId)
+    : undefined;
   const softDelete = useSoftDeleteTask();
   const deleteOccurrence = useDeleteOccurrence();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -102,9 +110,21 @@ export function TaskInfoModal({ occurrence, onClose, onEditTask }: TaskInfoModal
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1 text-xs text-body-2">
             <MapPin size={13} aria-hidden="true" />
-            {[occurrence.floorName, occurrence.areaName].filter(Boolean).join(" · ")}
+            {[occurrence.floorName, areaGroup ? areaGroup.name : occurrence.areaName].filter(Boolean).join(" · ")}
           </span>
         </div>
+
+        {areaGroup && (
+          <div className="flex items-start gap-1.5 rounded-xl border border-line bg-surface-muted px-3 py-2 text-xs text-body-2">
+            <Layers size={13} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-medium text-ink">
+                Applies to {areaGroup.areas.length} area{areaGroup.areas.length === 1 ? "" : "s"} in {areaGroup.name}
+              </p>
+              <p className="mt-0.5">{areaGroup.areas.map((a) => a.name).join(" · ")}</p>
+            </div>
+          </div>
+        )}
 
         <InfoRow icon={Repeat} label="Recurrence">
           {assignmentQuery.isLoading ? (

@@ -165,10 +165,18 @@ export function AttendanceLogsTable() {
                           className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
                             log.status === "CHECKED_OUT"
                               ? "bg-success/10 text-success"
-                              : "bg-status-pending/10 text-status-pending"
+                              : log.status === "FORCED_CHECKOUT"
+                                ? "bg-error/10 text-error"
+                                : "bg-status-pending/10 text-status-pending"
                           }`}
                         >
-                          {log.status === "CHECKED_OUT" ? "Checked out" : "Checked in"}
+                          {log.status === "CHECKED_OUT"
+                            ? "Checked out"
+                            : log.status === "FORCED_CHECKOUT"
+                              ? "Force checked out"
+                              : log.status === "PAUSED"
+                                ? "Paused"
+                                : "Checked in"}
                         </span>
                       </td>
                       <td className="px-4 py-3">

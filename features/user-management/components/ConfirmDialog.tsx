@@ -10,6 +10,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   isPending?: boolean;
   error?: string;
+  /** Visual intent of the confirm action. Defaults to a destructive (red) style. */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -21,14 +23,22 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   isPending,
   error,
+  tone = "danger",
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
+  const isPrimary = tone === "primary";
   return (
     <Modal open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error">
+          <div
+            className={
+              isPrimary
+                ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error"
+            }
+          >
             <AlertTriangle size={20} aria-hidden="true" />
           </div>
           <p className="pt-0.5 text-sm leading-relaxed text-body-2">{description}</p>
@@ -53,7 +63,11 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isPending}
-            className="h-11 flex-1 rounded-xl bg-error text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className={
+              isPrimary
+                ? "h-11 flex-1 rounded-xl bg-primary text-sm font-semibold text-white transition-colors hover:bg-primary-variant disabled:cursor-not-allowed disabled:opacity-60"
+                : "h-11 flex-1 rounded-xl bg-error text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-60"
+            }
           >
             {isPending ? "Please wait…" : confirmLabel}
           </button>

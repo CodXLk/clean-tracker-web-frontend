@@ -224,6 +224,8 @@ function WorkforceContent() {
           defaultSiteId={prefill.siteId}
           defaultFloorId={prefill.floorId}
           defaultAreaId={prefill.areaId}
+          defaultAreaIds={prefill.areaIds}
+          defaultAreaGroupId={prefill.areaGroupId}
           defaultTaskName={prefill.taskName}
           scopeMode={prefill.mode}
           scopeWeekday={prefill.weekday}

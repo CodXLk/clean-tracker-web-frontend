@@ -57,11 +57,18 @@ export function useSelectRole() {
 
 export function useLogout() {
   const clear = useAuthStore((s) => s.clear);
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       await clientApi.post(ENDPOINTS.auth.logout);
     },
-    onSuccess: () => clear(),
+    // Clear local session AND the React Query cache regardless of the API result, so the next
+    // login starts fresh (otherwise the previous user's cached /me + role-scoped data is served
+    // stale until a manual refresh).
+    onSettled: () => {
+      clear();
+      queryClient.clear();
+    },
   });
 }
 

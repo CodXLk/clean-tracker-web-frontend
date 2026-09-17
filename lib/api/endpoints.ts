@@ -125,6 +125,11 @@ export const ENDPOINTS = {
     reorder: "/areas/reorder",
     byId:   (id: string) => `/areas/${id}`,
   },
+  areaGroups: {
+    list:   "/area-groups",
+    create: "/area-groups",
+    byId:   (id: string) => `/area-groups/${id}`,
+  },
   cleaners: {
     list: "/cleaners",
     byId: (id: string) => `/cleaners/${id}`,
@@ -136,6 +141,7 @@ export const ENDPOINTS = {
     checkIn:  "/attendance/check-in",
     checkOut: "/attendance/check-out",
     heartbeat: "/attendance/heartbeat",
+    pause:    "/attendance/pause",
     logs:     "/attendance",
     me:       "/attendance/me",
   },
@@ -159,11 +165,16 @@ export const ENDPOINTS = {
     byId:        (id: string) => `/assignments/${id}`,
     taskById:    (taskId: string) => `/assignments/tasks/${taskId}`,
     taskStatus:  (taskId: string) => `/assignments/tasks/${taskId}/status`,
+    taskCriticalLevel: (taskId: string) => `/assignments/tasks/${taskId}/critical-level`,
     taskRestore: (taskId: string) => `/assignments/tasks/${taskId}/restore`,
     taskCompletionCount: (taskId: string) => `/assignments/tasks/${taskId}/completion-count`,
     occurrence:  (taskId: string, date: string) => `/assignments/tasks/${taskId}/occurrences/${date}`,
     occurrenceContent: (taskId: string, date: string) =>
       `/assignments/tasks/${taskId}/occurrences/${date}/content`,
+    occurrencesCopy:   "/assignments/occurrences/copy",
+    occurrencesDelete: "/assignments/occurrences/delete-batch",
+    taskReferencePhotos: (taskId: string) => `/assignments/tasks/${taskId}/reference-photos`,
+    referencePhoto: (photoId: string) => `/assignments/tasks/reference-photos/${photoId}`,
   },
   assignmentDrafts: {
     list:   "/assignment-drafts",
@@ -371,6 +382,11 @@ export const BACKEND = {
     reorder: "/api/v1/areas/reorder",
     byId:   (id: string) => `/api/v1/areas/${id}`,
   },
+  areaGroups: {
+    list:   "/api/v1/area-groups",
+    create: "/api/v1/area-groups",
+    byId:   (id: string) => `/api/v1/area-groups/${id}`,
+  },
   cleaners: {
     list: "/api/v1/cleaners",
     byId: (id: string) => `/api/v1/cleaners/${id}`,
@@ -382,6 +398,7 @@ export const BACKEND = {
     checkIn:  "/api/v1/attendance/check-in",
     checkOut: "/api/v1/attendance/check-out",
     heartbeat: "/api/v1/attendance/heartbeat",
+    pause:    "/api/v1/attendance/pause",
     logs:     "/api/v1/attendance",
     me:       "/api/v1/attendance/me",
   },
@@ -405,11 +422,16 @@ export const BACKEND = {
     byId:        (id: string) => `/api/v1/assignments/${id}`,
     taskById:    (taskId: string) => `/api/v1/assignments/tasks/${taskId}`,
     taskStatus:  (taskId: string) => `/api/v1/assignments/tasks/${taskId}/status`,
+    taskCriticalLevel: (taskId: string) => `/api/v1/assignments/tasks/${taskId}/critical-level`,
     taskRestore: (taskId: string) => `/api/v1/assignments/tasks/${taskId}/restore`,
     taskCompletionCount: (taskId: string) => `/api/v1/assignments/tasks/${taskId}/completion-count`,
     occurrence:  (taskId: string, date: string) => `/api/v1/assignments/tasks/${taskId}/occurrences/${date}`,
     occurrenceContent: (taskId: string, date: string) =>
       `/api/v1/assignments/tasks/${taskId}/occurrences/${date}/content`,
+    occurrencesCopy:   "/api/v1/assignments/occurrences/copy",
+    occurrencesDelete: "/api/v1/assignments/occurrences/delete-batch",
+    taskReferencePhotos: (taskId: string) => `/api/v1/assignments/tasks/${taskId}/reference-photos`,
+    referencePhoto: (photoId: string) => `/api/v1/assignments/tasks/reference-photos/${photoId}`,
   },
   assignmentDrafts: {
     list:   "/api/v1/assignment-drafts",

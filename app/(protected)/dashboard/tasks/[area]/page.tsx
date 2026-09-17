@@ -1,13 +1,14 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { AlertTriangle, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, ChevronLeft, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
+import { PausedResumeBanner } from "@/features/attendance/components/PausedResumeBanner";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
@@ -53,6 +54,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const areaName = decodeURIComponent(area);
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const areaId = searchParams.get("areaId");
   const date = searchParams.get("date") ?? toLocalDateString(new Date());
 
@@ -119,11 +121,34 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     };
   }, [isDragging]);
 
-  // All occurrences in this area, regardless of status — role-agnostic.
+  // All occurrences in this area (or, for a cleaner's area group, across all its member areas).
+  const areaGroupId = searchParams.get("areaGroupId");
+  const isGroupMode = !!areaGroupId;
   const areaTasks = useMemo(
-    () => occurrences.filter((o) => (areaId ? o.areaId === areaId : true)),
-    [occurrences, areaId],
+    () =>
+      occurrences.filter((o) =>
+        isGroupMode ? o.areaGroupId === areaGroupId : areaId ? o.areaId === areaId : true,
+      ),
+    [occurrences, areaId, areaGroupId, isGroupMode],
   );
+
+  // For a group, collapse the identical per-area copies (same groupTaskKey) into one display row;
+  // its status is COMPLETED only when every member area's copy is done.
+  const displayTasks = useMemo(() => {
+    if (!isGroupMode) return areaTasks;
+    const groups = new Map<string, TaskOccurrence[]>();
+    for (const o of areaTasks) {
+      const key = o.groupTaskKey ?? o.taskId ?? "";
+      const list = groups.get(key) ?? [];
+      list.push(o);
+      groups.set(key, list);
+    }
+    return Array.from(groups.values()).map((list) => {
+      const rep = list[0]!;
+      const allDone = list.every((o) => o.status === "COMPLETED");
+      return { ...rep, status: allDone ? ("COMPLETED" as const) : rep.status };
+    });
+  }, [areaTasks, isGroupMode]);
 
   // A cleaner may only complete this area's tasks while actively checked in at its site.
   // A paused shift (moved off-site) or a checked-out shift makes the tasks view-only until
@@ -134,28 +159,35 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     ? sites.find((s) => s.siteId === areaSiteId)?.status ?? null
     : null;
   const isCheckedInToAreaSite = areaSiteStatus === "CHECKED_IN";
+  const isPausedAreaSite = areaSiteStatus === "PAUSED";
+  // Paused shifts show the tasks read-only (view-only) with a slide-to-start prompt.
+  const pausedReadOnly = !isAdmin && !isSupervisor && isPausedAreaSite;
+  const pausedAreaSite =
+    isPausedAreaSite && areaSiteId ? sites.find((s) => s.siteId === areaSiteId) ?? null : null;
 
-  // Until the cleaner/supervisor is checked in to this area's site, no tasks are shown.
-  const mustCheckIn = !isAdmin && !isCheckedInToAreaSite;
+  // A checked-out or not-yet-checked-in site shows the check-in banner; a paused site shows
+  // its tasks read-only instead of hiding them.
+  const mustCheckIn = !isAdmin && !isCheckedInToAreaSite && !isPausedAreaSite;
 
   // Supervisors review everything in original order. Cleaners see everything too, but
   // completed tasks are pushed to the bottom (stable partition, relative order preserved
   // within each group) as they finish.
   const tasks = useMemo(() => {
-    if (isSupervisor) return areaTasks;
+    if (isSupervisor) return displayTasks;
     const incomplete: TaskOccurrence[] = [];
     const completed: TaskOccurrence[] = [];
-    for (const o of areaTasks) {
+    for (const o of displayTasks) {
       (o.status === "COMPLETED" ? completed : incomplete).push(o);
     }
     return [...incomplete, ...completed];
-  }, [areaTasks, isSupervisor]);
+  }, [displayTasks, isSupervisor]);
 
   // Cleaners can't act on an already-completed task; supervisors can select any status.
   const selectableIds = useMemo(() => {
+    if (pausedReadOnly) return [];
     const selectable = isSupervisor ? tasks : tasks.filter((t) => t.status !== "COMPLETED");
     return selectable.map((t) => occKey(t));
-  }, [tasks, isSupervisor]);
+  }, [tasks, isSupervisor, pausedReadOnly]);
   const allSelected = selectedIds.size > 0 && selectedIds.size === selectableIds.length;
 
   // Object URLs for photo previews.
@@ -165,6 +197,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   }, [previews]);
 
   function toggleTaskSelected(taskId: string) {
+    if (pausedReadOnly) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(taskId)) next.delete(taskId);
@@ -209,13 +242,27 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     }
     const selected = tasks.filter((t) => selectedIds.has(occKey(t)));
     if (selected.length === 0) return;
-    completeTasks.mutate(
-      {
-        occurrences: selected.map((t) => ({
+    // In area-group mode, completing one group task completes it across every member area
+    // (all occurrences that share the group task key) in a single completion (shared note/photos).
+    const occRefs = isGroupMode
+      ? (() => {
+          const keys = new Set(selected.map((t) => t.groupTaskKey ?? t.taskId));
+          return areaTasks
+            .filter((o) => keys.has(o.groupTaskKey ?? o.taskId) && o.status !== "COMPLETED")
+            .map((o) => ({
+              taskId: o.taskId as string,
+              date: o.occurrenceDate,
+              redoId: o.redoId ?? undefined,
+            }));
+        })()
+      : selected.map((t) => ({
           taskId: t.taskId as string,
           date: t.occurrenceDate,
           redoId: t.redoId ?? undefined,
-        })),
+        }));
+    completeTasks.mutate(
+      {
+        occurrences: occRefs,
         note: note.trim() || undefined,
         photos,
       },
@@ -274,14 +321,24 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
         )}
       >
         <div className="flex items-center justify-between pb-3">
-          <button
-            type="button"
-            onClick={() => setCalendarOpen(true)}
-            aria-label="Open calendar"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
-          >
-            <CalendarDays size={18} strokeWidth={2} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
+            >
+              <ChevronLeft size={18} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              aria-label="Open calendar"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
+            >
+              <CalendarDays size={18} strokeWidth={2} />
+            </button>
+          </div>
           {selectableIds.length > 0 && !mustCheckIn && (
             <button
               onClick={toggleSelectAll}
@@ -297,6 +354,12 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
             </button>
           )}
         </div>
+
+        {pausedAreaSite && !isAdmin && (
+          <div className="mb-3">
+            <PausedResumeBanner site={pausedAreaSite} />
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-16">
@@ -317,7 +380,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               const isCompleted = task.status === "COMPLETED";
               // Cleaners have no valid action on an already-completed task; supervisors
               // keep full interactivity on every status (review/complaint flows).
-              const isSelectable = isSupervisor || !isCompleted;
+              const isSelectable = (isSupervisor || !isCompleted) && !pausedReadOnly;
 
               const cardClassName = cn(
                 "flex w-full items-start gap-3 rounded-2xl border-l-4 p-4 text-left shadow-sm transition-shadow",

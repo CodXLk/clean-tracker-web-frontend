@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { AlertTriangle, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, ChevronLeft, Camera, CalendarDays, ImagePlus, Square, SquareCheck, X } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
@@ -73,6 +73,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const areaName = decodeURIComponent(area);
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const areaId = searchParams.get("areaId");
   const date = searchParams.get("date") ?? toLocalDateString(new Date());
 
@@ -390,14 +391,24 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
         )}
       >
         <div className="flex items-center justify-between pb-3">
-          <button
-            type="button"
-            onClick={() => setCalendarOpen(true)}
-            aria-label="Open calendar"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
-          >
-            <CalendarDays size={18} strokeWidth={2} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
+            >
+              <ChevronLeft size={18} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              aria-label="Open calendar"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-ink transition-colors hover:bg-primary/20"
+            >
+              <CalendarDays size={18} strokeWidth={2} />
+            </button>
+          </div>
           {selectableIds.length > 0 && !mustCheckIn && (
             <button
               onClick={toggleSelectAll}

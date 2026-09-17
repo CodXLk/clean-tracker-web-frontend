@@ -54,9 +54,9 @@ export function SiteRoster({
   const [workOrderManage, setWorkOrderManage] = useState<"cleaner" | "supervisor" | null>(null);
   const [selectedOutsourceId, setSelectedOutsourceId] = useState<string>("");
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string>("");
-  // Each roster section collapses independently; all expanded by default.
-  const [outsourceOpen, setOutsourceOpen] = useState(true);
-  const [workOrderOpen, setWorkOrderOpen] = useState(true);
+  // Each roster section collapses independently; outsource and work-order sections start collapsed.
+  const [outsourceOpen, setOutsourceOpen] = useState(false);
+  const [workOrderOpen, setWorkOrderOpen] = useState(false);
   // A pending unassign awaiting confirmation — the actual removal runs task cleanup
   // and notifications on the backend, so it must be intentional.
   const [removing, setRemoving] = useState<{

@@ -9,8 +9,8 @@ import {
   FormProvider,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList, Repeat } from "lucide-react";
-import { useEffect, useCallback, useMemo, useRef, useState } from "react";
+import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList, Repeat, Layers, Image as ImageIcon } from "lucide-react";
+import { useEffect, useCallback, useMemo, useRef, useState, createContext, useContext } from "react";
 import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { WorkingDaysSelector } from "@/features/user-management/components/WorkingDaysSelector";
@@ -18,14 +18,16 @@ import { RecurrenceDialog, summarizeRecurrence } from "@/features/workforce/comp
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useFloors, useCreateFloor } from "@/features/user-management/hooks/useFloors";
 import { useAreas, useCreateArea } from "@/features/user-management/hooks/useAreas";
+import { useAreaGroups } from "@/features/user-management/hooks/useAreaGroups";
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
 import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
 import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
-import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions } from "@/features/workforce/hooks/useAssignments";
+import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions, uploadTaskReferencePhotos } from "@/features/workforce/hooks/useAssignments";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
+import { PriorityFlagMenu } from "@/features/workforce/components/PriorityFlagMenu";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
 import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
@@ -43,6 +45,101 @@ import {
 } from "@/features/workforce/schemas/assignment.schema";
 
 export type AssignmentFormData = AssignmentFormInput;
+
+/**
+ * Holds pending reference-photo File[] for HIGH-critical tasks, keyed by each task's
+ * client-only refPhotoKey. Files can't live in react-hook-form (zod strips them), so
+ * they're stashed here and uploaded per created task after the assignment is saved.
+ */
+const ReferencePhotosContext = createContext<{
+  get: (key: string) => File[];
+  set: (key: string, files: File[]) => void;
+} | null>(null);
+
+/** Per-task criticality selector; HIGH reveals a note + reference-photo picker. */
+function CriticalTaskEditor({ groupIndex, taskIndex }: { groupIndex: number; taskIndex: number }) {
+  const { control, register, setValue } = useFormContext<AssignmentFormInput>();
+  const photos = useContext(ReferencePhotosContext);
+  const base = `groups.${groupIndex}.tasks.${taskIndex}` as const;
+  const level = useWatch({ control, name: `${base}.criticalLevel` }) ?? "LOW";
+  const refPhotoKey = useWatch({ control, name: `${base}.refPhotoKey` });
+  const files = refPhotoKey && photos ? photos.get(refPhotoKey) : [];
+
+  const previews = useMemo(
+    () => (files ?? []).map((f) => ({ name: f.name, url: URL.createObjectURL(f) })),
+    [files],
+  );
+  useEffect(() => {
+    return () => previews.forEach((p) => URL.revokeObjectURL(p.url));
+  }, [previews]);
+
+  function selectLevel(next: "LOW" | "MEDIUM" | "HIGH") {
+    setValue(`${base}.criticalLevel`, next, { shouldDirty: true });
+    if (next === "HIGH" && !refPhotoKey) {
+      setValue(`${base}.refPhotoKey`, crypto.randomUUID(), { shouldDirty: true });
+    }
+  }
+
+  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (picked.length === 0 || !photos) return;
+    let key = refPhotoKey;
+    if (!key) {
+      key = crypto.randomUUID();
+      setValue(`${base}.refPhotoKey`, key, { shouldDirty: true });
+    }
+    photos.set(key, [...(photos.get(key) ?? []), ...picked]);
+  }
+
+  function removeFile(idx: number) {
+    if (!refPhotoKey || !photos) return;
+    photos.set(
+      refPhotoKey,
+      (photos.get(refPhotoKey) ?? []).filter((_, i) => i !== idx),
+    );
+  }
+
+  return (
+    <div className="mt-2 pl-7">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-medium text-grey-500">Priority</span>
+        <PriorityFlagMenu level={level} taskName="this task" onChange={selectLevel} showLabel />
+      </div>
+      {level === "HIGH" && (
+        <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 p-2">
+          <textarea
+            {...register(`${base}.criticalNote`)}
+            rows={2}
+            placeholder="What must the cleaner know? (shown at check-in)"
+            className="w-full resize-none rounded-md border border-grey-300 bg-white px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {previews.map((p, i) => (
+              <div key={p.url} className="relative h-14 w-14 overflow-hidden rounded-md border border-grey-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={p.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label={`Remove photo ${i + 1}`}
+                  onClick={() => removeFile(i)}
+                  className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl-md bg-black/60 text-white"
+                >
+                  <X size={9} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            <label className="flex h-14 w-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-grey-300 text-grey-500 transition-colors hover:border-primary hover:text-ink">
+              <ImageIcon size={14} aria-hidden="true" />
+              <span className="text-[9px]">Add</span>
+              <input type="file" accept="image/*" multiple className="hidden" onChange={onPickFiles} />
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CLEANER_GRADIENTS: Array<{ from: string; to: string }> = [
   { from: "#2B7FFF", to: "#155DFC" },
@@ -62,6 +159,9 @@ interface NewAssignmentModalProps {
   defaultSiteId?: string;
   defaultFloorId?: string;
   defaultAreaId?: string;
+  /** When adding to an area group: the group id + all member area ids (task fans out to all). */
+  defaultAreaIds?: string[];
+  defaultAreaGroupId?: string;
   /** Day-view quick add — seed the first task's name. */
   defaultTaskName?: string;
   /**
@@ -132,16 +232,18 @@ function cleanerInitials(c: { firstName?: string | null; lastName?: string | nul
   return (first + last).toUpperCase() || "?";
 }
 
-function emptyGroup(floorId = "", areaId = "", taskName = "") {
+function emptyGroup(floorId = "", areaId = "", taskName = "", areaIds?: string[], areaGroupId?: string) {
   return {
     floorId,
-    areaIds: areaId ? [areaId] : [],
+    areaIds: areaIds && areaIds.length > 0 ? areaIds : areaId ? [areaId] : [],
+    ...(areaGroupId ? { areaGroupId } : {}),
     tasks: (taskName
       ? [
           {
             name: taskName,
             durationMinutes: undefined,
             description: "",
+            criticalLevel: "LOW",
             cleanerIds: [],
             profileIds: [],
             items: [],
@@ -159,6 +261,8 @@ interface Prefill {
   defaultSiteId?: string;
   defaultFloorId?: string;
   defaultAreaId?: string;
+  defaultAreaIds?: string[];
+  defaultAreaGroupId?: string;
   defaultTaskName?: string;
   scopeMode?: "ONE_OFF" | "DAY_WEEKLY" | "TASK_INHERIT";
   scopeWeekday?: DayOfWeek;
@@ -171,6 +275,8 @@ function buildDefaults({
   defaultSiteId = "",
   defaultFloorId = "",
   defaultAreaId = "",
+  defaultAreaIds,
+  defaultAreaGroupId,
   defaultTaskName = "",
   scopeMode,
   scopeWeekday,
@@ -184,7 +290,7 @@ function buildDefaults({
     seriesEndDate: undefined,
     startTime: defaultTime,
     poId: "",
-    groups: [emptyGroup(defaultFloorId, defaultAreaId, defaultTaskName)],
+    groups: [emptyGroup(defaultFloorId, defaultAreaId, defaultTaskName, defaultAreaIds, defaultAreaGroupId)],
     cleanerIds: [],
     profileIds: [],
     supervisorIds: [],
@@ -415,6 +521,7 @@ function LocationGroupCard({
 
   const floorId = watch(`groups.${groupIndex}.floorId`);
   const areasQuery = useAreas(floorId || undefined);
+  const areaGroupsQuery = useAreaGroups(floorId || undefined);
   const taskNameSuggestions = useTaskNameSuggestions();
   const taskNameListId = `task-names-${groupIndex}`;
   const { fields, append, remove } = useFieldArray({
@@ -461,6 +568,7 @@ function LocationGroupCard({
       name,
       durationMinutes: duration && duration > 0 ? duration : undefined,
       description: qDesc.trim(),
+      criticalLevel: "LOW",
       cleanerIds: [],
       profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
       items: [],
@@ -492,6 +600,7 @@ function LocationGroupCard({
         name: t.name,
         durationMinutes: t.durationMinutes && t.durationMinutes > 0 ? t.durationMinutes : undefined,
         description: t.description ?? "",
+        criticalLevel: "LOW",
         cleanerIds: [],
         profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
         items: (t.items ?? []).map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
@@ -600,6 +709,7 @@ function LocationGroupCard({
                   onChange={(v) => {
                     field.onChange(v);
                     setValue(`groups.${groupIndex}.areaIds`, []);
+                    setValue(`groups.${groupIndex}.areaGroupId`, undefined);
                   }}
                   disabled={!siteId}
                   loading={floorsLoading && !!siteId}
@@ -625,7 +735,7 @@ function LocationGroupCard({
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className="text-sm font-medium text-on-surface">
-              Areas <span className="text-grey-500">(pick one or more)</span>
+              Areas <span className="text-grey-500">(pick areas or an area group)</span>
             </label>
             <button
               type="button"
@@ -652,30 +762,70 @@ function LocationGroupCard({
               if (areaOptions.length === 0) {
                 return <p className="text-sm text-grey-500">No areas yet — add one with the + button.</p>;
               }
+              const groups = areaGroupsQuery.data ?? [];
+              const currentAreaGroupId = watch(`groups.${groupIndex}.areaGroupId`);
               return (
-                <div className="flex flex-wrap gap-2">
-                  {areaOptions.map((o) => {
-                    const on = selected.includes(o.value);
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        onClick={() =>
-                          field.onChange(
-                            on ? selected.filter((id) => id !== o.value) : [...selected, o.value],
-                          )
-                        }
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                          on
-                            ? "border-primary bg-primary text-white"
-                            : "border-grey-300 text-on-surface hover:bg-grey-100",
-                        )}
-                      >
-                        {o.label}
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-col gap-2">
+                  {groups.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {groups.map((g) => {
+                        const on = currentAreaGroupId === g.id;
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            title={g.areas.map((a) => a.name).join(", ")}
+                            onClick={() => {
+                              if (on) {
+                                const memberIds = new Set(g.areas.map((a) => a.id));
+                                field.onChange(selected.filter((id) => !memberIds.has(id)));
+                                setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+                              } else {
+                                field.onChange(g.areas.map((a) => a.id));
+                                setValue(`groups.${groupIndex}.areaGroupId`, g.id, { shouldValidate: true });
+                              }
+                            }}
+                            className={cn(
+                              "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                              on
+                                ? "border-primary bg-primary text-white"
+                                : "border-primary/40 text-ink hover:bg-primary/10",
+                            )}
+                          >
+                            <Layers size={12} aria-hidden="true" />
+                            {g.name}
+                            <span className="opacity-80">({g.areas.length})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {areaOptions.map((o) => {
+                      const on = selected.includes(o.value);
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => {
+                            field.onChange(
+                              on ? selected.filter((id) => id !== o.value) : [...selected, o.value],
+                            );
+                            // A manual area change breaks a whole-group selection.
+                            if (currentAreaGroupId) setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+                          }}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                            on
+                              ? "border-primary bg-primary text-white"
+                              : "border-grey-300 text-on-surface hover:bg-grey-100",
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             }}
@@ -950,6 +1100,8 @@ function LocationGroupCard({
                   <p className="mt-0.5 pl-7 text-xs text-grey-500">{task.description}</p>
                 )}
 
+                <CriticalTaskEditor groupIndex={groupIndex} taskIndex={taskIndex} />
+
                 {assignPerTask && (
                   <div className="mt-2 pl-7">
                     {cleaners.length === 0 ? (
@@ -1043,6 +1195,8 @@ export function NewAssignmentModal({
   defaultSiteId,
   defaultFloorId,
   defaultAreaId,
+  defaultAreaIds,
+  defaultAreaGroupId,
   defaultTaskName,
   scopeMode,
   scopeWeekday,
@@ -1061,6 +1215,21 @@ export function NewAssignmentModal({
   const [activeDraftId, setActiveDraftId] = useState<string | undefined>();
   const [showClosePrompt, setShowClosePrompt] = useState(false);
 
+  // Pending HIGH-task reference photos, keyed by each task's client-only refPhotoKey.
+  const referencePhotosRef = useRef<Map<string, File[]>>(new Map());
+  const [, forcePhotoRerender] = useState(0);
+  const referencePhotosApi = useMemo(
+    () => ({
+      get: (key: string) => referencePhotosRef.current.get(key) ?? [],
+      set: (key: string, files: File[]) => {
+        if (files.length === 0) referencePhotosRef.current.delete(key);
+        else referencePhotosRef.current.set(key, files);
+        forcePhotoRerender((v) => v + 1);
+      },
+    }),
+    [],
+  );
+
   const sitesQuery = useSites();
   const createMutation = useCreateAssignment();
   const updateMutation = useUpdateAssignment();
@@ -1071,7 +1240,7 @@ export function NewAssignmentModal({
 
   const methods = useForm<AssignmentFormInput>({
     resolver: zodResolver(AssignmentFormSchema),
-    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }),
+    defaultValues: buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultAreaIds, defaultAreaGroupId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }),
   });
   const {
     register,
@@ -1332,7 +1501,7 @@ export function NewAssignmentModal({
         // once its assignment loads; keep a blank base until then.
         setActiveDraftId(undefined);
       } else {
-        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }));
+        reset(buildDefaults({ defaultDate, defaultTime, defaultSiteId, defaultFloorId, defaultAreaId, defaultAreaIds, defaultAreaGroupId, defaultTaskName, scopeMode, scopeWeekday, workOrderMode }));
         setActiveDraftId(undefined);
       }
       setCleanerSearch("");
@@ -1463,7 +1632,8 @@ export function NewAssignmentModal({
       updateMutation.mutate(
         { id: editAssignmentId, input: data },
         {
-          onSuccess: () => {
+          onSuccess: async (updated) => {
+            await uploadPendingReferencePhotos(data, updated);
             onCreated?.();
             onClose();
           },
@@ -1472,13 +1642,41 @@ export function NewAssignmentModal({
       return;
     }
     createMutation.mutate(data, {
-      onSuccess: () => {
+      onSuccess: async (created) => {
+        // Upload any pending reference photos for HIGH tasks to each created (per-area) copy.
+        await uploadPendingReferencePhotos(data, created);
         // A draft that has become a real assignment no longer needs to linger.
         if (activeDraftId) deleteDraftMutation.mutate(activeDraftId);
         onCreated?.();
         onClose();
       },
     });
+  }
+
+  /** After create, match HIGH form tasks (by name + area) to created tasks and upload their photos. */
+  async function uploadPendingReferencePhotos(
+    form: AssignmentFormInput,
+    created: { tasks: Array<{ id: string; name: string; areaId: string; criticalLevel?: string | null }> },
+  ) {
+    const map = referencePhotosRef.current;
+    if (map.size === 0) return;
+    const uploads: Promise<unknown>[] = [];
+    for (const group of form.groups) {
+      for (const task of group.tasks) {
+        if (task.criticalLevel !== "HIGH" || !task.refPhotoKey) continue;
+        const files = map.get(task.refPhotoKey);
+        if (!files || files.length === 0) continue;
+        const targets = created.tasks.filter(
+          (ct) =>
+            ct.name === task.name.trim() &&
+            ct.criticalLevel === "HIGH" &&
+            group.areaIds.includes(ct.areaId),
+        );
+        for (const ct of targets) uploads.push(uploadTaskReferencePhotos(ct.id, files));
+      }
+    }
+    await Promise.allSettled(uploads);
+    map.clear();
   }
 
   /** Copy the assignment-level recurrence into every task's own rule (override all). */
@@ -1574,6 +1772,7 @@ export function NewAssignmentModal({
         </div>
 
         <FormProvider {...methods}>
+          <ReferencePhotosContext.Provider value={referencePhotosApi}>
           <form onSubmit={handleSubmit(handleFormSubmit)}>
             <div className="max-h-[72vh] overflow-y-auto px-6 pb-2">
               {/* Row 1: Work Type + Site */}
@@ -2453,6 +2652,7 @@ export function NewAssignmentModal({
               </div>
             </div>
           </form>
+          </ReferencePhotosContext.Provider>
         </FormProvider>
 
         {/* Close-with-unsaved-changes prompt */}

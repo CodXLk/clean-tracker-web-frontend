@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package, MoonStar } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package, MoonStar, Copy, ClipboardPaste } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
   useOccurrences,
@@ -12,10 +12,15 @@ import {
   useDeleteOccurrence,
   useReorderTasks,
   useSetTaskStatus,
+  useSetTaskCriticalLevel,
+  uploadTaskReferencePhotos,
   useRestoreTask,
   useSiteTaskStatusCounts,
+  useCopyOccurrences,
+  useDeleteOccurrencesBatch,
   type OccurrenceQuery,
   type EditOccurrenceInput,
+  type OccurrenceRefInput,
 } from "@/features/workforce/hooks/useAssignments";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -27,6 +32,8 @@ import {
   useReorderFloors,
 } from "@/features/user-management/hooks/useFloors";
 import { useAreas, useCreateArea, useUpdateArea, useDeleteArea, useReorderAreas } from "@/features/user-management/hooks/useAreas";
+import { useAreaGroups, useDeleteAreaGroup } from "@/features/user-management/hooks/useAreaGroups";
+import { AreaGroupModal } from "@/components/admin/AreaGroupModal";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
 import { NameFormModal } from "@/components/admin/NameFormModal";
@@ -34,6 +41,8 @@ import { EditOccurrenceModal } from "@/components/admin/EditOccurrenceModal";
 import { TaskInfoModal } from "@/components/admin/TaskInfoModal";
 import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
 import { TypeDetailsModal } from "@/components/admin/TypeDetailsModal";
+import { SetHighPriorityModal } from "@/features/workforce/components/SetHighPriorityModal";
+import { EditTaskModal } from "@/features/workforce/components/EditTaskModal";
 import { usePublicHolidays } from "@/features/workforce/hooks/usePublicHolidays";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
@@ -42,6 +51,7 @@ import { WORK_TYPE_LABELS, assignmentToFormInput, type AssignmentFormInput, type
 import { DAY_OF_WEEK_VALUES, isSelectableInOperations, type DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
+import type { AreaGroup } from "@/features/user-management/schemas/area.schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +98,9 @@ export interface AssignmentPrefill {
   siteId?: string;
   floorId?: string;
   areaId?: string;
+  /** When adding to an area group: the group id + all its member area ids (task fans out to all). */
+  areaGroupId?: string;
+  areaIds?: string[];
   /** Day-view quick add — seed the first task's name. */
   taskName?: string;
   /** Scope-view create constraint: one-off (date cell), weekly-on-day, or inherit from a task. */
@@ -290,6 +303,11 @@ function groupDayByType(dayEvents: CalendarEvent[]): DayTypeGroup[] {
     hex: ASSIGNMENT_TYPE_COLOR[t] ?? "#0B585A",
     events: byType.get(t)!,
   }));
+}
+
+/** Distinct PO references across a work-order group's occurrences (empty for other types). */
+function workOrderPoIds(events: CalendarEvent[]): string[] {
+  return Array.from(new Set(events.map((e) => e.raw?.poId).filter(Boolean))) as string[];
 }
 
 function normalizeTime(time: string): string {
@@ -1176,6 +1194,65 @@ function WeekView({
 
 // ── Month View ────────────────────────────────────────────────────────────────
 
+/** Right-click menu shown over a work-type rectangle or an empty day cell in the month grid. */
+type MonthMenuState =
+  | { x: number; y: number; kind: "group"; group: DayTypeGroup; date: string }
+  | { x: number; y: number; kind: "cell"; date: string };
+
+interface MonthContextMenuProps {
+  menu: MonthMenuState;
+  clipboardLabel?: string | null;
+  onCopy: () => void;
+  onDelete: () => void;
+  onPaste: () => void;
+  onClose: () => void;
+}
+
+function MonthContextMenu({ menu, clipboardLabel, onCopy, onDelete, onPaste, onClose }: MonthContextMenuProps) {
+  const left = Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 9999) - 210);
+  const top = Math.min(menu.y, (typeof window !== "undefined" ? window.innerHeight : 9999) - 160);
+  const label = menu.kind === "group" ? WORK_TYPE_LABELS[menu.group.type as WorkType] ?? menu.group.type : null;
+  return (
+    <div className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
+      <div
+        className="absolute min-w-[190px] overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg"
+        style={{ left, top }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {menu.kind === "group" && (
+          <>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-grey-100"
+            >
+              <Copy size={14} aria-hidden="true" />
+              Copy {label} task{menu.group.events.length === 1 ? "" : "s"}
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-error transition-colors hover:bg-error/10"
+            >
+              <Trash2 size={14} aria-hidden="true" />
+              Delete {label} task{menu.group.events.length === 1 ? "" : "s"}
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onPaste}
+          disabled={!clipboardLabel}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-ink transition-colors hover:bg-grey-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ClipboardPaste size={14} aria-hidden="true" />
+          {clipboardLabel ? `Paste ${clipboardLabel}` : "Paste (nothing copied)"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface MonthViewProps {
   year: number;
   month: number;
@@ -1185,10 +1262,37 @@ interface MonthViewProps {
   holidays: Map<string, string>;
   onDayClick: (date: string, x: number, y: number) => void;
   onTypeClick: (group: DayTypeGroup, date: string) => void;
+  /** Clipboard label, when a group has been copied via the right-click menu. */
+  clipboardLabel?: string | null;
+  /** Drag a work-type group from one date and drop it on another. */
+  onDragCopyGroup: (group: DayTypeGroup, sourceDate: string, targetDate: string) => void;
+  /** Right-click "Copy" — store the group on the clipboard for a later paste. */
+  onCopyGroupToClipboard: (group: DayTypeGroup, sourceDate: string) => void;
+  /** Right-click "Delete" — remove the group's tasks from that date. */
+  onDeleteGroup: (group: DayTypeGroup, date: string) => void;
+  /** Right-click "Paste" — copy the clipboard group onto the target date. */
+  onPasteClipboard: (targetDate: string) => void;
 }
 
-function MonthView({ year, month, events, today, workingDays, holidays, onDayClick, onTypeClick }: MonthViewProps) {
+function MonthView({
+  year,
+  month,
+  events,
+  today,
+  workingDays,
+  holidays,
+  onDayClick,
+  onTypeClick,
+  clipboardLabel,
+  onDragCopyGroup,
+  onCopyGroupToClipboard,
+  onDeleteGroup,
+  onPasteClipboard,
+}: MonthViewProps) {
   const weeks = getMonthWeeks(year, month);
+  const dragData = useRef<{ group: DayTypeGroup; date: string } | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [menu, setMenu] = useState<MonthMenuState | null>(null);
 
   function isWorkingDate(date: string): boolean {
     return workingDays === null || workingDays.includes(dayOfWeekOf(date));
@@ -1217,6 +1321,7 @@ function MonthView({ year, month, events, today, workingDays, holidays, onDayCli
             const visibleGroups = typeGroups.slice(0, 4);
             const overflow = typeGroups.length - visibleGroups.length;
             const holidayName = holidays.get(dateStr);
+            const isDragOver = dragOverDate === dateStr;
 
             return (
               <div
@@ -1227,10 +1332,29 @@ function MonthView({ year, month, events, today, workingDays, holidays, onDayCli
                   !isCurrentMonth && "bg-grey-100/30",
                   isCurrentMonth && !working && !holidayName && "bg-grey-100/60",
                   holidayName && "bg-rose-50",
+                  isDragOver && "ring-2 ring-inset ring-primary bg-primary/5",
                 )}
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   onDayClick(dateStr, rect.left + rect.width / 2, rect.top);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, kind: "cell", date: dateStr });
+                }}
+                onDragOver={(e) => {
+                  if (!dragData.current) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                  if (dragOverDate !== dateStr) setDragOverDate(dateStr);
+                }}
+                onDragLeave={() => setDragOverDate((d) => (d === dateStr ? null : d))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const src = dragData.current;
+                  dragData.current = null;
+                  setDragOverDate(null);
+                  if (src && src.date !== dateStr) onDragCopyGroup(src.group, src.date, dateStr);
                 }}
               >
                 <div className="flex items-center justify-between gap-1">
@@ -1256,26 +1380,50 @@ function MonthView({ year, month, events, today, workingDays, holidays, onDayCli
 
                 {/* Work-type rectangles — one per type present that day */}
                 <div className="mt-1 flex flex-col gap-1">
-                  {visibleGroups.map((g) => (
+                  {visibleGroups.map((g) => {
+                    const poIds = g.type === "WORK_ORDER" ? workOrderPoIds(g.events) : [];
+                    const poSuffix = poIds.length ? ` · PO ${poIds.join(", ")}` : "";
+                    return (
                     <button
                       key={g.type}
                       type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        dragData.current = { group: g, date: dateStr };
+                        e.dataTransfer.effectAllowed = "copy";
+                        e.dataTransfer.setData("text/plain", g.type);
+                      }}
+                      onDragEnd={() => {
+                        dragData.current = null;
+                        setDragOverDate(null);
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         onTypeClick(g, dateStr);
                       }}
-                      className="flex w-full items-center justify-between gap-1 rounded px-1.5 py-1 text-left text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMenu({ x: e.clientX, y: e.clientY, kind: "group", group: g, date: dateStr });
+                      }}
+                      className="flex w-full cursor-grab items-center justify-between gap-1 rounded px-1.5 py-1 text-left text-[11px] font-semibold text-white transition-opacity hover:opacity-90 active:cursor-grabbing"
                       style={{ backgroundColor: g.hex }}
-                      title={`${WORK_TYPE_LABELS[g.type as WorkType] ?? g.type} — ${g.events.length} task${g.events.length === 1 ? "" : "s"}`}
+                      title={`${WORK_TYPE_LABELS[g.type as WorkType] ?? g.type} — ${g.events.length} task${g.events.length === 1 ? "" : "s"}${poSuffix} · drag to copy, right-click for more`}
                     >
-                      <span className="truncate">{WORK_TYPE_LABELS[g.type as WorkType] ?? g.type}</span>
+                      <span className="truncate">
+                        {WORK_TYPE_LABELS[g.type as WorkType] ?? g.type}
+                        {poIds.length > 0 && (
+                          <span className="ml-1 font-normal opacity-90">· {poIds.join(", ")}</span>
+                        )}
+                      </span>
                       {g.events.length > 1 && (
                         <span className="shrink-0 rounded-full bg-black/20 px-1 text-[9px] leading-tight">
                           {g.events.length}
                         </span>
                       )}
                     </button>
-                  ))}
+                    );
+                  })}
                   {overflow > 0 && (
                     <span className="pl-1 text-[11px] text-grey-400">+{overflow} more</span>
                   )}
@@ -1285,6 +1433,26 @@ function MonthView({ year, month, events, today, workingDays, holidays, onDayCli
           })}
         </div>
       ))}
+
+      {menu && (
+        <MonthContextMenu
+          menu={menu}
+          clipboardLabel={clipboardLabel}
+          onClose={() => setMenu(null)}
+          onCopy={() => {
+            if (menu.kind === "group") onCopyGroupToClipboard(menu.group, menu.date);
+            setMenu(null);
+          }}
+          onDelete={() => {
+            if (menu.kind === "group") onDeleteGroup(menu.group, menu.date);
+            setMenu(null);
+          }}
+          onPaste={() => {
+            onPasteClipboard(menu.date);
+            setMenu(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1710,11 +1878,17 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     name: string;
   } | null>(null);
   const [pendingRestore, setPendingRestore] = useState<{ taskId: string; name: string } | null>(null);
+  // Raising a task to HIGH opens a note + photos prompt; the level only changes on a successful save.
+  const [pendingHighPriority, setPendingHighPriority] = useState<{ taskId: string; name: string } | null>(null);
+  // Editing a task (rename + HIGH note/photos) via the pencil icon.
+  const [editTask, setEditTask] = useState<{ taskId: string; name: string } | null>(null);
   const [scopeDialog, setScopeDialog] = useState<ScopeDialogState | null>(null);
 
   // Floor/area management (scope view, single site selected).
   const [floorModal, setFloorModal] = useState<{ mode: "add" | "edit"; floor?: Floor } | null>(null);
   const [areaModal, setAreaModal] = useState<{ mode: "add" | "edit"; floor?: Floor; area?: Area } | null>(null);
+  const [areaGroupModal, setAreaGroupModal] = useState<{ floor: Floor; group?: AreaGroup } | null>(null);
+  const [pendingAreaGroupDelete, setPendingAreaGroupDelete] = useState<AreaGroup | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<
     { kind: "floor"; floor: Floor } | { kind: "area"; area: Area } | null
   >(null);
@@ -1809,12 +1983,25 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     return map;
   }, [floors, allAreasQuery.data, localAreaOrder]);
 
+  const areaGroupsQuery = useAreaGroups(undefined, { enabled: managing });
+  const areaGroupsByFloor = useMemo(() => {
+    const map = new Map<string, AreaGroup[]>();
+    for (const g of areaGroupsQuery.data ?? []) {
+      const list = map.get(g.floorId) ?? [];
+      list.push(g);
+      map.set(g.floorId, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
+    return map;
+  }, [areaGroupsQuery.data]);
+
   const createFloor = useCreateFloor();
   const updateFloor = useUpdateFloor();
   const deleteFloor = useDeleteFloor();
   const createArea = useCreateArea();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
+  const deleteAreaGroup = useDeleteAreaGroup();
 
   // Visible date range → drives the backend fetch. The schedule grid is weekly too.
   const range = useMemo<OccurrenceQuery>(() => {
@@ -1847,7 +2034,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     ? timeToMinutes(selectedSite.generalTaskEndTime.slice(0, 5))
     : null;
   const setTaskStatusMutation = useSetTaskStatus();
-  const restoreTaskMutation = useRestoreTask();
+  const setTaskCriticalLevelMutation = useSetTaskCriticalLevel();  const restoreTaskMutation = useRestoreTask();
 
   // Day view aggregates the recurrence pattern into weekday columns, so it fetches a wide
   // lookahead. Anchor the fetch at the visible week's start (not today) so the current week's
@@ -1892,6 +2079,24 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   }
   const editMutation = useEditOccurrence();
   const deleteMutation = useDeleteOccurrence();
+
+  // Month-view day-group copy / paste / delete.
+  const [clipboard, setClipboard] = useState<
+    { label: string; sourceDate: string; occurrences: OccurrenceRefInput[] } | null
+  >(null);
+  const [pendingCopy, setPendingCopy] = useState<
+    { label: string; sourceDate: string; targetDate: string; count: number; occurrences: OccurrenceRefInput[] } | null
+  >(null);
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<
+    { label: string; date: string; count: number; occurrences: OccurrenceRefInput[] } | null
+  >(null);
+  const copyOccurrences = useCopyOccurrences();
+  const deleteOccurrencesBatch = useDeleteOccurrencesBatch();
+
+  const groupToRefs = (group: DayTypeGroup): OccurrenceRefInput[] =>
+    group.events.map((e) => ({ taskId: e.taskId, occurrenceDate: e.occurrenceDate }));
+  const groupLabel = (group: DayTypeGroup): string =>
+    WORK_TYPE_LABELS[group.type as WorkType] ?? group.type;
 
   // Mirror server data into local state so drag/resize can update optimistically.
   // Sync during render (React's approved "adjust state on prop change" pattern)
@@ -2239,6 +2444,8 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       siteId: siteFilter,
       floorId: target.floorId,
       areaId: target.areaId,
+      areaGroupId: target.areaGroupId,
+      areaIds: target.areaIds,
       taskName: target.taskName,
       mode: target.mode,
       weekday: target.mode === "DAY_WEEKLY" ? weekday : undefined,
@@ -2509,6 +2716,17 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
               name: siteTasksQuery.data?.find((t) => t.taskId === taskId)?.name ?? "this task",
             })
           }
+          onSetTaskCriticalLevel={(taskId, level) => {
+            if (level === "HIGH") {
+              setPendingHighPriority({
+                taskId,
+                name: siteTasksQuery.data?.find((t) => t.taskId === taskId)?.name ?? "this task",
+              });
+            } else {
+              setTaskCriticalLevelMutation.mutate({ taskId, level });
+            }
+          }}
+          onEditTask={(taskId, name) => setEditTask({ taskId, name })}
           onRestoreTask={(taskId) =>
             setPendingRestore({
               taskId,
@@ -2520,6 +2738,13 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           onDeleteFloor={(floor) => setDeleteTarget({ kind: "floor", floor })}
           onAddArea={(floor) => setAreaModal({ mode: "add", floor })}
           onEditArea={(area) => setAreaModal({ mode: "edit", area })}
+          areaGroupsByFloor={managing ? areaGroupsByFloor : undefined}
+          onAddAreaGroup={(floor) => setAreaGroupModal({ floor })}
+          onEditAreaGroup={(group) => {
+            const floor = floors.find((f) => f.id === group.floorId);
+            if (floor) setAreaGroupModal({ floor, group });
+          }}
+          onDeleteAreaGroup={(group) => setPendingAreaGroupDelete(group)}
           onEditAreaTasks={handleEditAreaTasks}
           onDeleteArea={(area) => setDeleteTarget({ kind: "area", area })}
         />
@@ -2559,6 +2784,37 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
               occurrences: group.events.map((e) => e.raw).filter(Boolean) as TaskOccurrence[],
             })
           }
+          clipboardLabel={clipboard?.label ?? null}
+          onDragCopyGroup={(group, sourceDate, targetDate) =>
+            setPendingCopy({
+              label: groupLabel(group),
+              sourceDate,
+              targetDate,
+              count: group.events.length,
+              occurrences: groupToRefs(group),
+            })
+          }
+          onCopyGroupToClipboard={(group, sourceDate) =>
+            setClipboard({ label: groupLabel(group), sourceDate, occurrences: groupToRefs(group) })
+          }
+          onDeleteGroup={(group, date) =>
+            setPendingGroupDelete({
+              label: groupLabel(group),
+              date,
+              count: group.events.length,
+              occurrences: groupToRefs(group),
+            })
+          }
+          onPasteClipboard={(targetDate) => {
+            if (!clipboard || clipboard.sourceDate === targetDate) return;
+            setPendingCopy({
+              label: clipboard.label,
+              sourceDate: clipboard.sourceDate,
+              targetDate,
+              count: clipboard.occurrences.length,
+              occurrences: clipboard.occurrences,
+            });
+          }}
         />
       )}
 
@@ -2570,6 +2826,45 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           hex={typeDetail.hex}
           occurrences={typeDetail.occurrences}
           onClose={() => setTypeDetail(null)}
+        />
+      )}
+
+      {/* Copy a day's work-type group onto another date (drag or right-click paste) */}
+      {pendingCopy && (
+        <ConfirmDialog
+          open
+          tone="primary"
+          title="Copy tasks"
+          confirmLabel="Copy"
+          isPending={copyOccurrences.isPending}
+          error={copyOccurrences.isError ? getErrorMessage(copyOccurrences.error) : undefined}
+          description={`All ${pendingCopy.label} task${pendingCopy.count === 1 ? "" : "s"} (${pendingCopy.count}) from ${formatDateLong(pendingCopy.sourceDate)} will be copied to ${formatDateLong(pendingCopy.targetDate)}, keeping the same cleaners, supervisors, items and settings. Assigned cleaners and supervisors will be notified.`}
+          onConfirm={() =>
+            copyOccurrences.mutate(
+              { targetDate: pendingCopy.targetDate, occurrences: pendingCopy.occurrences },
+              { onSuccess: () => setPendingCopy(null) },
+            )
+          }
+          onClose={() => setPendingCopy(null)}
+        />
+      )}
+
+      {/* Delete a day's work-type group (right-click) */}
+      {pendingGroupDelete && (
+        <ConfirmDialog
+          open
+          title="Delete tasks"
+          confirmLabel="Delete"
+          isPending={deleteOccurrencesBatch.isPending}
+          error={deleteOccurrencesBatch.isError ? getErrorMessage(deleteOccurrencesBatch.error) : undefined}
+          description={`All ${pendingGroupDelete.label} task${pendingGroupDelete.count === 1 ? "" : "s"} (${pendingGroupDelete.count}) on ${formatDateLong(pendingGroupDelete.date)} will be deleted from that date.`}
+          onConfirm={() =>
+            deleteOccurrencesBatch.mutate(
+              { occurrences: pendingGroupDelete.occurrences },
+              { onSuccess: () => setPendingGroupDelete(null) },
+            )
+          }
+          onClose={() => setPendingGroupDelete(null)}
         />
       )}
 
@@ -2704,6 +2999,36 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
         }}
       />
 
+      {/* Area group create / edit */}
+      {areaGroupModal && (
+        <AreaGroupModal
+          open
+          floor={areaGroupModal.floor}
+          areas={areasByFloor.get(areaGroupModal.floor.id) ?? []}
+          group={areaGroupModal.group}
+          onClose={() => setAreaGroupModal(null)}
+        />
+      )}
+
+      {/* Area group delete */}
+      <ConfirmDialog
+        open={!!pendingAreaGroupDelete}
+        title="Delete area group"
+        description={
+          pendingAreaGroupDelete
+            ? `Delete the area group "${pendingAreaGroupDelete.name}"? Its areas are ungrouped (their tasks are kept).`
+            : ""
+        }
+        confirmLabel="Delete group"
+        isPending={deleteAreaGroup.isPending}
+        error={deleteAreaGroup.isError ? getErrorMessage(deleteAreaGroup.error) : undefined}
+        onConfirm={() =>
+          pendingAreaGroupDelete &&
+          deleteAreaGroup.mutate(pendingAreaGroupDelete.id, { onSuccess: () => setPendingAreaGroupDelete(null) })
+        }
+        onClose={() => setPendingAreaGroupDelete(null)}
+      />
+
       {/* Floor / area delete */}
       <ConfirmDialog
         open={!!deleteTarget}
@@ -2781,6 +3106,30 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           restoreTaskMutation.reset();
         }}
       />
+
+      {/* Raise to HIGH: capture a note + reference photos; the level changes only on success. */}
+      {pendingHighPriority && (
+        <SetHighPriorityModal
+          taskName={pendingHighPriority.name}
+          onCancel={() => setPendingHighPriority(null)}
+          onSubmit={async (note, files) => {
+            await setTaskCriticalLevelMutation.mutateAsync({
+              taskId: pendingHighPriority.taskId,
+              level: "HIGH",
+              note,
+            });
+            if (files.length > 0) {
+              await uploadTaskReferencePhotos(pendingHighPriority.taskId, files);
+            }
+            setPendingHighPriority(null);
+          }}
+        />
+      )}
+
+      {/* Edit task (rename + HIGH note/photos) */}
+      {editTask && (
+        <EditTaskModal taskId={editTask.taskId} onClose={() => setEditTask(null)} />
+      )}
     </div>
   );
 }
