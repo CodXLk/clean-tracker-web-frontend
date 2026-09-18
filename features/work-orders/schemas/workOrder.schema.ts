@@ -71,6 +71,8 @@ export const WorkOrderSchema = z.object({
   siteName: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
+  startTime: z.string().nullable().optional(),
+  endTime: z.string().nullable().optional(),
   expectedDurationDays: z.number().nullable().optional(),
   taskDates: z.array(z.string()).default([]),
   numberOfCleaners: z.number().default(0),
@@ -114,6 +116,8 @@ export interface CreateWorkOrderInput {
   oneTimeSite?: boolean;
   oneTimeSiteDetails?: OneTimeSiteInput;
   description?: string;
+  startTime?: string;
+  endTime?: string;
   numberOfCleaners?: number;
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;
@@ -127,6 +131,8 @@ export interface CreateWorkOrderInput {
 export interface UpdateWorkOrderInput {
   poId: string;
   description?: string;
+  startTime?: string;
+  endTime?: string;
   numberOfCleaners?: number;
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;

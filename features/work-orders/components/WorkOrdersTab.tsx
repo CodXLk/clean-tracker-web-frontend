@@ -104,6 +104,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         poId: addTasks.poId,
         siteId: addTasks.siteId ?? "",
         startDate: addTasks.startDate ?? undefined,
+        startTime: addTasks.startTime ? addTasks.startTime.slice(0, 5) : undefined,
         cleanerProfiles: addTasks.cleanerProfiles.map((p) => ({
           id: p.id,
           label: p.label,

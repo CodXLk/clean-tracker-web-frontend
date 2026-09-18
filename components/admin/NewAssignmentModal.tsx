@@ -209,6 +209,8 @@ export interface WorkOrderTaskConfig {
   poId: string;
   siteId: string;
   startDate?: string;
+  /** The work order's daily start time (HH:mm) — seeds the first task's start time. */
+  startTime?: string;
   /** The work order's cleaner slots offered for per-task assignment. */
   cleanerProfiles: Array<{ id: string; label: string; cleanerName?: string | null }>;
   /** The work order's supervisor slots attached to every created task. */
@@ -321,6 +323,7 @@ function buildDefaults({
       workType: "WORK_ORDER",
       siteId: workOrderMode.siteId,
       date: workOrderMode.startDate ?? (defaultDate ? formatDateForInput(defaultDate) : ""),
+      startTime: workOrderMode.startTime || base.startTime,
       poId: workOrderMode.poId,
       workOrderId: workOrderMode.workOrderId,
       workOrderSupervisorProfileIds: workOrderMode.supervisorProfileIds,

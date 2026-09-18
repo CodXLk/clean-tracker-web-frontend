@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Upload, ShieldCheck, MapPin } from "lucide-react";
+import { X, Upload, ShieldCheck, MapPin, ArrowRight, MoonStar } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
+import { TimeField } from "@/components/shared/TimeField";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { LocationPicker } from "@/features/user-management/components/LocationPicker";
 import { useSites } from "@/features/user-management/hooks/useSites";
@@ -29,6 +30,21 @@ import {
 /** Browser URL for a stored work-order photo. */
 function photoUrl(photoId: string): string {
   return `/api/work-orders/photos/${photoId}`;
+}
+
+/** Duration + overnight flag for a work window (end earlier than start = next day). */
+function windowInfo(start?: string, end?: string): { overnight: boolean; duration: string } | null {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const s = sh * 60 + sm;
+  let e = eh * 60 + em;
+  const overnight = e <= s;
+  if (overnight) e += 24 * 60;
+  const mins = e - s;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return { overnight, duration: `${h}h${m ? ` ${m}m` : ""}` };
 }
 
 interface WorkOrderFormModalProps {
@@ -64,6 +80,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [description, setDescription] = useState(workOrder?.description ?? "");
   const [numberOfCleaners, setNumberOfCleaners] = useState(workOrder?.numberOfCleaners ?? 1);
   const [numberOfSupervisors, setNumberOfSupervisors] = useState(workOrder?.numberOfSupervisors ?? 1);
+  const [startTime, setStartTime] = useState<string>(workOrder?.startTime ? workOrder.startTime.slice(0, 5) : "");
+  const [endTime, setEndTime] = useState<string>(workOrder?.endTime ? workOrder.endTime.slice(0, 5) : "");
   const [priceType, setPriceType] = useState<WorkOrderPriceType>(workOrder?.priceType ?? "TOTAL_AMOUNT");
   const [priceAmount, setPriceAmount] = useState<string>(
     workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
@@ -180,6 +198,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       if (Number(cleaningAllocatedAmount) > Number(priceAmount))
         return "Cleaning allocated amount cannot exceed the price.";
     }
+    if ((startTime && !endTime) || (!startTime && endTime))
+      return "Enter both a start and end time, or leave both empty.";
     return null;
   }
 
@@ -199,6 +219,10 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       priceAmount: parsedPrice,
       cleaningAllocatedAmount: parsedPrice != null ? parsedAllocated : undefined,
     };
+    const timePayload = {
+      startTime: startTime || undefined,
+      endTime: endTime || undefined,
+    };
 
     if (isEdit && workOrder) {
       update.mutate(
@@ -210,6 +234,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             numberOfCleaners,
             numberOfSupervisors,
             ...pricePayload,
+            ...timePayload,
             requiredCertificatesAllWorkers: certsAll,
             requiredCertificatesAnyWorker: certsAny,
             status: workOrder.status,
@@ -253,6 +278,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
         numberOfCleaners,
         numberOfSupervisors,
         ...pricePayload,
+        ...timePayload,
         requiredCertificatesAllWorkers: certsAll,
         requiredCertificatesAnyWorker: certsAny,
       },
@@ -448,6 +474,42 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             value={numberOfSupervisors}
             onChange={(e) => setNumberOfSupervisors(Math.max(0, Number(e.target.value) || 0))}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-on-surface">Work window (optional)</span>
+          <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <TimeField label="Start" value={startTime} onChange={setStartTime} />
+              </div>
+              <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
+              <div className="flex-1">
+                <TimeField label="End" value={endTime} onChange={setEndTime} />
+              </div>
+            </div>
+            {(() => {
+              const info = windowInfo(startTime, endTime);
+              if (!info) return null;
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-ink">
+                    {info.duration}
+                  </span>
+                  {info.overnight && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-600">
+                      <MoonStar size={12} aria-hidden="true" />
+                      Overnight — ends next day
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+          <p className="text-xs text-grey-500">
+            Set an end earlier than the start for an overnight window. Cleaners can check in from 5 hours
+            before the start, and are auto checked-out 5 hours after the end.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">
