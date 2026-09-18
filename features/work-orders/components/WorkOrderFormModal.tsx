@@ -107,6 +107,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     setOtClientId("");
   }
 
+  // Total amount and rate per hour are mutually exclusive — switching type starts with empty amounts.
+  function handlePriceTypeChange(value: WorkOrderPriceType) {
+    if (value === priceType) return;
+    setPriceType(value);
+    setPriceAmount("");
+    setCleaningAllocatedAmount("");
+  }
+
   // A client company with exactly one contact needs no choice — preselect it.
   useEffect(() => {
     const list = clientsQuery.data;
@@ -449,7 +457,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               <button
                 key={value}
                 type="button"
-                onClick={() => setPriceType(value)}
+                onClick={() => handlePriceTypeChange(value)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                   priceType === value
                     ? "border-primary bg-primary/10 text-primary"
