@@ -38,6 +38,7 @@ export const SITE_TYPE_VALUES = [
   "SCHOOL",
   "RESTAURANT",
   "BUILDING_CLEANING",
+  "WORK_ORDER",
 ] as const;
 
 export const SiteTypeSchema = z.enum(SITE_TYPE_VALUES);
@@ -52,6 +53,7 @@ export const SITE_TYPE_LABELS: Record<SiteType, string> = {
   SCHOOL: "School",
   RESTAURANT: "Restaurant",
   BUILDING_CLEANING: "Building cleaning site",
+  WORK_ORDER: "Work order site",
 };
 
 // A General-task shift assigned to a cleaner slot — mirrors backend AssignedShift.

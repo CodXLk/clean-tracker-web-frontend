@@ -184,7 +184,8 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
     [clientsQuery.data],
   );
   const siteTypeOptions: SelectOption[] = useMemo(
-    () => SITE_TYPE_VALUES.map((v) => ({ value: v, label: SITE_TYPE_LABELS[v] })),
+    // WORK_ORDER is auto-assigned to one-time work-order sites — not a manual choice.
+    () => SITE_TYPE_VALUES.filter((v) => v !== "WORK_ORDER").map((v) => ({ value: v, label: SITE_TYPE_LABELS[v] })),
     [],
   );
 
