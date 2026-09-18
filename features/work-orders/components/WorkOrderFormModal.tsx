@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Upload, ShieldCheck, MapPin } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
@@ -68,6 +68,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [priceAmount, setPriceAmount] = useState<string>(
     workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
   );
+  const [cleaningAllocatedAmount, setCleaningAllocatedAmount] = useState<string>(
+    workOrder?.cleaningAllocatedAmount != null ? String(workOrder.cleaningAllocatedAmount) : "",
+  );
   const [certsAll, setCertsAll] = useState<string[]>(
     Array.from(new Set([...MANDATORY_CERTIFICATE_KEYS, ...(workOrder?.requiredCertificatesAllWorkers ?? [])])),
   );
@@ -103,6 +106,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     setOtClientCompanyId(id);
     setOtClientId("");
   }
+
+  // A client company with exactly one contact needs no choice — preselect it.
+  useEffect(() => {
+    const list = clientsQuery.data;
+    if (otClientCompanyId && list && list.length === 1 && !otClientId) {
+      setOtClientId(list[0]!.id);
+    }
+  }, [clientsQuery.data, otClientCompanyId, otClientId]);
 
   const previews = useMemo(() => pendingFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [pendingFiles]);
 
@@ -155,6 +166,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       return "Select a site.";
     }
     if (priceAmount.trim() && !(Number(priceAmount) > 0)) return "Enter a valid price greater than zero.";
+    if (cleaningAllocatedAmount.trim()) {
+      if (!(Number(cleaningAllocatedAmount) > 0)) return "Enter a valid cleaning allocated amount.";
+      if (!priceAmount.trim()) return "Enter the price before the cleaning allocated amount.";
+      if (Number(cleaningAllocatedAmount) > Number(priceAmount))
+        return "Cleaning allocated amount cannot exceed the price.";
+    }
     return null;
   }
 
@@ -168,9 +185,11 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     const trimmedPo = poId.trim();
 
     const parsedPrice = priceAmount.trim() ? Number(priceAmount) : undefined;
+    const parsedAllocated = cleaningAllocatedAmount.trim() ? Number(cleaningAllocatedAmount) : undefined;
     const pricePayload = {
       priceType: parsedPrice != null ? priceType : undefined,
       priceAmount: parsedPrice,
+      cleaningAllocatedAmount: parsedPrice != null ? parsedAllocated : undefined,
     };
 
     if (isEdit && workOrder) {
@@ -441,16 +460,31 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               </button>
             ))}
           </div>
-          <TextField
-            label={priceType === "RATE_PER_HOUR" ? "Rate per hour (AUD)" : "Total amount (AUD)"}
-            name="wo-price"
-            type="number"
-            min={0}
-            step="0.01"
-            value={priceAmount}
-            onChange={(e) => setPriceAmount(e.target.value)}
-            placeholder="e.g. 250.00"
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextField
+              label={priceType === "RATE_PER_HOUR" ? "Client rate per hour (AUD)" : "Client total amount (AUD)"}
+              name="wo-price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={priceAmount}
+              onChange={(e) => setPriceAmount(e.target.value)}
+              placeholder="e.g. 250.00"
+            />
+            <TextField
+              label={priceType === "RATE_PER_HOUR" ? "Cleaning rate per hour (AUD)" : "Cleaning allocated amount (AUD)"}
+              name="wo-cleaning-amount"
+              type="number"
+              min={0}
+              step="0.01"
+              value={cleaningAllocatedAmount}
+              onChange={(e) => setCleaningAllocatedAmount(e.target.value)}
+              placeholder={priceType === "RATE_PER_HOUR" ? "e.g. 25.00" : "e.g. 300.00"}
+            />
+          </div>
+          <p className="text-xs text-grey-500">
+            The client amount is what you charge; the cleaning amount is what you allocate to the cleaners.
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">

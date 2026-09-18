@@ -77,6 +77,8 @@ export const WorkOrderSchema = z.object({
   numberOfSupervisors: z.number().default(0),
   priceType: WorkOrderPriceTypeSchema.nullable().optional(),
   priceAmount: z.number().nullable().optional(),
+  cleaningAllocatedAmount: z.number().nullable().optional(),
+  profitAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
   requiredCertificatesAllWorkers: z.array(z.string()).default([]),
   requiredCertificatesAnyWorker: z.array(z.string()).default([]),
@@ -116,6 +118,7 @@ export interface CreateWorkOrderInput {
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
+  cleaningAllocatedAmount?: number;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];
 }
@@ -128,6 +131,7 @@ export interface UpdateWorkOrderInput {
   numberOfSupervisors?: number;
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
+  cleaningAllocatedAmount?: number;
   status?: WorkOrderStatus;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];

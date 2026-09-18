@@ -26,6 +26,13 @@ function formatPrice(wo: WorkOrder): string {
   return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
 }
 
+/** Cleaning-allocated amount (interpreted per price type), or "—" when not set. */
+function formatAmount(value: number | null | undefined, wo: WorkOrder): string {
+  if (value == null || !wo.priceType) return "—";
+  const amount = value.toLocaleString(undefined, { style: "currency", currency: "AUD" });
+  return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
+}
+
 /** Compact span of the dates a work order has tasks on. */
 function formatDates(dates?: string[] | null): string {
   if (!dates || dates.length === 0) return "—";
@@ -91,6 +98,16 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           <StatCard icon={<DollarSign size={15} />} label="Price" value={formatPrice(workOrder)} />
           <StatCard icon={<ListChecks size={15} />} label="Tasks" value={String(workOrder.taskCount)} />
         </div>
+
+        {workOrder.cleaningAllocatedAmount != null && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              icon={<DollarSign size={15} />}
+              label="Cleaning allocated"
+              value={formatAmount(workOrder.cleaningAllocatedAmount, workOrder)}
+            />
+          </div>
+        )}
 
         {workOrder.description && (
           <section>
