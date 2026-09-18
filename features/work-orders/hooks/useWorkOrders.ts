@@ -17,6 +17,7 @@ import {
 } from "@/features/work-orders/schemas/workOrder.schema";
 import { CleanerListSchema, type Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
 import { UserListSchema, type User } from "@/features/users/schemas/user.schema";
+import { siteKeys } from "@/features/user-management/hooks/keys";
 
 const workOrderKeys = {
   all: ["work-orders"] as const,
@@ -63,7 +64,11 @@ export function useCreateWorkOrder() {
       const { data } = await clientApi.post(ENDPOINTS.workOrders.create, input);
       return WorkOrderSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    // A work order may create a one-time site (named after its PO ID) — refresh the site list too.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+    },
   });
 }
 
@@ -74,7 +79,10 @@ export function useUpdateWorkOrder() {
       const { data } = await clientApi.put(ENDPOINTS.workOrders.byId(id), input);
       return WorkOrderSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+    },
   });
 }
 
@@ -85,7 +93,11 @@ export function useUpdateWorkOrderStatus() {
       const { data } = await clientApi.patch(ENDPOINTS.workOrders.status(id), { status });
       return WorkOrderSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    // Completing a work order hides its one-time site from Operations — refresh the site list.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+    },
   });
 }
 
@@ -95,7 +107,10 @@ export function useDeleteWorkOrder() {
     mutationFn: async (id: string) => {
       await clientApi.delete(ENDPOINTS.workOrders.byId(id));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+    },
   });
 }
 
