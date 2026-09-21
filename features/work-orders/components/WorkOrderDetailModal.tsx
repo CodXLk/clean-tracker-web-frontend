@@ -26,11 +26,11 @@ function formatPrice(wo: WorkOrder): string {
   return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
 }
 
-/** Cleaning-allocated amount (interpreted per price type), or "—" when not set. */
+/** Cleaning-allocated amount (interpreted per its own type), or "—" when not set. */
 function formatAmount(value: number | null | undefined, wo: WorkOrder): string {
-  if (value == null || !wo.priceType) return "—";
+  if (value == null) return "—";
   const amount = value.toLocaleString(undefined, { style: "currency", currency: "AUD" });
-  return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
+  return wo.cleaningAllocatedType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
 }
 
 /** Compact span of the dates a work order has tasks on. */
