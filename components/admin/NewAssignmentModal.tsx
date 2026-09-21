@@ -9,7 +9,7 @@ import {
   FormProvider,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList, Repeat, Layers, Image as ImageIcon } from "lucide-react";
+import { X, Search, Check, Plus, Trash2, Clock, MapPin, BookmarkPlus, LayoutList, Repeat, Layers, ChevronDown, Package, Image as ImageIcon } from "lucide-react";
 import { useEffect, useCallback, useMemo, useRef, useState, createContext, useContext } from "react";
 import { cn } from "@/lib/utils/cn";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
@@ -57,7 +57,19 @@ const ReferencePhotosContext = createContext<{
 } | null>(null);
 
 /** Per-task criticality selector; HIGH reveals a note + reference-photo picker. */
-function CriticalTaskEditor({ groupIndex, taskIndex }: { groupIndex: number; taskIndex: number }) {
+function CriticalTaskEditor({
+  groupIndex,
+  taskIndex,
+  variant = "full",
+  onLevelChange,
+}: {
+  groupIndex: number;
+  taskIndex: number;
+  /** "flag": just the priority flag; "details": just the HIGH note/photos; "full": both. */
+  variant?: "full" | "flag" | "details";
+  /** Notified when the level changes (lets the row auto-expand to reveal the HIGH details). */
+  onLevelChange?: (level: "LOW" | "MEDIUM" | "HIGH") => void;
+}) {
   const { control, register, setValue } = useFormContext<AssignmentFormInput>();
   const photos = useContext(ReferencePhotosContext);
   const base = `groups.${groupIndex}.tasks.${taskIndex}` as const;
@@ -78,6 +90,7 @@ function CriticalTaskEditor({ groupIndex, taskIndex }: { groupIndex: number; tas
     if (next === "HIGH" && !refPhotoKey) {
       setValue(`${base}.refPhotoKey`, crypto.randomUUID(), { shouldDirty: true });
     }
+    onLevelChange?.(next);
   }
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -97,6 +110,47 @@ function CriticalTaskEditor({ groupIndex, taskIndex }: { groupIndex: number; tas
     photos.set(
       refPhotoKey,
       (photos.get(refPhotoKey) ?? []).filter((_, i) => i !== idx),
+    );
+  }
+
+  // Compact flag only (rendered inline next to the task name).
+  if (variant === "flag") {
+    return <PriorityFlagMenu level={level} taskName="this task" onChange={selectLevel} />;
+  }
+
+  // HIGH note/photos only — kept visible independent of the row's collapsed/expanded state.
+  if (variant === "details") {
+    if (level !== "HIGH") return null;
+    return (
+      <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 p-2">
+        <textarea
+          {...register(`${base}.criticalNote`)}
+          rows={2}
+          placeholder="What must the cleaner know? (shown at check-in)"
+          className="w-full resize-none rounded-md border border-grey-300 bg-white px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {previews.map((p, i) => (
+            <div key={p.url} className="relative h-14 w-14 overflow-hidden rounded-md border border-grey-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={p.name} className="h-full w-full object-cover" />
+              <button
+                type="button"
+                aria-label={`Remove photo ${i + 1}`}
+                onClick={() => removeFile(i)}
+                className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-bl-md bg-black/60 text-white"
+              >
+                <X size={9} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+          <label className="flex h-14 w-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-grey-300 text-grey-500 transition-colors hover:border-primary hover:text-ink">
+            <ImageIcon size={14} aria-hidden="true" />
+            <span className="text-[9px]">Add</span>
+            <input type="file" accept="image/*" multiple className="hidden" onChange={onPickFiles} />
+          </label>
+        </div>
+      </div>
     );
   }
 
@@ -311,24 +365,26 @@ function buildDefaults({
     generalUseRecurrence: false,
     templateName: "",
   };
-  // Date-view cell: a single one-off assignment (no recurrence, no working-day repeat).
-  if (scopeMode === "ONE_OFF") {
-    return { ...base, workType: "OTHER", otherRepeatWorkingDays: false, otherUseRecurrence: false };
-  }
-  // Work-order add-tasks: locked WORK_ORDER at the work order's site/date, with all of the
-  // work order's cleaner slots responsible by default.
+  // Work-order add-tasks: locked WORK_ORDER at the work order's site, with all of the work order's
+  // cleaner slots responsible by default. Takes precedence over any scope mode so the task is
+  // always a single-date work order (never a general/weekly task).
   if (workOrderMode) {
     return {
       ...base,
       workType: "WORK_ORDER",
       siteId: workOrderMode.siteId,
-      date: workOrderMode.startDate ?? (defaultDate ? formatDateForInput(defaultDate) : ""),
+      // A specific clicked/seeded date wins; otherwise fall back to the work order's start date.
+      date: (defaultDate ? formatDateForInput(defaultDate) : "") || workOrderMode.startDate || "",
       startTime: workOrderMode.startTime || base.startTime,
       poId: workOrderMode.poId,
       workOrderId: workOrderMode.workOrderId,
       workOrderSupervisorProfileIds: workOrderMode.supervisorProfileIds,
       profileIds: workOrderMode.cleanerProfiles.map((p) => p.id),
     };
+  }
+  // Date-view cell: a single one-off assignment (no recurrence, no working-day repeat).
+  if (scopeMode === "ONE_OFF") {
+    return { ...base, workType: "OTHER", otherRepeatWorkingDays: false, otherUseRecurrence: false };
   }
   // Day-view cell: repeats weekly on the clicked weekday by default (week/month allowed, not day).
   if (scopeMode === "DAY_WEEKLY") {
@@ -359,9 +415,11 @@ function formatDuration(minutes?: number): string {
 interface TaskItemsEditorProps {
   groupIndex: number;
   taskIndex: number;
+  /** Incremented externally (row "Add items" button) to open the add-item input. */
+  openSignal?: number;
 }
 
-function TaskItemsEditor({ groupIndex, taskIndex }: TaskItemsEditorProps) {
+function TaskItemsEditor({ groupIndex, taskIndex, openSignal = 0 }: TaskItemsEditorProps) {
   const { control } = useFormContext<AssignmentFormInput>();
   const { fields, append, remove } = useFieldArray({
     control,
@@ -373,6 +431,11 @@ function TaskItemsEditor({ groupIndex, taskIndex }: TaskItemsEditorProps) {
   const [expanded, setExpanded] = useState(false);
   const [selItem, setSelItem] = useState<string | null>(null);
   const [qty, setQty] = useState("1");
+
+  // Open the add-item input when the row's "Add items" button is pressed.
+  useEffect(() => {
+    if (openSignal > 0) setExpanded(true);
+  }, [openSignal]);
 
   const catalog = itemsQuery.data ?? [];
   const chosenIds = values.map((v) => v?.itemId);
@@ -488,8 +551,98 @@ function TaskItemsEditor({ groupIndex, taskIndex }: TaskItemsEditorProps) {
   );
 }
 
-// ── Location group card: floor + area, then quick-add many tasks ──────────────
+/** Free-text task-name input with a filtered suggestion dropdown of previously-used task names.
+ *  Replaces the native <datalist> (which collided with the browser's autofill history). */
+function TaskNameCombobox({
+  value,
+  onChange,
+  onEnter,
+  suggestions,
+  error,
+  inputRef,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onEnter: () => void;
+  suggestions: string[];
+  error?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // A stable, non-standard field name discourages the browser's saved-value dropdown.
+  const fieldName = useRef(`task-name-${Math.random().toString(36).slice(2)}`).current;
 
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    const list = q ? suggestions.filter((s) => s.toLowerCase().includes(q)) : suggestions;
+    return list.slice(0, 50);
+  }, [suggestions, value]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        name={fieldName}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            setOpen(false);
+            onEnter();
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        placeholder="Task name — e.g. Vacuum & mop floor"
+        aria-label="New task name"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        className={cn("w-full bg-white", inputClass, error ? "border-danger" : "border-grey-300")}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-grey-200 bg-white py-1 shadow-lg">
+          {filtered.map((s) => (
+            <li key={s}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(s);
+                  setOpen(false);
+                  inputRef?.current?.focus();
+                }}
+                className="flex w-full items-center px-3 py-1.5 text-left text-sm text-on-surface hover:bg-grey-100"
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Location group card: floor + area, then quick-add many tasks ──────────────
 interface LocationGroupCardProps {
   groupIndex: number;
   siteId: string;
@@ -501,6 +654,12 @@ interface LocationGroupCardProps {
   cleaners: Cleaner[];
   usingProfiles: boolean;
   lockTasks?: boolean;
+  /** Lifted to the parent so it survives this card re-mounting during form updates. */
+  areaMultiMode: boolean;
+  setAreaMultiMode: (value: boolean) => void;
+  /** Expanded task-detail rows (by task field id), lifted so a re-mount doesn't collapse them. */
+  expandedTasks: Set<string>;
+  setExpandedTasks: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 function LocationGroupCard({
@@ -514,6 +673,10 @@ function LocationGroupCard({
   cleaners,
   usingProfiles,
   lockTasks,
+  areaMultiMode,
+  setAreaMultiMode,
+  expandedTasks,
+  setExpandedTasks,
 }: LocationGroupCardProps) {
   const {
     control,
@@ -526,7 +689,6 @@ function LocationGroupCard({
   const areasQuery = useAreas(floorId || undefined);
   const areaGroupsQuery = useAreaGroups(floorId || undefined);
   const taskNameSuggestions = useTaskNameSuggestions();
-  const taskNameListId = `task-names-${groupIndex}`;
   const { fields, append, remove } = useFieldArray({
     control,
     name: `groups.${groupIndex}.tasks`,
@@ -541,6 +703,10 @@ function LocationGroupCard({
   const [qDuration, setQDuration] = useState("");
   const [qDesc, setQDesc] = useState("");
   const [qError, setQError] = useState(false);
+  // Quick-add time/description panel is collapsed by default (revealed via the chevron).
+  const [quickExpanded, setQuickExpanded] = useState(false);
+  // Bumps a task's items editor open (row "Add items" button); the counter lets repeat clicks re-open.
+  const [openItemsSignal, setOpenItemsSignal] = useState<{ id: string; n: number }>({ id: "", n: 0 });
   // Which task's recurrence popup is open (edited in a draft, committed on OK).
   const [recurEditIndex, setRecurEditIndex] = useState<number | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -558,6 +724,92 @@ function LocationGroupCard({
   );
 
   const groupErrors = errors.groups?.[groupIndex];
+
+  // Area dropdown: a sentinel first option switches to multi-area badge selection.
+  const AREA_MULTI = "__MULTI__";
+  const AREA_SINGLE = "__SINGLE__";
+  // In multi mode the dropdown offers only the mode switches — areas are chosen via the badges below,
+  // so picking an area can never collapse the multi picker.
+  const areaSelectOptions: SelectOption[] = useMemo(
+    () =>
+      areaMultiMode
+        ? [
+            { value: AREA_MULTI, label: "Multiple areas" },
+            { value: AREA_SINGLE, label: "Single area" },
+          ]
+        : [{ value: AREA_MULTI, label: "Multiple areas" }, ...areaOptions],
+    [areaMultiMode, areaOptions],
+  );
+  const currentAreaIds: string[] = watch(`groups.${groupIndex}.areaIds`) ?? [];
+  const currentAreaGroupId = watch(`groups.${groupIndex}.areaGroupId`);
+  const areaSelectValue = areaMultiMode ? AREA_MULTI : (currentAreaIds[0] ?? null);
+  // Group location labels shown in each expanded task row.
+  const floorLabel = floorOptions.find((o) => o.value === floorId)?.label;
+  const selectedAreaLabels = currentAreaIds
+    .map((id) => areaOptions.find((o) => o.value === id)?.label)
+    .filter((l): l is string => !!l);
+
+  function onAreaSelect(value: string | null) {
+    if (value === AREA_MULTI) {
+      // Start multi selection fresh — don't carry over a previously chosen single area.
+      setAreaMultiMode(true);
+      setValue(`groups.${groupIndex}.areaIds`, [], { shouldValidate: false });
+      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+      return;
+    }
+    if (value === AREA_SINGLE) {
+      // Switch back to single-area mode with a clean slate.
+      setAreaMultiMode(false);
+      setValue(`groups.${groupIndex}.areaIds`, [], { shouldValidate: false });
+      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+      return;
+    }
+    setAreaMultiMode(false);
+    setValue(`groups.${groupIndex}.areaIds`, value ? [value] : [], { shouldValidate: true });
+    setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+  }
+
+  function toggleAreaBadge(areaId: string) {
+    const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
+    const next = current.includes(areaId)
+      ? current.filter((id) => id !== areaId)
+      : [...current, areaId];
+    setValue(`groups.${groupIndex}.areaIds`, next, { shouldValidate: true });
+    if (watch(`groups.${groupIndex}.areaGroupId`)) {
+      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+    }
+  }
+
+  function toggleAreaGroup(group: { id: string; areas: Array<{ id: string }> }) {
+    const on = watch(`groups.${groupIndex}.areaGroupId`) === group.id;
+    if (on) {
+      const memberIds = new Set(group.areas.map((a) => a.id));
+      const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
+      setValue(`groups.${groupIndex}.areaIds`, current.filter((id) => !memberIds.has(id)), {
+        shouldValidate: true,
+      });
+      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+    } else {
+      setValue(`groups.${groupIndex}.areaIds`, group.areas.map((a) => a.id), { shouldValidate: true });
+      setValue(`groups.${groupIndex}.areaGroupId`, group.id, { shouldValidate: true });
+    }
+  }
+
+  function toggleTaskExpanded(fieldId: string) {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldId)) next.delete(fieldId);
+      else next.add(fieldId);
+      return next;
+    });
+  }
+
+  // Seeded (edit/draft/template) selections spanning several areas or an area group open in multi mode.
+  useEffect(() => {
+    if ((currentAreaIds.length > 1 || currentAreaGroupId) && !areaMultiMode) {
+      setAreaMultiMode(true);
+    }
+  }, [currentAreaIds.length, currentAreaGroupId, areaMultiMode]);
 
   function addTask() {
     const name = qName.trim();
@@ -697,146 +949,138 @@ function LocationGroupCard({
         )}
       </div>
 
-      {/* Floor + Areas (a task is created in each selected area) */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <Controller
-              name={`groups.${groupIndex}.floorId`}
-              control={control}
-              render={({ field }) => (
-                <SearchableSelect
-                  label="Floor"
-                  options={floorOptions}
-                  value={field.value || null}
-                  onChange={(v) => {
-                    field.onChange(v);
-                    setValue(`groups.${groupIndex}.areaIds`, []);
-                    setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-                  }}
-                  disabled={!siteId}
-                  loading={floorsLoading && !!siteId}
-                  error={groupErrors?.floorId?.message}
-                  placeholder={siteId ? "Select floor" : "Select a site first"}
-                  emptyMessage="No floors for this site"
-                />
-              )}
-            />
+      {/* Floor + Area side by side, each with an add (+) button */}
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Floor */}
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Controller
+                name={`groups.${groupIndex}.floorId`}
+                control={control}
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Floor"
+                    options={floorOptions}
+                    value={field.value || null}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      setAreaMultiMode(false);
+                      setValue(`groups.${groupIndex}.areaIds`, []);
+                      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+                    }}
+                    disabled={!siteId}
+                    loading={floorsLoading && !!siteId}
+                    error={groupErrors?.floorId?.message}
+                    placeholder={siteId ? "Select floor" : "Select a site first"}
+                    emptyMessage="No floors for this site"
+                  />
+                )}
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="Add a new floor"
+              title="Add a new floor"
+              disabled={!siteId}
+              onClick={() => setFloorPromptOpen(true)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Plus size={18} aria-hidden="true" />
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Add a new floor"
-            title="Add a new floor"
-            disabled={!siteId}
-            onClick={() => setFloorPromptOpen(true)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Plus size={18} aria-hidden="true" />
-          </button>
-        </div>
 
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-on-surface">
-              Areas <span className="text-grey-500">(pick areas or an area group)</span>
-            </label>
+          {/* Area */}
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <SearchableSelect
+                label="Area"
+                options={areaSelectOptions}
+                value={areaSelectValue}
+                onChange={onAreaSelect}
+                disabled={!floorId}
+                loading={areasQuery.isLoading && !!floorId}
+                placeholder={floorId ? "Select area" : "Select a floor first"}
+                emptyMessage="No areas yet — add one with +"
+              />
+            </div>
             <button
               type="button"
               aria-label="Add a new area"
               title="Add a new area"
               disabled={!floorId}
               onClick={() => setAreaPromptOpen(true)}
-              className="flex h-8 items-center gap-1 rounded-lg border border-dashed border-primary px-2 text-xs font-medium text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Plus size={14} aria-hidden="true" /> Area
+              <Plus size={18} aria-hidden="true" />
             </button>
           </div>
-          <Controller
-            name={`groups.${groupIndex}.areaIds`}
-            control={control}
-            render={({ field }) => {
-              const selected: string[] = field.value ?? [];
-              if (!floorId) {
-                return <p className="text-sm text-grey-500">Select a floor first.</p>;
-              }
-              if (areasQuery.isLoading) {
-                return <p className="text-sm text-grey-400">Loading areas…</p>;
-              }
-              if (areaOptions.length === 0) {
-                return <p className="text-sm text-grey-500">No areas yet — add one with the + button.</p>;
-              }
-              const groups = areaGroupsQuery.data ?? [];
-              const currentAreaGroupId = watch(`groups.${groupIndex}.areaGroupId`);
-              return (
-                <div className="flex flex-col gap-2">
-                  {groups.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {groups.map((g) => {
-                        const on = currentAreaGroupId === g.id;
-                        return (
-                          <button
-                            key={g.id}
-                            type="button"
-                            title={g.areas.map((a) => a.name).join(", ")}
-                            onClick={() => {
-                              if (on) {
-                                const memberIds = new Set(g.areas.map((a) => a.id));
-                                field.onChange(selected.filter((id) => !memberIds.has(id)));
-                                setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-                              } else {
-                                field.onChange(g.areas.map((a) => a.id));
-                                setValue(`groups.${groupIndex}.areaGroupId`, g.id, { shouldValidate: true });
-                              }
-                            }}
-                            className={cn(
-                              "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                              on
-                                ? "border-primary bg-primary text-white"
-                                : "border-primary/40 text-ink hover:bg-primary/10",
-                            )}
-                          >
-                            <Layers size={12} aria-hidden="true" />
-                            {g.name}
-                            <span className="opacity-80">({g.areas.length})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+        </div>
+
+        {/* Multiple-areas picker — shown only when "Multiple areas" is chosen */}
+        {areaMultiMode && floorId && (
+          <div className="rounded-xl border border-grey-200 bg-grey-50/60 p-3">
+            <p className="mb-2 text-xs font-medium text-grey-500">
+              Pick the areas for this task (a task is created in each).
+            </p>
+            {areasQuery.isLoading ? (
+              <p className="text-sm text-grey-400">Loading areas…</p>
+            ) : areaOptions.length === 0 ? (
+              <p className="text-sm text-grey-500">No areas yet — add one with the + button.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {(areaGroupsQuery.data ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {areaOptions.map((o) => {
-                      const on = selected.includes(o.value);
+                    {(areaGroupsQuery.data ?? []).map((g) => {
+                      const on = currentAreaGroupId === g.id;
                       return (
                         <button
-                          key={o.value}
+                          key={g.id}
                           type="button"
-                          onClick={() => {
-                            field.onChange(
-                              on ? selected.filter((id) => id !== o.value) : [...selected, o.value],
-                            );
-                            // A manual area change breaks a whole-group selection.
-                            if (currentAreaGroupId) setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-                          }}
+                          title={g.areas.map((a) => a.name).join(", ")}
+                          onClick={() => toggleAreaGroup(g)}
                           className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                            "flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                             on
                               ? "border-primary bg-primary text-white"
-                              : "border-grey-300 text-on-surface hover:bg-grey-100",
+                              : "border-primary/40 text-ink hover:bg-primary/10",
                           )}
                         >
-                          {o.label}
+                          <Layers size={12} aria-hidden="true" />
+                          {g.name}
+                          <span className="opacity-80">({g.areas.length})</span>
                         </button>
                       );
                     })}
                   </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {areaOptions.map((o) => {
+                    const on = currentAreaIds.includes(o.value);
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => toggleAreaBadge(o.value)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          on
+                            ? "border-primary bg-primary text-white"
+                            : "border-grey-300 text-on-surface hover:bg-grey-100",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            }}
-          />
-          {groupErrors?.areaIds?.message && (
-            <p className="mt-1 text-xs text-danger">{groupErrors.areaIds.message as string}</p>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
+        {groupErrors?.areaIds?.message && (
+          <p className="text-xs text-danger">{groupErrors.areaIds.message as string}</p>
+        )}
       </div>
 
       {/* Add floor / area prompts */}
@@ -855,6 +1099,7 @@ function LocationGroupCard({
             {
               onSuccess: (floor) => {
                 setValue(`groups.${groupIndex}.floorId`, floor.id, { shouldValidate: true });
+                setAreaMultiMode(false);
                 setValue(`groups.${groupIndex}.areaIds`, []);
                 setFloorPromptOpen(false);
                 createFloor.reset();
@@ -881,10 +1126,16 @@ function LocationGroupCard({
             { floorId, input: { name } },
             {
               onSuccess: (area) => {
-                const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
-                setValue(`groups.${groupIndex}.areaIds`, [...current, area.id], {
-                  shouldValidate: true,
-                });
+                // Single mode: the new area becomes the sole selection; multi mode: append it.
+                if (areaMultiMode) {
+                  const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
+                  setValue(`groups.${groupIndex}.areaIds`, [...current, area.id], {
+                    shouldValidate: true,
+                  });
+                } else {
+                  setValue(`groups.${groupIndex}.areaIds`, [area.id], { shouldValidate: true });
+                  setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+                }
                 setAreaPromptOpen(false);
                 createArea.reset();
               },
@@ -900,44 +1151,34 @@ function LocationGroupCard({
       {/* Quick add — sits directly under floor/area so it never moves out of reach */}
       {!lockTasks && (
       <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <div className="flex-1">
-            <input
-              ref={nameRef}
-              type="text"
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <TaskNameCombobox
               value={qName}
-              onChange={(e) => {
-                setQName(e.target.value);
+              onChange={(v) => {
+                setQName(v);
                 if (qError) setQError(false);
               }}
-              onKeyDown={onQuickKeyDown}
-              placeholder="Task name — e.g. Vacuum & mop floor"
-              aria-label="New task name"
-              list={taskNameListId}
-              autoComplete="off"
-              className={cn(
-                "w-full bg-white",
-                inputClass,
-                qError ? "border-danger" : "border-grey-300",
-              )}
+              onEnter={addTask}
+              suggestions={taskNameSuggestions.data ?? []}
+              error={qError}
+              inputRef={nameRef}
             />
-            <datalist id={taskNameListId}>
-              {(taskNameSuggestions.data ?? []).map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
           </div>
-          <input
-            type="number"
-            min="5"
-            step="5"
-            value={qDuration}
-            onChange={(e) => setQDuration(e.target.value)}
-            onKeyDown={onQuickKeyDown}
-            placeholder="Mins"
-            aria-label="Estimated duration in minutes (optional)"
-            className={cn("w-full bg-white sm:w-24", inputClass, "border-grey-300")}
-          />
+          <button
+            type="button"
+            onClick={() => setQuickExpanded((v) => !v)}
+            aria-expanded={quickExpanded}
+            aria-label={quickExpanded ? "Hide time & description" : "Add time & description"}
+            title={quickExpanded ? "Hide time & description" : "Add time & description"}
+            className="flex h-[38px] w-9 shrink-0 items-center justify-center rounded-xl border border-grey-300 bg-white text-grey-500 transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ChevronDown
+              size={16}
+              className={cn("transition-transform", !quickExpanded && "-rotate-90")}
+              aria-hidden="true"
+            />
+          </button>
           <button
             type="button"
             onClick={addTask}
@@ -947,18 +1188,33 @@ function LocationGroupCard({
             Add
           </button>
         </div>
-        <input
-          type="text"
-          value={qDesc}
-          onChange={(e) => setQDesc(e.target.value)}
-          onKeyDown={onQuickKeyDown}
-          placeholder="Description (optional)"
-          aria-label="Task description (optional)"
-          className={cn("mt-2 w-full bg-white", inputClass, "border-grey-300")}
-        />
+        {quickExpanded && (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              type="number"
+              min="5"
+              step="5"
+              value={qDuration}
+              onChange={(e) => setQDuration(e.target.value)}
+              onKeyDown={onQuickKeyDown}
+              placeholder="Mins"
+              aria-label="Estimated duration in minutes (optional)"
+              className={cn("w-full bg-white sm:w-28", inputClass, "border-grey-300")}
+            />
+            <input
+              type="text"
+              value={qDesc}
+              onChange={(e) => setQDesc(e.target.value)}
+              onKeyDown={onQuickKeyDown}
+              placeholder="Description (optional)"
+              aria-label="Task description (optional)"
+              className={cn("w-full flex-1 bg-white", inputClass, "border-grey-300")}
+            />
+          </div>
+        )}
         <p className="mt-1.5 text-[11px] text-grey-500">
-          Duration &amp; description are optional. Press <kbd className="rounded bg-white px-1">Enter</kbd> to
-          add and keep going.
+          Use the chevron to add time &amp; description. Press{" "}
+          <kbd className="rounded bg-white px-1">Enter</kbd> to add and keep going.
         </p>
       </div>
       )}
@@ -967,27 +1223,26 @@ function LocationGroupCard({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <LayoutList size={14} className="text-grey-500" aria-hidden="true" />
-          <select
-            aria-label="Load a saved task list"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) loadTemplate(e.target.value);
-              e.currentTarget.selectedIndex = 0;
-            }}
-            disabled={(templatesQuery.data ?? []).length === 0}
-            className={cn(inputClass, "border-grey-300 bg-white py-1.5 text-xs")}
-          >
-            <option value="">
-              {(templatesQuery.data ?? []).length === 0
-                ? "No saved task lists"
-                : "Load a saved task list…"}
-            </option>
-            {(templatesQuery.data ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.tasks.length} task{t.tasks.length === 1 ? "" : "s"})
-              </option>
-            ))}
-          </select>
+          <div className="w-60">
+            <SearchableSelect
+              options={(templatesQuery.data ?? []).map((t) => ({
+                value: t.id,
+                label: `${t.name} (${t.tasks.length} task${t.tasks.length === 1 ? "" : "s"})`,
+              }))}
+              value={null}
+              onChange={(v) => {
+                if (v) loadTemplate(v);
+              }}
+              disabled={(templatesQuery.data ?? []).length === 0}
+              placeholder={
+                (templatesQuery.data ?? []).length === 0
+                  ? "No saved task lists"
+                  : "Load a saved task list…"
+              }
+              searchPlaceholder="Search task lists…"
+              emptyMessage="No task lists found"
+            />
+          </div>
         </div>
         {!showSaveTemplate ? (
           <button
@@ -1069,6 +1324,47 @@ function LocationGroupCard({
                   <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={task?.name}>
                     {task?.name}
                   </span>
+                  {/* Priority flag — always visible next to the name. */}
+                  <CriticalTaskEditor
+                    groupIndex={groupIndex}
+                    taskIndex={taskIndex}
+                    variant="flag"
+                    onLevelChange={(lvl) => {
+                      // Reveal the HIGH note/photo panel by expanding the row.
+                      if (lvl === "HIGH") setExpandedTasks((prev) => new Set(prev).add(field.id));
+                    }}
+                  />
+                  {/* Add items — opens the detail panel and the add-item input. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedTasks((prev) => new Set(prev).add(field.id));
+                      setOpenItemsSignal((prev) => ({
+                        id: field.id,
+                        n: prev.id === field.id ? prev.n + 1 : 1,
+                      }));
+                    }}
+                    title="Add items"
+                    aria-label={`Add items to ${task?.name}`}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-primary/10 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Package size={14} aria-hidden="true" />
+                  </button>
+                  {/* Expand to view/edit time, description and items. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleTaskExpanded(field.id)}
+                    aria-expanded={expandedTasks.has(field.id)}
+                    aria-label={expandedTasks.has(field.id) ? "Hide task details" : "Show task details"}
+                    title={expandedTasks.has(field.id) ? "Hide details" : "Show details"}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-grey-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <ChevronDown
+                      size={14}
+                      className={cn("transition-transform", !expandedTasks.has(field.id) && "-rotate-90")}
+                      aria-hidden="true"
+                    />
+                  </button>
                   {/* Per-task schedule opens a popup with OK/Cancel; always editable. */}
                   <button
                     type="button"
@@ -1084,62 +1380,94 @@ function LocationGroupCard({
                     <Repeat size={11} aria-hidden="true" />
                     {recurrenceSummary ?? "Schedule"}
                   </button>
-                  <span className="shrink-0 rounded-md bg-grey-100 px-1.5 py-0.5 text-[11px] font-medium text-grey-500">
-                    {formatDuration(task?.durationMinutes ?? undefined)}
-                  </span>
                   <button
                     type="button"
-                    aria-label={`Remove task ${task?.name}`}
+                    aria-label={`Delete task ${task?.name}`}
+                    title="Delete task"
                     onClick={() => remove(taskIndex)}
                     className={cn(
                       "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       lockTasks && "hidden",
                     )}
                   >
-                    <X size={13} aria-hidden="true" />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                 </div>
-                {task?.description && (
-                  <p className="mt-0.5 pl-7 text-xs text-grey-500">{task.description}</p>
-                )}
 
-                <CriticalTaskEditor groupIndex={groupIndex} taskIndex={taskIndex} />
-
-                {assignPerTask && (
-                  <div className="mt-2 pl-7">
-                    {cleaners.length === 0 ? (
-                      <p className="text-[11px] text-grey-500">No cleaners on this site.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {cleaners.map((cleaner) => {
-                          const isSelected = selected.includes(cleaner.id);
-                          return (
-                            <button
-                              key={cleaner.id}
-                              type="button"
-                              onClick={() => toggleTaskCleaner(taskIndex, cleaner.id)}
-                              aria-pressed={isSelected}
-                              className={cn(
-                                "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                                isSelected
-                                  ? "border-primary bg-primary text-white"
-                                  : "border-grey-300 bg-white text-on-surface hover:border-primary",
-                              )}
-                            >
-                              {isSelected && <Check size={10} aria-hidden="true" />}
-                              {cleanerName(cleaner)}
-                            </button>
-                          );
-                        })}
+                {expandedTasks.has(field.id) && (
+                  <>
+                    {/* Group location: floor name + selected area badges. */}
+                    {(floorLabel || selectedAreaLabels.length > 0) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-7">
+                        {floorLabel && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink">
+                            <MapPin size={11} aria-hidden="true" />
+                            {floorLabel}
+                          </span>
+                        )}
+                        {selectedAreaLabels.map((label) => (
+                          <span
+                            key={label}
+                            className="rounded-full border border-grey-300 px-2 py-0.5 text-[11px] font-medium text-on-surface"
+                          >
+                            {label}
+                          </span>
+                        ))}
                       </div>
                     )}
-                    {taskCleanerError && (
-                      <p className="mt-1 text-[11px] text-danger">{taskCleanerError}</p>
-                    )}
-                  </div>
-                )}
 
-                <TaskItemsEditor groupIndex={groupIndex} taskIndex={taskIndex} />
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-7 text-xs text-grey-500">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-grey-100 px-1.5 py-0.5 font-medium">
+                        <Clock size={11} aria-hidden="true" />
+                        {formatDuration(task?.durationMinutes ?? undefined)}
+                      </span>
+                      {task?.description && <span>{task.description}</span>}
+                    </div>
+
+                    {/* HIGH priority note/photos — collapsing the row closes them. */}
+                    <CriticalTaskEditor groupIndex={groupIndex} taskIndex={taskIndex} variant="details" />
+
+                    {assignPerTask && (
+                      <div className="mt-2 pl-7">
+                        {cleaners.length === 0 ? (
+                          <p className="text-[11px] text-grey-500">No cleaners on this site.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {cleaners.map((cleaner) => {
+                              const isSelected = selected.includes(cleaner.id);
+                              return (
+                                <button
+                                  key={cleaner.id}
+                                  type="button"
+                                  onClick={() => toggleTaskCleaner(taskIndex, cleaner.id)}
+                                  aria-pressed={isSelected}
+                                  className={cn(
+                                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                                    isSelected
+                                      ? "border-primary bg-primary text-white"
+                                      : "border-grey-300 bg-white text-on-surface hover:border-primary",
+                                  )}
+                                >
+                                  {isSelected && <Check size={10} aria-hidden="true" />}
+                                  {cleanerName(cleaner)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {taskCleanerError && (
+                          <p className="mt-1 text-[11px] text-danger">{taskCleanerError}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <TaskItemsEditor
+                      groupIndex={groupIndex}
+                      taskIndex={taskIndex}
+                      openSignal={openItemsSignal.id === field.id ? openItemsSignal.n : 0}
+                    />
+                  </>
+                )}
               </li>
             );
           })}
@@ -1256,10 +1584,20 @@ export function NewAssignmentModal({
     formState: { errors, isDirty },
   } = methods;
 
-  const { fields: groupFields, append: appendGroup, remove: removeGroup } = useFieldArray({
+  const { fields: groupFields, remove: removeGroup } = useFieldArray({
     control,
     name: "groups",
   });
+
+  // Per-group "Multiple areas" mode, held here so it survives a LocationGroupCard re-mount.
+  const [areaMultiByGroup, setAreaMultiByGroup] = useState<Record<number, boolean>>({});
+  const setAreaMultiMode = useCallback(
+    (index: number, value: boolean) =>
+      setAreaMultiByGroup((prev) => (prev[index] === value ? prev : { ...prev, [index]: value })),
+    [],
+  );
+  // Expanded task-detail rows (by task field id), held here so form updates don't collapse them.
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
 
   // Single-task edit: the group index that holds the task being edited.
   // Area edit: the group index for the area whose tasks are being edited.
@@ -2225,7 +2563,7 @@ export function NewAssignmentModal({
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="text-sm font-medium text-on-surface">
-                    {seededFromTask ? "Task" : "Tasks by location"}
+                    {seededFromTask ? "Task" : "Tasks"}
                   </span>
                   {!seededFromTask && (
                     <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
@@ -2270,21 +2608,14 @@ export function NewAssignmentModal({
                             cleaners={cleaners}
                             usingProfiles={usingProfiles}
                             lockTasks={!!editTaskId}
+                            areaMultiMode={!!areaMultiByGroup[index]}
+                            setAreaMultiMode={(v) => setAreaMultiMode(index, v)}
+                            expandedTasks={expandedTaskIds}
+                            setExpandedTasks={setExpandedTaskIds}
                           />
                         );
                       })}
                     </div>
-
-                    {!restrictGroups && !defaultAreaId && (
-                      <button
-                        type="button"
-                        onClick={() => appendGroup(emptyGroup())}
-                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-grey-300 py-2.5 text-sm font-medium text-grey-500 transition-colors hover:border-primary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        <Plus size={15} aria-hidden="true" />
-                        Add another floor / area
-                      </button>
-                    )}
                   </>
                 )}
 

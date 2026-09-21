@@ -7,7 +7,7 @@ import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { WorkforceCalendar, type AssignmentPrefill } from "@/components/admin/WorkforceCalendar";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
-import { NewAssignmentModal } from "@/components/admin/NewAssignmentModal";
+import { NewAssignmentModal, type WorkOrderTaskConfig } from "@/components/admin/NewAssignmentModal";
 import { DraftsModal } from "@/components/admin/DraftsModal";
 import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesTab";
@@ -20,6 +20,8 @@ import { StaffManagement } from "@/features/users/components/StaffManagement";
 import { DocumentReviewModal } from "@/features/users/components/DocumentReviewModal";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import { useWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
+import type { WorkOrder } from "@/features/work-orders/schemas/workOrder.schema";
 import { useDrafts } from "@/features/workforce/hooks/useDrafts";
 import type { AssignmentDraft } from "@/features/workforce/schemas/draft.schema";
 import { cn } from "@/lib/utils/cn";
@@ -87,6 +89,52 @@ function WorkforceContent() {
   }, [operationsSites, operationsSiteId]);
   const selectedSite = operationsSites.find((s) => s.id === operationsSiteId) ?? null;
 
+  // Work orders let one-time sites lock task-adding to WORK_ORDER and show their PO id in the picker.
+  const workOrdersQuery = useWorkOrders();
+  const workOrderBySiteId = useMemo(() => {
+    const map = new Map<string, WorkOrder>();
+    for (const wo of workOrdersQuery.data ?? []) {
+      if (wo.siteId && wo.status !== "COMPLETED") map.set(wo.siteId, wo);
+    }
+    return map;
+  }, [workOrdersQuery.data]);
+
+  // Show one-time work-order sites as "Site name · <poId>" so same-named sites stay distinguishable.
+  // Legacy sites named after the PO id (or with no real name) fall back to just the PO id.
+  const siteFilterOptions = useMemo(
+    () =>
+      operationsSites.map((s) => {
+        const wo = s.oneTimeSite ? workOrderBySiteId.get(s.id) : undefined;
+        if (!wo) return { id: s.id, name: s.name };
+        const siteName = s.name?.trim();
+        const hasRealName = siteName && siteName !== wo.poId;
+        return { id: s.id, name: hasRealName ? `${siteName} · ${wo.poId}` : wo.poId };
+      }),
+    [operationsSites, workOrderBySiteId],
+  );
+
+  // A one-time work-order site's locked WORK_ORDER config for the assignment modal (else undefined).
+  function workOrderModeForSite(siteId: string | undefined): WorkOrderTaskConfig | undefined {
+    if (!siteId) return undefined;
+    const site = operationsSites.find((s) => s.id === siteId);
+    if (!site?.oneTimeSite) return undefined;
+    const wo = workOrderBySiteId.get(siteId);
+    if (!wo) return undefined;
+    return {
+      workOrderId: wo.id,
+      poId: wo.poId,
+      siteId: wo.siteId ?? siteId,
+      startDate: wo.startDate ?? undefined,
+      startTime: wo.startTime ? wo.startTime.slice(0, 5) : undefined,
+      cleanerProfiles: wo.cleanerProfiles.map((p) => ({
+        id: p.id,
+        label: p.label,
+        cleanerName: p.cleanerName,
+      })),
+      supervisorProfileIds: wo.supervisorProfiles.map((p) => p.id),
+    };
+  }
+
   const [newAssignmentOpen, setNewAssignmentOpen] = useState(false);
   const [prefill, setPrefill] = useState<AssignmentPrefill>({});
   const [loadedDraft, setLoadedDraft] = useState<{ id: string; payload: unknown } | null>(null);
@@ -106,14 +154,23 @@ function WorkforceContent() {
 
   function handleNewAssignmentButton() {
     setLoadedDraft(null);
+    // For a one-time work-order site, seed the work order's start date so the task lands on it.
+    const woStart = workOrderBySiteId.get(operationsSiteId)?.startDate;
     // Default to the site's start date when it's still in the future, so we don't seed a date
     // before the site begins operating.
-    const start = selectedSite?.startDate ? new Date(`${selectedSite.startDate}T00:00:00`) : null;
+    const start = woStart
+      ? new Date(`${woStart}T00:00:00`)
+      : selectedSite?.startDate
+        ? new Date(`${selectedSite.startDate}T00:00:00`)
+        : null;
     const todayMidnight = new Date();
     todayMidnight.setHours(0, 0, 0, 0);
-    const date = start && !Number.isNaN(start.getTime()) && start.getTime() > todayMidnight.getTime()
-      ? start
-      : new Date();
+    const date =
+      woStart && start && !Number.isNaN(start.getTime())
+        ? start
+        : start && !Number.isNaN(start.getTime()) && start.getTime() > todayMidnight.getTime()
+          ? start
+          : new Date();
     // Seed the modal with the site currently selected in Operations.
     setPrefill({ date, time: "09:00", siteId: operationsSiteId || undefined });
     setAssignmentModalKey((k) => k + 1);
@@ -161,7 +218,7 @@ function WorkforceContent() {
             <>
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <SiteFilterSelect
-                  sites={operationsSites}
+                  sites={siteFilterOptions}
                   value={operationsSiteId}
                   onChange={setOperationsSiteId}
                   loading={sitesQuery.isLoading}
@@ -230,6 +287,7 @@ function WorkforceContent() {
           scopeMode={prefill.mode}
           scopeWeekday={prefill.weekday}
           sourceTask={prefill.sourceTask}
+          workOrderMode={workOrderModeForSite(prefill.siteId ?? operationsSiteId)}
           loadedDraft={loadedDraft}
         />
 

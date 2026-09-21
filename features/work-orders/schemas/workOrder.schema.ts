@@ -80,6 +80,7 @@ export const WorkOrderSchema = z.object({
   priceType: WorkOrderPriceTypeSchema.nullable().optional(),
   priceAmount: z.number().nullable().optional(),
   cleaningAllocatedAmount: z.number().nullable().optional(),
+  cleaningAllocatedType: WorkOrderPriceTypeSchema.nullable().optional(),
   profitAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
   requiredCertificatesAllWorkers: z.array(z.string()).default([]),
@@ -98,6 +99,7 @@ export const WorkOrderListSchema = z.array(WorkOrderSchema);
 export interface OneTimeSiteInput {
   clientCompanyId: string;
   clientId: string;
+  siteName: string;
   contactPersonName?: string;
   contactNumber?: string;
   googleMapsLink?: string;
@@ -123,6 +125,7 @@ export interface CreateWorkOrderInput {
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
   cleaningAllocatedAmount?: number;
+  cleaningAllocatedType?: WorkOrderPriceType;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];
 }
@@ -138,6 +141,7 @@ export interface UpdateWorkOrderInput {
   priceType?: WorkOrderPriceType;
   priceAmount?: number;
   cleaningAllocatedAmount?: number;
+  cleaningAllocatedType?: WorkOrderPriceType;
   status?: WorkOrderStatus;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];

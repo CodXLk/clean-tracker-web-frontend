@@ -69,6 +69,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [siteMode, setSiteMode] = useState<"one-time" | "existing">(isEdit ? "existing" : "one-time");
   const [otClientCompanyId, setOtClientCompanyId] = useState("");
   const [otClientId, setOtClientId] = useState("");
+  const [otSiteName, setOtSiteName] = useState("");
   const [otContactPersonName, setOtContactPersonName] = useState("");
   const [otContactNumber, setOtContactNumber] = useState("");
   const [otGoogleMapsLink, setOtGoogleMapsLink] = useState("");
@@ -85,6 +86,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [priceType, setPriceType] = useState<WorkOrderPriceType>(workOrder?.priceType ?? "TOTAL_AMOUNT");
   const [priceAmount, setPriceAmount] = useState<string>(
     workOrder?.priceAmount != null ? String(workOrder.priceAmount) : "",
+  );
+  const [cleaningAllocatedType, setCleaningAllocatedType] = useState<WorkOrderPriceType>(
+    workOrder?.cleaningAllocatedType ?? "TOTAL_AMOUNT",
   );
   const [cleaningAllocatedAmount, setCleaningAllocatedAmount] = useState<string>(
     workOrder?.cleaningAllocatedAmount != null ? String(workOrder.cleaningAllocatedAmount) : "",
@@ -125,11 +129,16 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     setOtClientId("");
   }
 
-  // Total amount and rate per hour are mutually exclusive — switching type starts with empty amounts.
+  // Client and cleaning amounts are priced independently; switching a section's basis clears its own amount.
   function handlePriceTypeChange(value: WorkOrderPriceType) {
     if (value === priceType) return;
     setPriceType(value);
     setPriceAmount("");
+  }
+
+  function handleCleaningTypeChange(value: WorkOrderPriceType) {
+    if (value === cleaningAllocatedType) return;
+    setCleaningAllocatedType(value);
     setCleaningAllocatedAmount("");
   }
 
@@ -166,6 +175,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       setSiteMode("one-time");
       setOtClientCompanyId("");
       setOtClientId("");
+      setOtSiteName("");
       setOtContactPersonName("");
       setOtContactNumber("");
       setOtGoogleMapsLink("");
@@ -186,6 +196,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   function validate(): string | null {
     if (!poId.trim()) return "Enter the PO ID.";
     if (!isEdit && siteMode === "one-time") {
+      if (!otSiteName.trim()) return "Enter a site name for the one-time site.";
       if (!otClientCompanyId) return "Select a client company for the one-time site.";
       if (!otClientId) return "Select a client contact for the one-time site.";
     } else if (!siteId) {
@@ -195,7 +206,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     if (cleaningAllocatedAmount.trim()) {
       if (!(Number(cleaningAllocatedAmount) > 0)) return "Enter a valid cleaning allocated amount.";
       if (!priceAmount.trim()) return "Enter the price before the cleaning allocated amount.";
-      if (Number(cleaningAllocatedAmount) > Number(priceAmount))
+      // Only comparable when both use the same basis (both total or both per-hour).
+      if (priceType === cleaningAllocatedType && Number(cleaningAllocatedAmount) > Number(priceAmount))
         return "Cleaning allocated amount cannot exceed the price.";
     }
     if ((startTime && !endTime) || (!startTime && endTime))
@@ -218,6 +230,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       priceType: parsedPrice != null ? priceType : undefined,
       priceAmount: parsedPrice,
       cleaningAllocatedAmount: parsedPrice != null ? parsedAllocated : undefined,
+      cleaningAllocatedType: parsedPrice != null && parsedAllocated != null ? cleaningAllocatedType : undefined,
     };
     const timePayload = {
       startTime: startTime || undefined,
@@ -263,6 +276,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               oneTimeSiteDetails: {
                 clientCompanyId: otClientCompanyId,
                 clientId: otClientId,
+                siteName: otSiteName.trim(),
                 contactPersonName: otContactPersonName.trim() || undefined,
                 contactNumber: otContactNumber.trim() || undefined,
                 googleMapsLink: otGoogleMapsLink.trim() || undefined,
@@ -361,9 +375,17 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               ) : (
                 <div className="flex flex-col gap-4 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
                   <p className="text-xs text-grey-500">
-                    A temporary site is saved from the details below and named after the PO ID. It appears in
-                    Operations until this work order is completed.
+                    A temporary site is saved from the details below. It appears in Operations until this
+                    work order is completed.
                   </p>
+                  <TextField
+                    label="Site name"
+                    name="wo-ot-site-name"
+                    required
+                    value={otSiteName}
+                    onChange={(e) => setOtSiteName(e.target.value)}
+                    placeholder="e.g. North Boundary Fence"
+                  />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <SearchableSelect
                       label="Client company"
@@ -512,25 +534,28 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           <span className="text-sm font-medium text-on-surface">Price</span>
-          <div className="flex flex-wrap gap-2">
-            {WORK_ORDER_PRICE_TYPE_VALUES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => handlePriceTypeChange(value)}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                  priceType === value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-grey-300 text-on-surface hover:bg-grey-100"
-                }`}
-              >
-                {WORK_ORDER_PRICE_TYPE_LABELS[value]}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+          {/* Client amount — total price or hourly rate */}
+          <div className="flex flex-col gap-2 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
+            <span className="text-sm font-medium text-on-surface">Client amount</span>
+            <div className="flex flex-wrap gap-2">
+              {WORK_ORDER_PRICE_TYPE_VALUES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handlePriceTypeChange(value)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                    priceType === value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-grey-300 text-on-surface hover:bg-grey-100"
+                  }`}
+                >
+                  {WORK_ORDER_PRICE_TYPE_LABELS[value]}
+                </button>
+              ))}
+            </div>
             <TextField
               label={priceType === "RATE_PER_HOUR" ? "Client rate per hour (AUD)" : "Client total amount (AUD)"}
               name="wo-price"
@@ -539,21 +564,48 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               step="0.01"
               value={priceAmount}
               onChange={(e) => setPriceAmount(e.target.value)}
-              placeholder="e.g. 250.00"
+              placeholder={priceType === "RATE_PER_HOUR" ? "e.g. 50.00" : "e.g. 250.00"}
             />
+          </div>
+
+          {/* Cleaning allocated amount — total price or hourly rate, priced independently */}
+          <div className="flex flex-col gap-2 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
+            <span className="text-sm font-medium text-on-surface">Cleaning allocated amount</span>
+            <div className="flex flex-wrap gap-2">
+              {WORK_ORDER_PRICE_TYPE_VALUES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleCleaningTypeChange(value)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                    cleaningAllocatedType === value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-grey-300 text-on-surface hover:bg-grey-100"
+                  }`}
+                >
+                  {WORK_ORDER_PRICE_TYPE_LABELS[value]}
+                </button>
+              ))}
+            </div>
             <TextField
-              label={priceType === "RATE_PER_HOUR" ? "Cleaning rate per hour (AUD)" : "Cleaning allocated amount (AUD)"}
+              label={
+                cleaningAllocatedType === "RATE_PER_HOUR"
+                  ? "Cleaning rate per hour (AUD)"
+                  : "Cleaning allocated amount (AUD)"
+              }
               name="wo-cleaning-amount"
               type="number"
               min={0}
               step="0.01"
               value={cleaningAllocatedAmount}
               onChange={(e) => setCleaningAllocatedAmount(e.target.value)}
-              placeholder={priceType === "RATE_PER_HOUR" ? "e.g. 25.00" : "e.g. 300.00"}
+              placeholder={cleaningAllocatedType === "RATE_PER_HOUR" ? "e.g. 25.00" : "e.g. 300.00"}
             />
           </div>
+
           <p className="text-xs text-grey-500">
             The client amount is what you charge; the cleaning amount is what you allocate to the cleaners.
+            Each can be a total price or an hourly rate, independently.
           </p>
         </div>
 
