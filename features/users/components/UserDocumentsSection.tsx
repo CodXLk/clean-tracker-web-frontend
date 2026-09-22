@@ -11,6 +11,7 @@ import {
   useVerifyDocument,
 } from "@/features/users/hooks/useUserDocuments";
 import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
+import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import {
   certificateNumberLabel,
   type UserDocument,
@@ -18,6 +19,12 @@ import {
 
 const MANAGEMENT_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER"]);
 const MAX_BYTES = 10 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 interface UserDocumentsSectionProps {
   userId: string;
@@ -145,11 +152,21 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
   const documents = documentsQuery.data ?? [];
   const busy = upload.isPending || remove.isPending || verify.isPending;
 
+  const certificateTypeOptions = useMemo<SelectOption[]>(
+    () => (certOptions.data ?? []).map((t) => ({ value: t.key, label: t.label })),
+    [certOptions.data],
+  );
+
   const submitError = useMemo(() => {
     if (localError) return localError;
     if (upload.isError) return getErrorMessage(upload.error);
     return null;
   }, [localError, upload.isError, upload.error]);
+
+  function clearFile() {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   function resetForm() {
     setFile(null);
@@ -233,28 +250,20 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
         <div className="flex flex-col gap-3 rounded-xl border border-grey-200 p-3">
           <p className="text-sm font-medium text-on-surface">Add a document</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-grey-600">Certificate type</span>
-              <select
-                className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
-                value={certificateType}
-                onChange={(e) => setCertificateType(e.target.value)}
-              >
-                <option value="" disabled>
-                  Select the document type from the drop down
-                </option>
-                {(certOptions.data ?? []).map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableSelect
+              label="Certificate type"
+              options={certificateTypeOptions}
+              value={certificateType || null}
+              onChange={setCertificateType}
+              loading={certOptions.isLoading}
+              placeholder="Select the document type from the drop down"
+              searchPlaceholder="Search certificate types…"
+            />
             {certificateType === "OTHER" && (
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-grey-600">Label</span>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-sm font-medium text-on-surface">Label</span>
                 <input
-                  className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
+                  className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                   value={otherLabel}
                   onChange={(e) => setOtherLabel(e.target.value)}
                   placeholder="e.g. Asbestos awareness"
@@ -262,45 +271,87 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
               </label>
             )}
             {certificateNumberLabel(certificateType) && (
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-grey-600">{certificateNumberLabel(certificateType)}</span>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-sm font-medium text-on-surface">{certificateNumberLabel(certificateType)}</span>
                 <input
-                  className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
+                  className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                   value={documentNumber}
                   onChange={(e) => setDocumentNumber(e.target.value)}
                   placeholder={`Enter ${certificateNumberLabel(certificateType)}`}
                 />
               </label>
             )}
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-grey-600">Issue date (optional)</span>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-sm font-medium text-on-surface">Issue date (optional)</span>
               <input
                 type="date"
-                className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
+                className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 value={issueDate}
                 onChange={(e) => setIssueDate(e.target.value)}
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-grey-600">Expiry date (optional)</span>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-sm font-medium text-on-surface">Expiry date (optional)</span>
               <input
                 type="date"
-                className="rounded-lg border border-grey-200 px-3 py-2 text-sm"
+                className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
               />
             </label>
           </div>
-          <label className="flex flex-col gap-1 text-sm">
+          <div className="flex flex-col gap-1.5 text-sm">
             <span className="text-grey-600">File (image or PDF, max 10MB)</span>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*,application/pdf"
-              className="text-sm"
+              className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-          </label>
+            {file ? (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-grey-300 bg-white px-3.5 py-2.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-grey-400">
+                    {file.type.includes("pdf") ? (
+                      <FileText className="h-5 w-5" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-on-surface">{file.name}</p>
+                    <p className="text-xs text-grey-500">{formatBytes(file.size)}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-full px-3 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                  >
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearFile}
+                    aria-label="Remove file"
+                    className="rounded-full p-1.5 text-grey-400 hover:bg-error/10 hover:text-error"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-grey-300 bg-white px-3.5 py-4 text-sm font-medium text-grey-600 transition-colors hover:border-primary hover:text-primary"
+              >
+                <Upload className="h-4 w-4" /> Choose file
+              </button>
+            )}
+          </div>
           {submitError && (
             <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
               {submitError}

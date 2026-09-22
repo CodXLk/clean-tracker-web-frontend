@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, GripVertical, Layers, ListChecks, Plus, Pencil, RotateCcw, Trash2, Flag } from "lucide-react";
+import { Building2, ChevronDown, GripVertical, Layers, ListChecks, Plus, Pencil, RotateCcw, Trash2, Flag } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -390,21 +390,22 @@ type AreaUnit =
   | { kind: "area"; area: Area }
   | { kind: "group"; group: AreaGroupModel; areas: Area[]; rep: Area };
 
-/** Collapse a floor's grouped areas into one unit per group; ungrouped areas pass through. */
+/** Collapse a floor's grouped areas into one unit per group; ungrouped areas pass through.
+ *  Area groups are always listed first (in their own saved order), then the ungrouped areas. */
 function buildAreaUnits(floorAreas: Area[], groups: AreaGroupModel[]): AreaUnit[] {
   const groupById = new Map(groups.map((g) => [g.id, g]));
-  const emitted = new Set<string>();
   const units: AreaUnit[] = [];
+  // Groups first, in the order they arrive (already sorted by group sortOrder).
+  for (const group of groups) {
+    const members = floorAreas.filter((a) => a.areaGroupId === group.id);
+    if (members.length === 0) continue;
+    units.push({ kind: "group", group, areas: members, rep: members[0]! });
+  }
+  // Then the ungrouped areas, in their saved order.
   for (const area of floorAreas) {
     const gid = area.areaGroupId;
-    if (gid && groupById.has(gid)) {
-      if (emitted.has(gid)) continue;
-      emitted.add(gid);
-      const members = floorAreas.filter((a) => a.areaGroupId === gid);
-      units.push({ kind: "group", group: groupById.get(gid)!, areas: members, rep: members[0]! });
-    } else {
-      units.push({ kind: "area", area });
-    }
+    if (gid && groupById.has(gid)) continue;
+    units.push({ kind: "area", area });
   }
   return units;
 }
@@ -460,6 +461,9 @@ interface WeekScheduleGridProps {
   /** When true, areas can be drag-reordered within their floor. */
   canReorderAreas?: boolean;
   onReorderAreas?: (floorId: string, orderedAreaIds: string[]) => void;
+  /** When true, area groups can be drag-reordered within their floor. */
+  canReorderAreaGroups?: boolean;
+  onReorderAreaGroups?: (floorId: string, orderedGroupIds: string[]) => void;
   /** When true, tasks can be drag-reordered within their area (super admin / company admin). */
   canReorderTasks?: boolean;
   onReorderTasks?: (areaId: string, orderedTaskIds: string[]) => void;
@@ -470,6 +474,8 @@ interface WeekScheduleGridProps {
   onSetTaskCriticalLevel?: (taskId: string, level: "LOW" | "MEDIUM" | "HIGH") => void;
   /** Open the edit popup for a task (rename, and HIGH note/photos). */
   onEditTask?: (taskId: string, name: string) => void;
+  /** Delete a task entirely — removes it and all its dates (managed mode). */
+  onDeleteTask?: (taskId: string, name: string) => void;
   /** Restore a soft-deleted task back to active (managed mode). */
   onRestoreTask?: (taskId: string) => void;
   onAddFloor?: () => void;
@@ -513,12 +519,15 @@ export function WeekScheduleGrid({
   onReorderFloors,
   canReorderAreas = false,
   onReorderAreas,
+  canReorderAreaGroups = false,
+  onReorderAreaGroups,
   canReorderTasks = false,
   onReorderTasks,
   onAddAssignment,
   onToggleTaskStatus,
   onSetTaskCriticalLevel,
   onEditTask,
+  onDeleteTask,
   onRestoreTask,
   onAddFloor,
   onEditFloor,
@@ -558,6 +567,9 @@ export function WeekScheduleGrid({
   // Area drag-reorder is scoped to a single floor: the dragged area's id plus its floor.
   const [draggingArea, setDraggingArea] = useState<{ floorId: string; areaId: string } | null>(null);
   const [dragOverAreaId, setDragOverAreaId] = useState<string | null>(null);
+  // Area-group drag-reorder, likewise scoped to a single floor.
+  const [draggingGroup, setDraggingGroup] = useState<{ floorId: string; groupId: string } | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   // Area-group rows whose member area names are expanded (the "view" toggle).
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -575,6 +587,23 @@ export function WeekScheduleGrid({
       ids.splice(from, 1);
       ids.splice(to, 0, dragging.areaId);
       onReorderAreas(floorId, ids);
+    }
+  }
+
+  function handleGroupDrop(floorId: string, targetGroupId: string) {
+    const dragging = draggingGroup;
+    setDraggingGroup(null);
+    setDragOverGroupId(null);
+    if (!dragging || dragging.floorId !== floorId || dragging.groupId === targetGroupId || !onReorderAreaGroups) {
+      return;
+    }
+    const ids = (areaGroupsByFloor?.get(floorId) ?? []).map((g) => g.id);
+    const from = ids.indexOf(dragging.groupId);
+    const to = ids.indexOf(targetGroupId);
+    if (from >= 0 && to >= 0) {
+      ids.splice(from, 1);
+      ids.splice(to, 0, dragging.groupId);
+      onReorderAreaGroups(floorId, ids);
     }
   }
 
@@ -846,6 +875,22 @@ export function WeekScheduleGrid({
         </button>
       ) : null;
 
+    const deleteControl =
+      floorId && areaId && !isDeleted && onDeleteTask ? (
+        <button
+          type="button"
+          title={`Delete ${row.name}`}
+          aria-label={`Delete ${row.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteTask(row.taskId, row.name);
+          }}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-error/10 hover:text-error focus-visible:opacity-100 group-hover/trow:opacity-100"
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      ) : null;
+
     // Priority flag shown for every task; managed rows can click it to change the level.
     const canEditPriority = !!floorId && !!areaId && !!onSetTaskCriticalLevel && !isDeleted;
     const level = (row.criticalLevel ?? "LOW") as CriticalLevel;
@@ -868,6 +913,7 @@ export function WeekScheduleGrid({
     const rightControls = (
       <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
         {editControl}
+        {deleteControl}
         {priorityFlag}
         {statusToggle}
         {statusPill}
@@ -1250,36 +1296,56 @@ export function WeekScheduleGrid({
                           const hasGeneralTasks = rows.some(
                             (r) => r.assignmentType === "GENERAL_TASK" && r.status !== "DELETED",
                           );
-                          const canDragThis = canReorderAreas && !isGroup;
-                          const isAreaDragTarget =
-                            canDragThis &&
-                            dragOverAreaId === area.id &&
-                            draggingArea != null &&
-                            draggingArea.areaId !== area.id &&
-                            draggingArea.floorId === floor.id;
+                          const canDragArea = canReorderAreas && !isGroup;
+                          const canDragGroup = canReorderAreaGroups && isGroup && !!group;
+                          const canDragThis = canDragArea || canDragGroup;
+                          const isUnitDragTarget = canDragGroup
+                            ? dragOverGroupId === group!.id &&
+                              draggingGroup != null &&
+                              draggingGroup.groupId !== group!.id &&
+                              draggingGroup.floorId === floor.id
+                            : canDragArea &&
+                              dragOverAreaId === area.id &&
+                              draggingArea != null &&
+                              draggingArea.areaId !== area.id &&
+                              draggingArea.floorId === floor.id;
+                          const isUnitBeingDragged = isGroup
+                            ? draggingGroup?.groupId === group?.id
+                            : draggingArea?.areaId === area.id;
                           return (
                             <div
                               key={unitKey}
                               onDragOver={
-                                canDragThis && draggingArea?.floorId === floor.id
+                                canDragGroup && draggingGroup?.floorId === floor.id
                                   ? (e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
-                                      if (dragOverAreaId !== area.id) setDragOverAreaId(area.id);
+                                      if (dragOverGroupId !== group!.id) setDragOverGroupId(group!.id);
                                     }
-                                  : undefined
+                                  : canDragArea && draggingArea?.floorId === floor.id
+                                    ? (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (dragOverAreaId !== area.id) setDragOverAreaId(area.id);
+                                      }
+                                    : undefined
                               }
                               onDrop={
-                                canDragThis && draggingArea?.floorId === floor.id
+                                canDragGroup && draggingGroup?.floorId === floor.id
                                   ? (e) => {
                                       e.stopPropagation();
-                                      handleAreaDrop(floor.id, area.id);
+                                      handleGroupDrop(floor.id, group!.id);
                                     }
-                                  : undefined
+                                  : canDragArea && draggingArea?.floorId === floor.id
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        handleAreaDrop(floor.id, area.id);
+                                      }
+                                    : undefined
                               }
                               className={cn(
-                                isAreaDragTarget && "ring-2 ring-inset ring-primary/60",
-                                draggingArea?.areaId === area.id && "opacity-60",
+                                isUnitDragTarget && "ring-2 ring-inset ring-primary/60",
+                                isUnitBeingDragged && "opacity-60",
                               )}
                             >
                               {/* Area band — name + actions + hover-add day cells */}
@@ -1290,7 +1356,11 @@ export function WeekScheduleGrid({
                                   canDragThis
                                     ? (e) => {
                                         e.stopPropagation();
-                                        setDraggingArea({ floorId: floor.id, areaId: area.id });
+                                        if (canDragGroup) {
+                                          setDraggingGroup({ floorId: floor.id, groupId: group!.id });
+                                        } else {
+                                          setDraggingArea({ floorId: floor.id, areaId: area.id });
+                                        }
                                       }
                                     : undefined
                                 }
@@ -1299,6 +1369,8 @@ export function WeekScheduleGrid({
                                     ? () => {
                                         setDraggingArea(null);
                                         setDragOverAreaId(null);
+                                        setDraggingGroup(null);
+                                        setDragOverGroupId(null);
                                       }
                                     : undefined
                                 }
@@ -1310,7 +1382,7 @@ export function WeekScheduleGrid({
                                       <GripVertical
                                         size={12}
                                         className="cursor-grab text-ink/60"
-                                        aria-label="Drag to reorder area"
+                                        aria-label={isGroup ? "Drag to reorder area group" : "Drag to reorder area"}
                                       />
                                     )}
                                     {isGroup && <Layers size={13} className="text-primary" aria-hidden="true" />}
@@ -1318,6 +1390,9 @@ export function WeekScheduleGrid({
                                     {isGroup && group && (
                                       <button
                                         type="button"
+                                        aria-label={groupExpanded ? `Hide areas in ${displayName}` : `View ${memberAreas.length} areas in ${displayName}`}
+                                        aria-expanded={groupExpanded}
+                                        title={groupExpanded ? "Hide areas" : `View ${memberAreas.length} areas`}
                                         onClick={() =>
                                           setExpandedGroups((prev) => {
                                             const next = new Set(prev);
@@ -1326,9 +1401,13 @@ export function WeekScheduleGrid({
                                             return next;
                                           })
                                         }
-                                        className="rounded-md border border-primary/30 px-1.5 py-0.5 text-[10px] font-medium text-primary transition-colors hover:bg-primary/10"
+                                        className="flex h-5 w-5 items-center justify-center rounded-md text-primary transition-colors hover:bg-primary/10"
                                       >
-                                        {groupExpanded ? "Hide" : `View ${memberAreas.length}`}
+                                        <ChevronDown
+                                          size={14}
+                                          className={cn("transition-transform", groupExpanded && "rotate-180")}
+                                          aria-hidden="true"
+                                        />
                                       </button>
                                     )}
                                     <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100">

@@ -128,6 +128,7 @@ export const ENDPOINTS = {
   areaGroups: {
     list:   "/area-groups",
     create: "/area-groups",
+    reorder: "/area-groups/reorder",
     byId:   (id: string) => `/area-groups/${id}`,
   },
   cleaners: {
@@ -153,6 +154,10 @@ export const ENDPOINTS = {
     inspectComplete: "/tasks/inspect/complete",
     history:         (id: string) => `/tasks/${id}/history`,
     photo:           (id: string) => `/tasks/completions/photos/${id}`,
+    draftPhotos:       "/tasks/draft-photos",
+    draftPhotosList:   "/tasks/draft-photos/list",
+    draftPhoto:        (id: string) => `/tasks/draft-photos/${id}`,
+    draftPhotoImage:   (id: string) => `/tasks/draft-photos/${id}/image`,
   },
   assignments: {
     create:      "/assignments",
@@ -385,6 +390,7 @@ export const BACKEND = {
   areaGroups: {
     list:   "/api/v1/area-groups",
     create: "/api/v1/area-groups",
+    reorder: "/api/v1/area-groups/reorder",
     byId:   (id: string) => `/api/v1/area-groups/${id}`,
   },
   cleaners: {
@@ -410,6 +416,10 @@ export const BACKEND = {
     inspectComplete: "/api/v1/tasks/inspect/complete",
     history:         (id: string) => `/api/v1/tasks/${id}/history`,
     photo:           (id: string) => `/api/v1/tasks/completions/photos/${id}`,
+    draftPhotos:       "/api/v1/tasks/draft-photos",
+    draftPhotosList:   "/api/v1/tasks/draft-photos/list",
+    draftPhoto:        (id: string) => `/api/v1/tasks/draft-photos/${id}`,
+    draftPhotoImage:   (id: string) => `/api/v1/tasks/draft-photos/${id}/image`,
   },
   assignments: {
     create:      "/api/v1/assignments",

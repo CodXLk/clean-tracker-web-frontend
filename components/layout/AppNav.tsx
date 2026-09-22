@@ -570,6 +570,10 @@ export function AppNav() {
   const pathname = usePathname();
   const items = useVisibleNavItems();
   const useDrawerNav = items.length > 5;
+  const { data: me } = useMe();
+  const router = useRouter();
+  // A cleaner who is also a supervisor gets a quick way to flip to the inspection view.
+  const canSwitchRole = (me?.roles?.length ?? 0) > 1;
 
   return (
     <>
@@ -589,6 +593,19 @@ export function AppNav() {
           {items.filter((i) => i.href).map((item) => (
             <BottomBarItem key={item.href} item={item} isActive={isItemActive(item, pathname)} />
           ))}
+          {canSwitchRole && (
+            <button
+              type="button"
+              onClick={() => router.push("/select-role")}
+              aria-label="Switch role"
+              className="flex flex-1 flex-col items-center gap-1 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-full">
+                <Repeat size={22} strokeWidth={1.75} className="text-nav-icon-inactive" aria-hidden="true" />
+              </span>
+              <span className="text-[11px] font-medium leading-none text-nav-icon-inactive">Switch</span>
+            </button>
+          )}
         </nav>
       )}
     </>

@@ -71,12 +71,15 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [afterPhotos, setAfterPhotos] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const beforeCameraInputRef = useRef<HTMLInputElement>(null);
+  const beforeGalleryInputRef = useRef<HTMLInputElement>(null);
+  const afterCameraInputRef = useRef<HTMLInputElement>(null);
+  const afterGalleryInputRef = useRef<HTMLInputElement>(null);
 
   // Desktop-only dragging for the completion panel: null until the cleaner drags it, at
   // which point it switches from the centered layout to an explicit pixel position.
@@ -191,10 +194,14 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const allSelected = selectedIds.size > 0 && selectedIds.size === selectableIds.length;
 
   // Object URLs for photo previews.
-  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
+  const beforePreviews = useMemo(() => beforePhotos.map((f) => URL.createObjectURL(f)), [beforePhotos]);
+  const afterPreviews = useMemo(() => afterPhotos.map((f) => URL.createObjectURL(f)), [afterPhotos]);
   useEffect(() => {
-    return () => previews.forEach((url) => URL.revokeObjectURL(url));
-  }, [previews]);
+    return () => beforePreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [beforePreviews]);
+  useEffect(() => {
+    return () => afterPreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [afterPreviews]);
 
   function toggleTaskSelected(taskId: string) {
     if (pausedReadOnly) return;
@@ -210,23 +217,26 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   }
 
-  function handlePhotosPicked(fileList: FileList | null) {
+  function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
     if (!fileList || fileList.length === 0) return;
     // Snapshot into a plain array immediately — fileList is a live reference to the
     // input's FileList, and the input gets cleared (value = "") right after this call
     // returns, which would otherwise empty it out before the setState updater below runs.
     const files = Array.from(fileList);
-    setPhotos((prev) => [...prev, ...files]);
+    const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
+    setter((prev) => [...prev, ...files]);
   }
 
-  function removePhoto(index: number) {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  function removePhoto(index: number, stage: "before" | "after") {
+    const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
+    setter((prev) => prev.filter((_, i) => i !== index));
   }
 
   function resetActionState() {
     setSelectedIds(new Set());
     setNote("");
-    setPhotos([]);
+    setBeforePhotos([]);
+    setAfterPhotos([]);
     setDragPosition(null);
     setCompleteBlockedError(null);
   }
@@ -264,7 +274,8 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
       {
         occurrences: occRefs,
         note: note.trim() || undefined,
-        photos,
+        beforePhotos,
+        afterPhotos,
       },
       { onSuccess: resetActionState },
     );
@@ -289,7 +300,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
           occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
           description: note.trim() || undefined,
         },
-        photos,
+        photos: [...beforePhotos, ...afterPhotos],
       },
       { onSuccess: resetActionState },
     );
@@ -479,27 +490,50 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
         )}
       </main>
 
-      {/* Hidden file inputs: camera capture + gallery/file picker */}
+      {/* Hidden file inputs: camera capture + gallery/file picker, per before/after bucket */}
       <input
-        ref={cameraInputRef}
+        ref={beforeCameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "before");
           e.target.value = "";
         }}
       />
       <input
-        ref={galleryInputRef}
+        ref={beforeGalleryInputRef}
         type="file"
         accept="image/*"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "before");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "after");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterGalleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "after");
           e.target.value = "";
         }}
       />
@@ -551,49 +585,61 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               </button>
             </div>
 
-            {/* Add photos */}
-            <div className="mb-3 flex gap-2">
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <Camera size={18} />
-                Take Photo
-              </button>
-              <button
-                onClick={() => galleryInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <ImagePlus size={18} />
-                Add Photos
-              </button>
-            </div>
-
-            {/* Photo thumbnails — preview of what will upload with Complete */}
-            {photos.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {previews.map((url, index) => (
-                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+            {/* Add before/after photos */}
+            {((["before", "after"] as const)).map((stage) => {
+              const isBefore = stage === "before";
+              const stagePhotos = isBefore ? beforePhotos : afterPhotos;
+              const stagePreviews = isBefore ? beforePreviews : afterPreviews;
+              const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
+              const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
+              return (
+                <div key={stage} className="mb-3">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-grey-500">
+                    {isBefore ? "Before photos" : "After photos"}
+                  </p>
+                  <div className="flex gap-2">
                     <button
-                      type="button"
-                      onClick={() => setLightboxUrl(url)}
-                      aria-label="View photo full screen"
-                      className="block h-full w-full"
+                      onClick={() => cameraRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <Camera size={18} />
+                      Take Photo
                     </button>
                     <button
-                      onClick={() => removePhoto(index)}
-                      aria-label="Remove photo"
-                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                      onClick={() => galleryRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      <X size={12} />
+                      <ImagePlus size={18} />
+                      Add Photos
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  {stagePhotos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {stagePreviews.map((url, index) => (
+                        <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(url)}
+                            aria-label="View photo full screen"
+                            className="block h-full w-full"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                          <button
+                            onClick={() => removePhoto(index, stage)}
+                            aria-label="Remove photo"
+                            className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Note */}
             <textarea

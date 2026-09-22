@@ -21,6 +21,19 @@ export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export const CriticalLevelSchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
 export type CriticalLevel = z.infer<typeof CriticalLevelSchema>;
 
+// Whether a completion photo shows the area before or after the work.
+export const PhotoStageSchema = z.enum(["BEFORE", "AFTER"]);
+export type PhotoStage = z.infer<typeof PhotoStageSchema>;
+
+// A saved draft (pre-completion) photo, kept in the completion box until the task is completed.
+export const DraftPhotoSchema = z.object({
+  id: z.string().uuid(),
+  url: z.string().optional(),
+  type: PhotoStageSchema.nullish().default("AFTER"),
+});
+export const DraftPhotoListSchema = z.array(DraftPhotoSchema);
+export type DraftPhoto = z.infer<typeof DraftPhotoSchema>;
+
 export const CleanerSummarySchema = z.object({
   id: z.string().uuid(),
   firstName: z.string().nullable().optional(),
@@ -63,6 +76,8 @@ export const TaskOccurrenceSchema = z.object({
   redoId: z.string().uuid().nullable().optional(),
   isRedo: z.boolean().optional().default(false),
   isComplaint: z.boolean().optional().default(false),
+  /** Originating complaint id (redo tasks) so the cleaner can view its note + photos. */
+  complaintId: z.string().uuid().nullable().optional(),
   /** True once a supervisor has closed out an inspection of this occurrence (rating or complaint). */
   inspected: z.boolean().optional().default(false),
   /** Set only when the inspection was closed via a 1-10 rating. */
@@ -94,6 +109,7 @@ export const TaskCompletionSchema = z.object({
         id: z.string().uuid(),
         url: z.string(),
         contentType: z.string().nullable().optional(),
+        type: PhotoStageSchema.nullish().default("AFTER"),
       }),
     )
     .default([]),
@@ -106,6 +122,7 @@ export const TaskHistoryPhotoSchema = z.object({
   id: z.string(),
   url: z.string(),
   uploadedAt: z.string().nullish(),
+  type: PhotoStageSchema.nullish().default("AFTER"),
 });
 export const TaskHistoryDaySchema = z.object({
   date: z.string(),
@@ -138,5 +155,6 @@ export interface OccurrenceRef {
 export interface CompleteTasksInput {
   occurrences: OccurrenceRef[];
   note?: string;
-  photos?: File[];
+  beforePhotos?: File[];
+  afterPhotos?: File[];
 }

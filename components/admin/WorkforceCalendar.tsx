@@ -15,6 +15,7 @@ import {
   useSetTaskCriticalLevel,
   uploadTaskReferencePhotos,
   useRestoreTask,
+  useSoftDeleteTask,
   useSiteTaskStatusCounts,
   useCopyOccurrences,
   useDeleteOccurrencesBatch,
@@ -32,7 +33,7 @@ import {
   useReorderFloors,
 } from "@/features/user-management/hooks/useFloors";
 import { useAreas, useCreateArea, useUpdateArea, useDeleteArea, useReorderAreas } from "@/features/user-management/hooks/useAreas";
-import { useAreaGroups, useDeleteAreaGroup } from "@/features/user-management/hooks/useAreaGroups";
+import { useAreaGroups, useDeleteAreaGroup, useReorderAreaGroups } from "@/features/user-management/hooks/useAreaGroups";
 import { AreaGroupModal } from "@/components/admin/AreaGroupModal";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { WeekScheduleGrid, type AddAssignmentTarget } from "@/components/admin/WeekScheduleGrid";
@@ -1878,6 +1879,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     name: string;
   } | null>(null);
   const [pendingRestore, setPendingRestore] = useState<{ taskId: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ taskId: string; name: string } | null>(null);
   // Raising a task to HIGH opens a note + photos prompt; the level only changes on a successful save.
   const [pendingHighPriority, setPendingHighPriority] = useState<{ taskId: string; name: string } | null>(null);
   // Editing a task (rename + HIGH note/photos) via the pencil icon.
@@ -1950,10 +1952,14 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   // Optimistic per-floor area order override, keyed by floorId.
   const [localAreaOrder, setLocalAreaOrder] = useState<Record<string, string[]>>({});
   const reorderAreas = useReorderAreas();
+  // Optimistic per-floor area-group order override, keyed by floorId.
+  const [localGroupOrder, setLocalGroupOrder] = useState<Record<string, string[]>>({});
+  const reorderAreaGroups = useReorderAreaGroups();
   const reorderTasks = useReorderTasks();
   const role = useMe().data?.role;
   const canReorderFloors = role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
   const canReorderAreas = canReorderFloors;
+  const canReorderAreaGroups = canReorderFloors;
   const canReorderTasks = canReorderFloors;
 
   const floors = useMemo(() => {
@@ -1991,9 +1997,16 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       list.push(g);
       map.set(g.floorId, list);
     }
-    for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
+    for (const [floorId, list] of map) {
+      list.sort((a, b) => a.sortOrder - b.sortOrder);
+      const override = localGroupOrder[floorId];
+      if (override) {
+        const rank = new Map(override.map((id, i) => [id, i]));
+        list.sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999));
+      }
+    }
     return map;
-  }, [areaGroupsQuery.data]);
+  }, [areaGroupsQuery.data, localGroupOrder]);
 
   const createFloor = useCreateFloor();
   const updateFloor = useUpdateFloor();
@@ -2035,6 +2048,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     : null;
   const setTaskStatusMutation = useSetTaskStatus();
   const setTaskCriticalLevelMutation = useSetTaskCriticalLevel();  const restoreTaskMutation = useRestoreTask();
+  const softDeleteTaskMutation = useSoftDeleteTask();
 
   // Day view aggregates the recurrence pattern into weekday columns, so it fetches a wide
   // lookahead. Anchor the fetch at the visible week's start (not today) so the current week's
@@ -2072,6 +2086,11 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   function handleReorderAreas(floorId: string, orderedAreaIds: string[]) {
     setLocalAreaOrder((prev) => ({ ...prev, [floorId]: orderedAreaIds }));
     reorderAreas.mutate({ floorId, areaIds: orderedAreaIds });
+  }
+
+  function handleReorderAreaGroups(floorId: string, orderedGroupIds: string[]) {
+    setLocalGroupOrder((prev) => ({ ...prev, [floorId]: orderedGroupIds }));
+    reorderAreaGroups.mutate({ floorId, groupIds: orderedGroupIds });
   }
 
   function handleReorderTasks(areaId: string, orderedTaskIds: string[]) {
@@ -2706,6 +2725,8 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           onReorderFloors={handleReorderFloors}
           canReorderAreas={canReorderAreas}
           onReorderAreas={handleReorderAreas}
+          canReorderAreaGroups={canReorderAreaGroups}
+          onReorderAreaGroups={handleReorderAreaGroups}
           canReorderTasks={canReorderTasks}
           onReorderTasks={handleReorderTasks}
           onAddAssignment={handleScopeAddAssignment}
@@ -2727,6 +2748,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
             }
           }}
           onEditTask={(taskId, name) => setEditTask({ taskId, name })}
+          onDeleteTask={(taskId, name) => setPendingDelete({ taskId, name })}
           onRestoreTask={(taskId) =>
             setPendingRestore({
               taskId,
@@ -3104,6 +3126,30 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
         onClose={() => {
           setPendingRestore(null);
           restoreTaskMutation.reset();
+        }}
+      />
+
+      {/* Task delete (removes the task and all its dates) */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete task"
+        description={
+          pendingDelete
+            ? `Delete “${pendingDelete.name}”? It will be removed from the schedule along with all of its dates and hidden from cleaners and supervisors. Recorded completion history is kept.`
+            : ""
+        }
+        confirmLabel="Delete"
+        isPending={softDeleteTaskMutation.isPending}
+        error={softDeleteTaskMutation.isError ? getErrorMessage(softDeleteTaskMutation.error) : undefined}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          softDeleteTaskMutation.mutate(pendingDelete.taskId, {
+            onSuccess: () => setPendingDelete(null),
+          });
+        }}
+        onClose={() => {
+          setPendingDelete(null);
+          softDeleteTaskMutation.reset();
         }}
       />
 

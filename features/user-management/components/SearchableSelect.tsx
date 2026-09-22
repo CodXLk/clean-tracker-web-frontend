@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CertificateBadgeRow, type CertBadge } from "@/features/users/components/CertificateBadge";
@@ -49,7 +50,18 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Fixed-position placement so the menu escapes any scrollable/overflow-clipped modal body
+  // and flips above the trigger when there's more room there.
+  const [placement, setPlacement] = useState<{
+    left: number;
+    width: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  } | null>(null);
 
   const selected = options.find((o) => o.value === value) ?? null;
 
@@ -63,16 +75,54 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
+  const computePlacement = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const available = Math.max(160, openUp ? spaceAbove : spaceBelow);
+    setPlacement({
+      left: rect.left,
+      width: rect.width,
+      maxHeight: Math.min(available, 460),
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + gap }
+        : { top: rect.bottom + gap }),
+    });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     function onClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+      const target = e.target as Node;
+      if (
+        (containerRef.current && containerRef.current.contains(target)) ||
+        (dropdownRef.current && dropdownRef.current.contains(target))
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
+
+  // Keep the menu pinned to the trigger while open, even as the modal body scrolls or resizes.
+  useEffect(() => {
+    if (!open) return;
+    computePlacement();
+    const onChange = () => computePlacement();
+    window.addEventListener("resize", onChange);
+    window.addEventListener("scroll", onChange, true);
+    return () => {
+      window.removeEventListener("resize", onChange);
+      window.removeEventListener("scroll", onChange, true);
+    };
+  }, [open, computePlacement]);
 
   useEffect(() => {
     if (open) {
@@ -96,6 +146,7 @@ export function SearchableSelect({
       <div className="relative">
         <button
           type="button"
+          ref={triggerRef}
           disabled={isDisabled}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -113,69 +164,82 @@ export function SearchableSelect({
           <ChevronDown size={16} className="shrink-0 text-grey-500" aria-hidden="true" />
         </button>
 
-        {open && !isDisabled && (
-          <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-grey-300 bg-white shadow-lg">
-            <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
-              <Search size={15} className="shrink-0 text-grey-500" aria-hidden="true" />
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="w-full text-sm text-on-surface outline-none placeholder:text-grey-500/70"
-              />
-            </div>
-            <ul role="listbox" className="max-h-56 overflow-y-auto py-1">
-              {filtered.length === 0 ? (
-                <li className="px-3.5 py-3 text-sm text-grey-500">{emptyMessage}</li>
-              ) : (
-                filtered.map((option) => {
-                  const isSelected = option.value === value;
-                  const isOptionDisabled = !!option.disabled;
-                  return (
-                    <li key={option.value} role="option" aria-selected={isSelected} aria-disabled={isOptionDisabled}>
-                      <button
-                        type="button"
-                        disabled={isOptionDisabled}
-                        title={isOptionDisabled ? option.disabledReason : undefined}
-                        onClick={() => {
-                          if (isOptionDisabled) return;
-                          onChange(option.value);
-                          setOpen(false);
-                        }}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-sm transition-colors",
-                          isOptionDisabled
-                            ? "cursor-not-allowed opacity-60"
-                            : "hover:bg-grey-100",
-                          isSelected && "bg-primary/5",
-                        )}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="truncate text-on-surface">{option.label}</span>
-                            {option.badges && option.badges.length > 0 && (
-                              <CertificateBadgeRow badges={option.badges} />
+        {open && !isDisabled && placement &&
+          createPortal(
+            <div
+              ref={dropdownRef}
+              style={{
+                position: "fixed",
+                left: placement.left,
+                width: placement.width,
+                top: placement.top,
+                bottom: placement.bottom,
+                maxHeight: placement.maxHeight,
+              }}
+              className="z-[70] flex flex-col overflow-hidden rounded-xl border border-grey-300 bg-white shadow-lg"
+            >
+              <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
+                <Search size={15} className="shrink-0 text-grey-500" aria-hidden="true" />
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full text-sm text-on-surface outline-none placeholder:text-grey-500/70"
+                />
+              </div>
+              <ul role="listbox" className="flex-1 overflow-y-auto py-1">
+                {filtered.length === 0 ? (
+                  <li className="px-3.5 py-3 text-sm text-grey-500">{emptyMessage}</li>
+                ) : (
+                  filtered.map((option) => {
+                    const isSelected = option.value === value;
+                    const isOptionDisabled = !!option.disabled;
+                    return (
+                      <li key={option.value} role="option" aria-selected={isSelected} aria-disabled={isOptionDisabled}>
+                        <button
+                          type="button"
+                          disabled={isOptionDisabled}
+                          title={isOptionDisabled ? option.disabledReason : undefined}
+                          onClick={() => {
+                            if (isOptionDisabled) return;
+                            onChange(option.value);
+                            setOpen(false);
+                          }}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-sm transition-colors",
+                            isOptionDisabled
+                              ? "cursor-not-allowed opacity-60"
+                              : "hover:bg-grey-100",
+                            isSelected && "bg-primary/5",
+                          )}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="truncate text-on-surface">{option.label}</span>
+                              {option.badges && option.badges.length > 0 && (
+                                <CertificateBadgeRow badges={option.badges} />
+                              )}
+                            </span>
+                            {option.sublabel && (
+                              <span className="block truncate text-xs text-grey-500">{option.sublabel}</span>
+                            )}
+                            {isOptionDisabled && option.disabledReason && (
+                              <span className="block truncate text-xs font-medium text-error">
+                                {option.disabledReason}
+                              </span>
                             )}
                           </span>
-                          {option.sublabel && (
-                            <span className="block truncate text-xs text-grey-500">{option.sublabel}</span>
-                          )}
-                          {isOptionDisabled && option.disabledReason && (
-                            <span className="block truncate text-xs font-medium text-error">
-                              {option.disabledReason}
-                            </span>
-                          )}
-                        </span>
-                        {isSelected && <Check size={16} className="shrink-0 text-ink" aria-hidden="true" />}
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </div>
-        )}
+                          {isSelected && <Check size={16} className="shrink-0 text-ink" aria-hidden="true" />}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>,
+            document.body,
+          )}
       </div>
 
       {hint && !error && <p className="text-xs text-grey-500">{hint}</p>}

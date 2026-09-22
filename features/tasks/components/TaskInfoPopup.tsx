@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Flag, MapPin, X } from "lucide-react";
+import { Flag, MapPin, MessageSquare, X } from "lucide-react";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { PRIORITY_META } from "@/features/workforce/components/PriorityFlagMenu";
+import { useComplaints } from "@/features/complaints/hooks/useComplaints";
+import { useTaskHistory } from "@/features/tasks/hooks/useTasks";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { isAdminRole } from "@/lib/auth/roles";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 
@@ -27,6 +31,25 @@ export function TaskInfoPopup({ task, memberAreas = [], onClose }: TaskInfoPopup
       ? PRIORITY_META[task.criticalLevel]
       : null;
   const photoIds = task.referencePhotoIds ?? [];
+
+  // Supervisors/management reviewing a task see the cleaner's before/after photos + note (from
+  // the task's completion history); cleaners just see their own uploaded photos.
+  const role = useMe().data?.role;
+  const canReview = role === "SUPERVISOR" || isAdminRole(role);
+  const historyQuery = useTaskHistory(
+    canReview && task.taskId ? (task.taskId as string) : null,
+    task.date,
+    canReview && !!task.taskId,
+  );
+  const reviewDay = historyQuery.data?.days.find((d) => d.date === task.date);
+  const beforePhotos = (reviewDay?.photos ?? []).filter((p) => (p.type ?? "AFTER") === "BEFORE");
+  const afterPhotos = (reviewDay?.photos ?? []).filter((p) => (p.type ?? "AFTER") === "AFTER");
+
+  // For a complaint redo, surface the supervisor's note + photos from the originating complaint.
+  const complaintsQuery = useComplaints();
+  const complaint = task.complaintId
+    ? (complaintsQuery.data?.complaints ?? []).find((c) => c.id === task.complaintId)
+    : undefined;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-4">
@@ -105,6 +128,95 @@ export function TaskInfoPopup({ task, memberAreas = [], onClose }: TaskInfoPopup
               </p>
             </div>
           )}
+
+          {complaint && (
+            <div className="rounded-xl border border-[#ED5F25]/25 bg-[#ED5F25]/[0.04] p-3">
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#ED5F25]">
+                <MessageSquare size={13} aria-hidden="true" /> Complaint from supervisor
+              </p>
+              {complaint.description ? (
+                <p className="whitespace-pre-wrap text-sm text-on-surface">{complaint.description}</p>
+              ) : (
+                <p className="text-sm text-grey-500">No note added.</p>
+              )}
+              {complaint.photos.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {complaint.photos.map((p) => {
+                    const url = `/api${ENDPOINTS.complaints.photo(p.id)}`;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setLightboxUrl(url)}
+                        className="h-16 w-16 overflow-hidden rounded-lg border border-grey-200 transition-transform hover:scale-105"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt="Complaint" className="h-full w-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {reviewDay && (reviewDay.photos.length > 0 || reviewDay.note) ? (
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                Cleaner&apos;s work
+              </p>
+              {reviewDay.note && (
+                <p className="mb-2 whitespace-pre-wrap text-sm text-on-surface">{reviewDay.note}</p>
+              )}
+              {([["BEFORE", beforePhotos], ["AFTER", afterPhotos]] as const).map(([label, list]) =>
+                list.length === 0 ? null : (
+                  <div key={label} className="mb-2 last:mb-0">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-grey-500">
+                      {label === "BEFORE" ? "Before" : "After"}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((p) => {
+                        const url = `/api${ENDPOINTS.tasks.photo(p.id)}`;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setLightboxUrl(url)}
+                            className="h-16 w-16 overflow-hidden rounded-lg border border-grey-200 transition-transform hover:scale-105"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="Cleaner upload" className="h-full w-full object-cover" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (task.completionPhotoIds?.length ?? 0) > 0 ? (
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-grey-400">
+                Cleaner&apos;s photos
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(task.completionPhotoIds ?? []).map((id) => {
+                  const url = `/api${ENDPOINTS.tasks.photo(id)}`;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setLightboxUrl(url)}
+                      className="h-16 w-16 overflow-hidden rounded-lg border border-grey-200 transition-transform hover:scale-105"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="Cleaner upload" className="h-full w-full object-cover" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {isHigh && (
             <div className="rounded-xl border border-danger/20 bg-danger/[0.03] p-3">

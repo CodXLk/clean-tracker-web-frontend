@@ -106,6 +106,9 @@ function DashboardContent() {
   const { data: unreadCount = 0 } = useUnreadCount();
 
   const isSupervisor = me?.role === "SUPERVISOR";
+  // Completing complaints is a cleaner obligation; supervisors review them in the Complaints
+  // tab, so the home alert/gate only counts complaints when acting as a cleaner.
+  const isCleaner = me?.role === "CLEANER";
   const { data: inspectionSchedules = [] } = useMyInspectionSchedules(isSupervisor);
 
   const activeSite = sites.find((s) => s.status === "CHECKED_IN");
@@ -134,8 +137,8 @@ function DashboardContent() {
   }, [todayTasks]);
 
   const openComplaints = useMemo(
-    () => (complaintsData?.complaints ?? []).filter((c) => c.status === "open"),
-    [complaintsData],
+    () => (isCleaner ? (complaintsData?.complaints ?? []).filter((c) => c.status === "open") : []),
+    [complaintsData, isCleaner],
   );
 
   const upcomingShifts = useMemo(() => buildUpcomingShifts(upcomingTasks), [upcomingTasks]);
