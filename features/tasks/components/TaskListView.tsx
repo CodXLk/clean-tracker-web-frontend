@@ -8,12 +8,14 @@ import {
   Flag,
   ImagePlus,
   Info,
+  Layers,
   Square,
   SquareCheck,
   X,
 } from "lucide-react";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
-import { useCompleteTasks } from "@/features/tasks/hooks/useTasks";
+import { useCompleteTasks, useDraftPhotos, useSaveDraftPhotos, useDeleteDraftPhoto } from "@/features/tasks/hooks/useTasks";
+import { ENDPOINTS } from "@/lib/api/endpoints";
 import { PRIORITY_META } from "@/features/workforce/components/PriorityFlagMenu";
 import { TaskInfoPopup } from "@/features/tasks/components/TaskInfoPopup";
 import { assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
@@ -25,6 +27,13 @@ function occKey(task: TaskOccurrence): string {
   return task.redoId ?? (task.taskId as string);
 }
 
+/** "Done" means completed for a cleaner, or inspected for a supervisor inspection. */
+function isDone(task: TaskOccurrence, inspect: boolean): boolean {
+  return inspect ? !!task.inspected : task.status === "COMPLETED";
+}
+
+const RATINGS = Array.from({ length: 10 }, (_, i) => i + 1);
+
 interface AreaGroup {
   areaId: string;
   areaName: string;
@@ -34,6 +43,9 @@ interface AreaGroup {
   allTasks: TaskOccurrence[];
   /** Set when this row represents an area group. */
   areaGroupId?: string;
+  /** The area's parent group (expandGroups mode nests areas under their group). */
+  parentGroupId?: string;
+  parentGroupName?: string;
 }
 
 interface TaskListViewProps {
@@ -43,24 +55,66 @@ interface TaskListViewProps {
   canComplete: boolean;
   /** Cleaner mode: collapse a floor's area groups into one row and complete across all member areas. */
   groupAreas?: boolean;
+  /** Supervisor mode: keep areas separate but nest them under a group heading (group → area → tasks). */
+  expandGroups?: boolean;
+  /** Supervisor inspection mode: inline select + rate/complaint/complete (mirrors cleaner completion). */
+  inspectMode?: boolean;
+  /** Submit an inspection for the selected occurrences (rating optional). */
+  onInspectSubmit?: (
+    occurrences: { taskId: string; date: string }[],
+    rating: number | undefined,
+    onDone: () => void,
+  ) => void;
+  /** Raise a complaint for the selected occurrences with a note + photos. */
+  onInspectComplaint?: (
+    occurrences: { taskId: string; date: string }[],
+    note: string,
+    photos: File[],
+    onDone: () => void,
+  ) => void;
+  inspectPending?: boolean;
 }
 
 /** Floor-grouped list of areas with their tasks as a nested sub-list, with area-wise and
  *  individual task completion for cleaners. */
-export function TaskListView({ occurrences, selectedFloor, canComplete, groupAreas = false }: TaskListViewProps) {
+export function TaskListView({
+  occurrences,
+  selectedFloor,
+  canComplete,
+  groupAreas = false,
+  expandGroups = false,
+  inspectMode = false,
+  onInspectSubmit,
+  onInspectComplaint,
+  inspectPending = false,
+}: TaskListViewProps) {
   const completeTasks = useCompleteTasks();
+  const saveDraftPhotos = useSaveDraftPhotos();
+  const deleteDraftPhoto = useDeleteDraftPhoto();
+  // Checkbox selection is available for cleaner completion or supervisor inspection.
+  const selecting = canComplete || inspectMode;
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Membership = expanded; areas start collapsed by default.
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Inspection-mode panel state (rating optional; photos are complaint evidence).
+  const [rating, setRating] = useState<number | null>(null);
+  const [inspectPhotos, setInspectPhotos] = useState<File[]>([]);
   // Task whose details popup is open (info icon).
   const [infoTask, setInfoTask] = useState<TaskOccurrence | null>(null);
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const beforeCameraInputRef = useRef<HTMLInputElement>(null);
+  const beforeGalleryInputRef = useRef<HTMLInputElement>(null);
+  const afterCameraInputRef = useRef<HTMLInputElement>(null);
+  const afterGalleryInputRef = useRef<HTMLInputElement>(null);
+  const inspectPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const inspectPreviews = useMemo(() => inspectPhotos.map((f) => URL.createObjectURL(f)), [inspectPhotos]);
+  useEffect(() => {
+    return () => inspectPreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [inspectPreviews]);
 
   const areaGroups = useMemo<AreaGroup[]>(() => {
     const map = new Map<string, AreaGroup>();
@@ -76,6 +130,8 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
         tasks: [],
         allTasks: [],
         areaGroupId: grouped ? o.areaGroupId! : undefined,
+        parentGroupId: o.areaGroupId ?? undefined,
+        parentGroupName: o.areaGroupName ?? undefined,
       };
       group.allTasks.push(o);
       map.set(key, group);
@@ -100,35 +156,100 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
       } else {
         group.tasks = group.allTasks;
       }
-      // Incomplete tasks first within each area (stable), completed pushed to the bottom.
+      // Not-done tasks first within each area (stable); done ones pushed to the bottom.
       group.tasks.sort(
-        (a, b) => (a.status === "COMPLETED" ? 1 : 0) - (b.status === "COMPLETED" ? 1 : 0),
+        (a, b) => (isDone(a, inspectMode) ? 1 : 0) - (isDone(b, inspectMode) ? 1 : 0),
       );
     }
-    // Areas with pending work rise to the top; fully-completed areas sink to the bottom (stable).
+    // Areas with pending work rise to the top; fully-done areas sink to the bottom (stable).
     const groups = Array.from(map.values());
     groups.sort((a, b) => {
-      const aDone = a.tasks.length > 0 && a.tasks.every((t) => t.status === "COMPLETED");
-      const bDone = b.tasks.length > 0 && b.tasks.every((t) => t.status === "COMPLETED");
+      const aDone = a.tasks.length > 0 && a.tasks.every((t) => isDone(t, inspectMode));
+      const bDone = b.tasks.length > 0 && b.tasks.every((t) => isDone(t, inspectMode));
       return (aDone ? 1 : 0) - (bDone ? 1 : 0);
     });
     return groups;
-  }, [occurrences, selectedFloor, groupAreas]);
+  }, [occurrences, selectedFloor, groupAreas, inspectMode]);
+
+  // Render order: in expandGroups mode, cluster a group's areas under one heading (group →
+  // indented area → tasks); otherwise a flat list of area sections.
+  type RenderItem =
+    | { kind: "header"; id: string; name: string }
+    | { kind: "area"; group: AreaGroup; indented: boolean };
+  const renderItems = useMemo<RenderItem[]>(() => {
+    if (!expandGroups) {
+      return areaGroups.map((group) => ({ kind: "area", group, indented: false }));
+    }
+    const items: RenderItem[] = [];
+    const emitted = new Set<string>();
+    for (const group of areaGroups) {
+      const gid = group.parentGroupId;
+      if (gid && group.parentGroupName) {
+        if (emitted.has(gid)) continue;
+        emitted.add(gid);
+        items.push({ kind: "header", id: gid, name: group.parentGroupName });
+        for (const member of areaGroups.filter((a) => a.parentGroupId === gid)) {
+          items.push({ kind: "area", group: member, indented: true });
+        }
+      } else {
+        items.push({ kind: "area", group, indented: false });
+      }
+    }
+    return items;
+  }, [areaGroups, expandGroups]);
 
   // Switching floors clears any in-progress selection so tasks are never completed cross-floor.
   useEffect(() => {
     setSelectedIds(new Set());
     setNote("");
-    setPhotos([]);
+    setRating(null);
+    setInspectPhotos([]);
   }, [selectedFloor]);
 
-  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
-  useEffect(() => {
-    return () => previews.forEach((url) => URL.revokeObjectURL(url));
-  }, [previews]);
+  // Resolve the current selection into concrete task occurrences (fanning an area-group row
+  // out to every member area's copy) — used for both saved draft photos and completion.
+  const selectedTargets = useMemo(() => {
+    const displayRows = areaGroups.flatMap((g) => g.tasks).filter((t) => selectedIds.has(occKey(t)));
+    const targets = new Map<string, TaskOccurrence>();
+    for (const row of displayRows) {
+      // Only the cleaner's collapsed-group row fans a completion across every member area;
+      // inspection keeps each area separate.
+      if (row.areaGroupId && groupAreas) {
+        const identity = row.groupTaskKey ?? row.name;
+        for (const o of occurrences) {
+          if (
+            o.floorName === selectedFloor &&
+            o.status !== "COMPLETED" &&
+            o.areaGroupId === row.areaGroupId &&
+            (o.groupTaskKey ?? o.name) === identity
+          ) {
+            targets.set(`${o.taskId}|${o.occurrenceDate}`, o);
+          }
+        }
+      } else {
+        targets.set(`${row.taskId}|${row.occurrenceDate}`, row);
+      }
+    }
+    return Array.from(targets.values());
+  }, [areaGroups, occurrences, selectedFloor, selectedIds, groupAreas]);
+
+  // Non-redo occurrences carry draft photos (redos aren't scheduled task occurrences).
+  const draftRefs = useMemo(
+    () =>
+      selectedTargets
+        .filter((t) => !t.redoId && t.taskId)
+        .map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
+    [selectedTargets],
+  );
+
+  const draftsQuery = useDraftPhotos(draftRefs, selectedIds.size > 0 && !inspectMode);
+  const drafts = draftsQuery.data ?? [];
 
   function selectableKeys(group: AreaGroup): string[] {
-    return group.tasks.filter((t) => t.status !== "COMPLETED").map(occKey);
+    // Inspection excludes redo tasks (those are cleaner obligations) and already-done rows.
+    return group.tasks
+      .filter((t) => !isDone(t, inspectMode) && (!inspectMode || !t.isRedo))
+      .map(occKey);
   }
 
   function toggleTask(key: string) {
@@ -161,43 +282,30 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
     });
   }
 
-  function handlePhotosPicked(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
+  function handlePhotosPicked(fileList: FileList | null, stage: "BEFORE" | "AFTER") {
+    if (!fileList || fileList.length === 0 || draftRefs.length === 0) return;
+    // Upload immediately so the shots persist server-side and reappear when the box reopens.
     const files = Array.from(fileList);
-    setPhotos((prev) => [...prev, ...files]);
+    saveDraftPhotos.mutate({ occurrences: draftRefs, type: stage, photos: files });
   }
 
   function resetSelection() {
     setSelectedIds(new Set());
     setNote("");
-    setPhotos([]);
+    setRating(null);
+    setInspectPhotos([]);
   }
 
+  // Occurrences for the current selection (non-redo) as inspection refs.
+  const inspectRefs = () =>
+    selectedTargets
+      .filter((t) => !t.redoId && t.taskId)
+      .map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate }));
+
   function handleComplete() {
-    const displayRows = areaGroups.flatMap((g) => g.tasks).filter((t) => selectedIds.has(occKey(t)));
-    if (displayRows.length === 0) return;
-    // A grouped task belongs to every member area, so one completion (shared note/photos)
-    // covers all of them. Match copies by area group + shared identity (groupTaskKey, or the
-    // task name for older tasks without a key). Non-grouped tasks complete just themselves.
-    const targets = new Map<string, TaskOccurrence>();
-    for (const row of displayRows) {
-      if (row.areaGroupId) {
-        const identity = row.groupTaskKey ?? row.name;
-        for (const o of occurrences) {
-          if (
-            o.floorName === selectedFloor &&
-            o.status !== "COMPLETED" &&
-            o.areaGroupId === row.areaGroupId &&
-            (o.groupTaskKey ?? o.name) === identity
-          ) {
-            targets.set(`${o.taskId}|${o.occurrenceDate}`, o);
-          }
-        }
-      } else {
-        targets.set(`${row.taskId}|${row.occurrenceDate}`, row);
-      }
-    }
-    const selected = Array.from(targets.values());
+    // Saved draft photos are folded into the completion server-side, so only occurrences + note
+    // are sent here.
+    const selected = selectedTargets;
     if (selected.length === 0) return;
     completeTasks.mutate(
       {
@@ -207,10 +315,26 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
           redoId: t.redoId ?? undefined,
         })),
         note: note.trim() || undefined,
-        photos,
       },
       { onSuccess: resetSelection },
     );
+  }
+
+  function handleInspectComplete() {
+    const refs = inspectRefs();
+    if (refs.length === 0 || !onInspectSubmit) return;
+    onInspectSubmit(refs, rating ?? undefined, resetSelection);
+  }
+
+  function handleInspectComplaint() {
+    const refs = inspectRefs();
+    if (refs.length === 0 || !onInspectComplaint) return;
+    onInspectComplaint(refs, note.trim(), inspectPhotos, resetSelection);
+  }
+
+  function handleInspectPhotosPicked(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setInspectPhotos((prev) => [...prev, ...Array.from(fileList)]);
   }
 
   const hasSelection = selectedIds.size > 0;
@@ -222,10 +346,19 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
   return (
     <>
       <div className={cn("flex flex-col gap-3", hasSelection && "pb-72")}>
-        {areaGroups.map((group) => {
+        {renderItems.map((item) => {
+          if (item.kind === "header") {
+            return (
+              <div key={`hdr-${item.id}`} className="mt-1 flex items-center gap-2 px-1">
+                <Layers size={15} className="text-primary" aria-hidden="true" />
+                <span className="text-sm font-semibold text-ink">{item.name}</span>
+              </div>
+            );
+          }
+          const group = item.group;
           const keys = selectableKeys(group);
           const areaSelected = keys.length > 0 && keys.every((k) => selectedIds.has(k));
-          const completedCount = group.tasks.filter((t) => t.status === "COMPLETED").length;
+          const completedCount = group.tasks.filter((t) => isDone(t, inspectMode)).length;
           const isCollapsed = !expandedAreas.has(group.areaId);
           // High/Medium tasks are always visible under the area; low tasks show once expanded.
           const priorityTasks = group.tasks.filter(
@@ -233,13 +366,14 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
           );
           const shownTasks = isCollapsed ? priorityTasks : group.tasks;
           const allCompleted =
-            group.tasks.length > 0 && group.tasks.every((t) => t.status === "COMPLETED");
+            group.tasks.length > 0 && group.tasks.every((t) => isDone(t, inspectMode));
 
           return (
             <section
               key={group.areaId}
               className={cn(
                 "overflow-hidden rounded-2xl border shadow-sm",
+                item.indented && "ml-3 border-l-2 border-l-primary/30 sm:ml-6",
                 allCompleted ? "border-success/30 bg-success/10" : "border-grey-200 bg-white",
               )}
             >
@@ -249,7 +383,7 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
                   allCompleted ? "border-success/20" : "border-grey-100",
                 )}
               >
-                {canComplete && (
+                {selecting && (
                   <button
                     type="button"
                     onClick={() => toggleArea(group)}
@@ -289,10 +423,11 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
                 <ul className="divide-y divide-grey-100">
                   {shownTasks.map((task) => {
                     const key = occKey(task);
-                    const isCompleted = task.status === "COMPLETED";
+                    const isCompleted = isDone(task, inspectMode);
                     const isRedo = Boolean(task.isRedo);
                     const selected = selectedIds.has(key);
-                    const selectable = canComplete && !isCompleted;
+                    // Inspection can't act on redo rows (cleaner obligations).
+                    const selectable = selecting && !isCompleted && (!inspectMode || !isRedo);
                     const accent = isRedo
                       ? task.colorHex ?? "#7C3AED"
                       : assignmentTypeColor(task.assignmentType);
@@ -300,7 +435,7 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
                     const rowInner = (
                       <>
                         <span className="mt-0.5 shrink-0">
-                          {canComplete ? (
+                          {selecting ? (
                             selectable ? (
                               selected ? (
                                 <SquareCheck size={18} className="text-ink" />
@@ -407,27 +542,61 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
         })}
       </div>
 
-      {/* Hidden file inputs: camera capture + gallery/file picker */}
+      {/* Hidden file inputs: camera capture + gallery/file picker, per before/after bucket */}
       <input
-        ref={cameraInputRef}
+        ref={beforeCameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "BEFORE");
           e.target.value = "";
         }}
       />
       <input
-        ref={galleryInputRef}
+        ref={beforeGalleryInputRef}
         type="file"
         accept="image/*"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "BEFORE");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "AFTER");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterGalleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "AFTER");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={inspectPhotoInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleInspectPhotosPicked(e.target.files);
           e.target.value = "";
         }}
       />
@@ -460,50 +629,163 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
               </button>
             </div>
 
-            <div className="mb-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <Camera size={18} />
-                Take Photo
-              </button>
-              <button
-                type="button"
-                onClick={() => galleryInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <ImagePlus size={18} />
-                Add Photos
-              </button>
-            </div>
+            {inspectMode && (
+              <>
+                <div className="mb-3">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-grey-500">
+                    Rating <span className="text-grey-400">(optional)</span>
+                  </p>
+                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                    {RATINGS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setRating((prev) => (prev === value ? null : value))}
+                        aria-pressed={rating === value}
+                        className={cn(
+                          "rounded-xl border py-2 text-sm font-medium transition-colors",
+                          rating === value
+                            ? "border-primary bg-primary text-white"
+                            : "border-grey-300 text-on-surface hover:bg-grey-100",
+                        )}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            {photos.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {previews.map((url, index) => (
-                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Add a note (required when raising a complaint)"
+                  rows={2}
+                  maxLength={2048}
+                  className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
+                />
+
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => inspectPhotoInputRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                  >
+                    <ImagePlus size={18} /> Add photos{inspectPhotos.length > 0 ? ` (${inspectPhotos.length})` : ""}
+                  </button>
+                  {inspectPhotos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {inspectPreviews.map((url, index) => (
+                        <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(url)}
+                            aria-label="View photo full screen"
+                            className="block h-full w-full"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInspectPhotos((prev) => prev.filter((_, i) => i !== index))}
+                            aria-label="Remove photo"
+                            className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleInspectComplaint}
+                    disabled={inspectPending}
+                    className="flex-1 rounded-xl bg-[#ED5F25] py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    Mark as Complaint
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleInspectComplete}
+                    disabled={inspectPending}
+                    className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  >
+                    {inspectPending ? "Saving…" : "Complete Inspection"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {!inspectMode && (
+              <>
+            {(["BEFORE", "AFTER"] as const).map((stage) => {
+              const isBefore = stage === "BEFORE";
+              const stageDrafts = drafts.filter((p) => (p.type ?? "AFTER") === stage);
+              const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
+              const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
+              return (
+                <div key={stage} className="mb-3">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-grey-500">
+                      {isBefore ? "Before photos" : "After photos"}
+                    </p>
+                    {saveDraftPhotos.isPending && (
+                      <span className="text-[10px] text-grey-400">Saving…</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setLightboxUrl(url)}
-                      aria-label="View photo full screen"
-                      className="block h-full w-full"
+                      onClick={() => cameraRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <Camera size={18} />
+                      Take Photo
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
-                      aria-label="Remove photo"
-                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                      onClick={() => galleryRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      <X size={12} />
+                      <ImagePlus size={18} />
+                      Add Photos
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  {stageDrafts.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {stageDrafts.map((p) => {
+                        const url = `/api${ENDPOINTS.tasks.draftPhotoImage(p.id)}`;
+                        return (
+                          <div key={p.id} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setLightboxUrl(url)}
+                              aria-label="View photo full screen"
+                              className="block h-full w-full"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt="" className="h-full w-full object-cover" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteDraftPhoto.mutate(p.id)}
+                              aria-label="Remove photo"
+                              className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             <textarea
               value={note}
@@ -522,6 +804,8 @@ export function TaskListView({ occurrences, selectedFloor, canComplete, groupAre
             >
               {completeTasks.isPending ? "Completing…" : "Complete"}
             </button>
+              </>
+            )}
           </div>
         </div>
       )}

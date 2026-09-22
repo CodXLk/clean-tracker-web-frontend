@@ -12,6 +12,7 @@ import { acquireCheckInPayload as acquirePayload } from "@/features/attendance/l
 import { useCheckIn, useCheckOut, useAttendanceHeartbeat } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
+import { useMe } from "@/features/auth/hooks/useMe";
 import { CriticalTaskAckModal } from "@/features/attendance/components/CriticalTaskAckModal";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
@@ -94,6 +95,8 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const today = toLocalDateString(new Date());
   const { data: todayTasks = [] } = useMyTasks(today);
   const { data: complaintsData } = useComplaints();
+  // Completing complaints (and the checkout gate for them) is a cleaner-only obligation.
+  const isCleaner = useMe().data?.role === "CLEANER";
 
   // Per-site error message and a remount key to reset the slider after a failure.
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -157,6 +160,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
   // Open complaints the cleaner must complete (in the Complaints tab) before checking out.
   function openComplaintsFor(siteId: string) {
+    if (!isCleaner) return [];
     return (complaintsData?.complaints ?? []).filter(
       (c) => c.siteId === siteId && c.status === "open",
     );

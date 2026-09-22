@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ClipboardList, CalendarClock } from "lucide-react";
+import { CalendarDays, ClipboardList, CalendarClock, Layers } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { useUIStore } from "@/store/ui.store";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -14,7 +14,11 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
 import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
-import { useMyTasks } from "@/features/tasks/hooks/useTasks";
+import { useMyTasks, useSubmitInspection } from "@/features/tasks/hooks/useTasks";
+import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
+import { useTaskViewStore } from "@/features/tasks/store/taskView.store";
+import { TaskViewToggle } from "@/features/tasks/components/TaskViewToggle";
+import { TaskListView } from "@/features/tasks/components/TaskListView";
 import { useMyInspectionSchedules } from "@/features/user-management/hooks/useSupervisorSchedules";
 import type { SupervisorSchedule } from "@/features/user-management/schemas/supervisorSchedule.schema";
 import { useMe } from "@/features/auth/hooks/useMe";
@@ -34,7 +38,14 @@ interface AreaCount {
   area: string;
   inspected: number;
   total: number;
+  areaGroupId?: string;
+  areaGroupName?: string;
 }
+
+/** Card-view section: a standalone area, or an area group with its member areas nested. */
+type AreaSection =
+  | { kind: "area"; area: AreaCount }
+  | { kind: "group"; id: string; name: string; areas: AreaCount[] };
 
 export default function InspectionsPage() {
   const useDrawerNav = useIsDrawerNav();
@@ -60,6 +71,38 @@ export default function InspectionsPage() {
   const setHeaderAction = useUIStore((s) => s.setHeaderAction);
   const activeFloor = useTaskFiltersStore((s) => s.activeFloor);
   const setActiveFloor = useTaskFiltersStore((s) => s.setActiveFloor);
+  const view = useTaskViewStore((s) => s.view);
+  const setView = useTaskViewStore((s) => s.setView);
+
+  const submitInspection = useSubmitInspection();
+  const createComplaint = useCreateComplaint();
+  const inspectPending = submitInspection.isPending || createComplaint.isPending;
+
+  function handleInspectSubmit(
+    occurrences: { taskId: string; date: string }[],
+    rating: number | undefined,
+    onDone: () => void,
+  ) {
+    submitInspection.mutate({ occurrences, rating }, { onSuccess: onDone });
+  }
+
+  function handleInspectComplaint(
+    occurrences: { taskId: string; date: string }[],
+    note: string,
+    photos: File[],
+    onDone: () => void,
+  ) {
+    createComplaint.mutate(
+      { input: { occurrences, description: note || undefined }, photos },
+      {
+        onSuccess: (complaint) => {
+          // Close out the inspection against the just-raised complaint.
+          submitInspection.mutate({ occurrences, complaintId: complaint.id });
+          onDone();
+        },
+      },
+    );
+  }
 
   // Surface the calendar trigger in the shared header bar instead of the page
   // body — cleared on unmount so it doesn't linger on other pages.
@@ -100,11 +143,35 @@ export default function InspectionsPage() {
           area: o.areaName,
           total: 1,
           inspected: isInspected ? 1 : 0,
+          areaGroupId: o.areaGroupId ?? undefined,
+          areaGroupName: o.areaGroupName ?? undefined,
         });
       }
     }
     return Array.from(byArea.values());
   }, [occurrences, selectedFloor]);
+
+  // Card view nests a group's areas under one heading (group → indented area → tasks).
+  const areaSections = useMemo<AreaSection[]>(() => {
+    const sections: AreaSection[] = [];
+    const emitted = new Set<string>();
+    for (const a of areas) {
+      const gid = a.areaGroupId;
+      if (gid && a.areaGroupName) {
+        if (emitted.has(gid)) continue;
+        emitted.add(gid);
+        sections.push({
+          kind: "group",
+          id: gid,
+          name: a.areaGroupName,
+          areas: areas.filter((x) => x.areaGroupId === gid),
+        });
+      } else {
+        sections.push({ kind: "area", area: a });
+      }
+    }
+    return sections;
+  }, [areas]);
 
   const periodicalTasks = useMemo(
     () => occurrences.filter((o) => o.assignmentType === "PERIODICAL_TASK"),
@@ -175,27 +242,30 @@ export default function InspectionsPage() {
                   <p className="rounded-xl bg-grey-50 p-4 text-sm text-grey-500">No floor-based tasks today.</p>
                 ) : (
                   <>
-                    <div className="border-b border-grey-200 pb-3">
+                    <div className="flex items-center justify-between gap-3 border-b border-grey-200 pb-3">
                       <FilterTabs
                         options={floors.map((f) => f.name)}
                         value={selectedFloor ?? floors[0].name}
                         onChange={setActiveFloor}
                       />
+                      <TaskViewToggle value={view} onChange={setView} />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-                      {areas.map((item) => (
-                        <Link
-                          key={item.areaId}
-                          href={`/dashboard/inspections/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
-                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-grey-200 bg-grey-50 p-3 text-center transition-shadow hover:shadow-md"
-                        >
-                          <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.inspected).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
-                          </span>
-                          <span className="text-xs text-on-surface">{item.area}</span>
-                        </Link>
-                      ))}
+                    <div className="mt-4">
+                      {view === "list" ? (
+                        <TaskListView
+                          occurrences={occurrences}
+                          selectedFloor={selectedFloor}
+                          canComplete={false}
+                          expandGroups
+                          inspectMode
+                          onInspectSubmit={handleInspectSubmit}
+                          onInspectComplaint={handleInspectComplaint}
+                          inspectPending={inspectPending}
+                        />
+                      ) : (
+                        <CardSections sections={areaSections} today={today} />
+                      )}
                     </div>
                   </>
                 )}
@@ -268,28 +338,29 @@ export default function InspectionsPage() {
                   </p>
                 ) : (
                   <>
-                    <div className="border-b border-grey-300 pb-3">
+                    <div className="flex items-center justify-between gap-3 border-b border-grey-300 pb-3">
                       <FilterTabs
                         options={floors.map((f) => f.name)}
                         value={selectedFloor ?? floors[0].name}
                         onChange={setActiveFloor}
                       />
+                      <TaskViewToggle value={view} onChange={setView} />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      {areas.map((item) => (
-                        <Link
-                          key={item.areaId}
-                          href={`/dashboard/inspections/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
-                          className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-white/30 bg-white p-3 text-center shadow-sm transition-shadow hover:shadow-md"
-                        >
-                          <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
-                            {String(item.inspected).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
-                          </span>
-                          <span className="text-xs text-on-surface">{item.area}</span>
-                        </Link>
-                      ))}
-                    </div>
+                    {view === "list" ? (
+                      <TaskListView
+                        occurrences={occurrences}
+                        selectedFloor={selectedFloor}
+                        canComplete={false}
+                        expandGroups
+                        inspectMode
+                        onInspectSubmit={handleInspectSubmit}
+                        onInspectComplaint={handleInspectComplaint}
+                        inspectPending={inspectPending}
+                      />
+                    ) : (
+                      <CardSections sections={areaSections} today={today} mobile />
+                    )}
                   </>
                 )}
               </section>
@@ -300,6 +371,65 @@ export default function InspectionsPage() {
 
       <CalendarModal open={calendarOpen} onClose={() => setCalendarOpen(false)} />
     </>
+  );
+}
+
+/** One inspection area card, linking to its per-area inspection page. */
+function AreaCard({ item, today, mobile }: { item: AreaCount; today: string; mobile?: boolean }) {
+  return (
+    <Link
+      href={`/dashboard/inspections/${encodeURIComponent(item.area)}?areaId=${item.areaId}&date=${today}`}
+      className={cn(
+        "flex flex-col items-center justify-center gap-1 rounded-xl p-3 text-center transition-shadow hover:shadow-md",
+        mobile ? "rounded-2xl border border-white/30 bg-white shadow-sm" : "border border-grey-200 bg-grey-50",
+      )}
+    >
+      <span className="whitespace-nowrap text-lg font-semibold text-on-surface sm:text-xl">
+        {String(item.inspected).padStart(2, "0")}/{String(item.total).padStart(2, "0")}
+      </span>
+      <span className="text-xs text-on-surface">{item.area}</span>
+    </Link>
+  );
+}
+
+/** Card view: standalone area cards, plus each area group as a bordered box with its areas nested. */
+function CardSections({
+  sections,
+  today,
+  mobile,
+}: {
+  sections: AreaSection[];
+  today: string;
+  mobile?: boolean;
+}) {
+  const groups = sections.filter((s): s is Extract<AreaSection, { kind: "group" }> => s.kind === "group");
+  const standalone = sections
+    .filter((s): s is Extract<AreaSection, { kind: "area" }> => s.kind === "area")
+    .map((s) => s.area);
+  const gridCols = mobile ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4";
+  return (
+    <div className="flex flex-col gap-4">
+      {groups.map((g) => (
+        <div key={g.id} className="rounded-2xl border border-grey-200 bg-grey-50/40 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Layers size={15} className="text-primary" aria-hidden="true" />
+            <span className="text-sm font-semibold text-ink">{g.name}</span>
+          </div>
+          <div className={cn("grid gap-3 border-l-2 border-l-primary/30 pl-3", gridCols)}>
+            {g.areas.map((a) => (
+              <AreaCard key={a.areaId} item={a} today={today} mobile={mobile} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {standalone.length > 0 && (
+        <div className={cn("grid gap-4", gridCols)}>
+          {standalone.map((a) => (
+            <AreaCard key={a.areaId} item={a} today={today} mobile={mobile} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

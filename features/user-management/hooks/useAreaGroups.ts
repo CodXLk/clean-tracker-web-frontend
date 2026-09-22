@@ -78,3 +78,18 @@ export function useDeleteAreaGroup() {
     },
   });
 }
+
+/** Persist a new area-group display order within a floor (super admin / company admin). */
+export function useReorderAreaGroups() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ floorId, groupIds }: { floorId: string; groupIds: string[] }) => {
+      const { data } = await clientApi.put(ENDPOINTS.areaGroups.reorder, { floorId, groupIds });
+      return AreaGroupListSchema.parse(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: areaGroupKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: areaKeys.lists() });
+    },
+  });
+}

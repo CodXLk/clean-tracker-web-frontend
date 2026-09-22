@@ -93,13 +93,16 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [afterPhotos, setAfterPhotos] = useState<File[]>([]);
   const [rating, setRating] = useState<number | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
   const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState<string | null>(null);
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const beforeCameraInputRef = useRef<HTMLInputElement>(null);
+  const beforeGalleryInputRef = useRef<HTMLInputElement>(null);
+  const afterCameraInputRef = useRef<HTMLInputElement>(null);
+  const afterGalleryInputRef = useRef<HTMLInputElement>(null);
 
   // Desktop-only dragging for the completion panel: null until the cleaner drags it, at
   // which point it switches from the centered layout to an explicit pixel position.
@@ -194,10 +197,14 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const allSelected = selectedIds.size > 0 && selectedIds.size === selectableIds.length;
 
   // Object URLs for photo previews.
-  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
+  const beforePreviews = useMemo(() => beforePhotos.map((f) => URL.createObjectURL(f)), [beforePhotos]);
+  const afterPreviews = useMemo(() => afterPhotos.map((f) => URL.createObjectURL(f)), [afterPhotos]);
   useEffect(() => {
-    return () => previews.forEach((url) => URL.revokeObjectURL(url));
-  }, [previews]);
+    return () => beforePreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [beforePreviews]);
+  useEffect(() => {
+    return () => afterPreviews.forEach((url) => URL.revokeObjectURL(url));
+  }, [afterPreviews]);
 
   function toggleTaskSelected(taskId: string) {
     setSelectedIds((prev) => {
@@ -212,23 +219,26 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   }
 
-  function handlePhotosPicked(fileList: FileList | null) {
+  function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
     if (!fileList || fileList.length === 0) return;
     // Snapshot into a plain array immediately — fileList is a live reference to the
     // input's FileList, and the input gets cleared (value = "") right after this call
     // returns, which would otherwise empty it out before the setState updater below runs.
     const files = Array.from(fileList);
-    setPhotos((prev) => [...prev, ...files]);
+    const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
+    setter((prev) => [...prev, ...files]);
   }
 
-  function removePhoto(index: number) {
-    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  function removePhoto(index: number, stage: "before" | "after") {
+    const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
+    setter((prev) => prev.filter((_, i) => i !== index));
   }
 
   function resetActionState() {
     setSelectedIds(new Set());
     setNote("");
-    setPhotos([]);
+    setBeforePhotos([]);
+    setAfterPhotos([]);
     setRating(null);
     setDragPosition(null);
     setCompleteBlockedError(null);
@@ -252,7 +262,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
           redoId: t.redoId ?? undefined,
         })),
         note: note.trim() || undefined,
-        photos,
+        beforePhotos,
+        afterPhotos,
       },
       { onSuccess: resetActionState },
     );
@@ -266,28 +277,29 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       {
         occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
         note: note.trim() || undefined,
-        photos,
+        beforePhotos,
+        afterPhotos,
       },
       {
         // Keep the selection open — once the refetch lands the task(s) show as COMPLETED
         // and this same panel switches to the rating/complaint inspection actions.
         onSuccess: () => {
           setNote("");
-          setPhotos([]);
+          setBeforePhotos([]);
+          setAfterPhotos([]);
         },
       },
     );
   }
 
   function handleCompleteInspection() {
-    if (rating === null) return;
     // Redo occurrences are completed by cleaners, not inspected directly.
     const selected = tasks.filter((t) => selectedIds.has(occKey(t)) && !t.isRedo);
     if (selected.length === 0) return;
     submitInspection.mutate(
       {
         occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
-        rating,
+        rating: rating ?? undefined,
       },
       { onSuccess: resetActionState },
     );
@@ -324,7 +336,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
           occurrences: selected.map((t) => ({ taskId: t.taskId as string, date: t.occurrenceDate })),
           description: note.trim() || undefined,
         },
-        photos,
+        photos: [...beforePhotos, ...afterPhotos],
       },
       {
         onSuccess: (complaint) => {
@@ -544,27 +556,50 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
         )}
       </main>
 
-      {/* Hidden file inputs: camera capture + gallery/file picker */}
+      {/* Hidden file inputs: camera capture + gallery/file picker, per before/after bucket */}
       <input
-        ref={cameraInputRef}
+        ref={beforeCameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "before");
           e.target.value = "";
         }}
       />
       <input
-        ref={galleryInputRef}
+        ref={beforeGalleryInputRef}
         type="file"
         accept="image/*"
         multiple
         className="hidden"
         onChange={(e) => {
-          handlePhotosPicked(e.target.files);
+          handlePhotosPicked(e.target.files, "before");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "after");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={afterGalleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handlePhotosPicked(e.target.files, "after");
           e.target.value = "";
         }}
       />
@@ -665,20 +700,35 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                         )}
                         {d.note && <p className="mt-1 text-xs text-grey-700">{d.note}</p>}
                         {d.photos.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {d.photos.map((p) => {
-                              const url = `/api${ENDPOINTS.tasks.photo(p.id)}`;
+                          <div className="mt-2 flex flex-col gap-2">
+                            {(["BEFORE", "AFTER"] as const).map((stage) => {
+                              const stagePhotos = d.photos.filter(
+                                (p) => (p.type ?? "AFTER") === stage,
+                              );
+                              if (stagePhotos.length === 0) return null;
                               return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => setFullscreenPhotoUrl(url)}
-                                  aria-label="View photo full screen"
-                                  className="relative h-16 w-16 overflow-hidden rounded-lg bg-grey-100"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={url} alt="Task completion" className="h-full w-full object-cover" />
-                                </button>
+                                <div key={stage}>
+                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-grey-500">
+                                    {stage === "BEFORE" ? "Before" : "After"}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {stagePhotos.map((p) => {
+                                      const url = `/api${ENDPOINTS.tasks.photo(p.id)}`;
+                                      return (
+                                        <button
+                                          key={p.id}
+                                          type="button"
+                                          onClick={() => setFullscreenPhotoUrl(url)}
+                                          aria-label="View photo full screen"
+                                          className="relative h-16 w-16 overflow-hidden rounded-lg bg-grey-100"
+                                        >
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={url} alt="Task completion" className="h-full w-full object-cover" />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               );
                             })}
                           </div>
@@ -690,49 +740,61 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               </div>
             )}
 
-            {/* Add photos */}
-            <div className="mb-3 flex gap-2">
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <Camera size={18} />
-                Take Photo
-              </button>
-              <button
-                onClick={() => galleryInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
-              >
-                <ImagePlus size={18} />
-                Add Photos
-              </button>
-            </div>
-
-            {/* Photo thumbnails — preview of what will upload with Complete */}
-            {photos.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {previews.map((url, index) => (
-                  <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+            {/* Add before/after photos */}
+            {((["before", "after"] as const)).map((stage) => {
+              const isBefore = stage === "before";
+              const stagePhotos = isBefore ? beforePhotos : afterPhotos;
+              const stagePreviews = isBefore ? beforePreviews : afterPreviews;
+              const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
+              const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
+              return (
+                <div key={stage} className="mb-3">
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-grey-500">
+                    {isBefore ? "Before photos" : "After photos"}
+                  </p>
+                  <div className="flex gap-2">
                     <button
-                      type="button"
-                      onClick={() => setFullscreenPhotoUrl(url)}
-                      aria-label="View photo full screen"
-                      className="block h-full w-full"
+                      onClick={() => cameraRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="h-full w-full object-cover" />
+                      <Camera size={18} />
+                      Take Photo
                     </button>
                     <button
-                      onClick={() => removePhoto(index)}
-                      aria-label="Remove photo"
-                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                      onClick={() => galleryRef.current?.click()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
                     >
-                      <X size={12} />
+                      <ImagePlus size={18} />
+                      Add Photos
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  {stagePhotos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {stagePreviews.map((url, index) => (
+                        <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setFullscreenPhotoUrl(url)}
+                            aria-label="View photo full screen"
+                            className="block h-full w-full"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                          <button
+                            onClick={() => removePhoto(index, stage)}
+                            aria-label="Remove photo"
+                            className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Note */}
             <textarea
@@ -749,7 +811,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                 <div className="flex flex-col gap-3">
                   <div>
                     <p className="mb-1.5 text-sm font-medium text-on-surface">
-                      Inspection Rating <span className="text-grey-500">(only needed to complete without a complaint)</span>
+                      Inspection Rating <span className="text-grey-500">(optional)</span>
                     </p>
                     <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
                       {RATINGS.map((value) => (
@@ -783,7 +845,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                         </button>
                         <button
                           onClick={handleCompleteInspection}
-                          disabled={supervisorPending || rating === null}
+                          disabled={supervisorPending}
                           className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                         >
                           {submitInspection.isPending ? "Saving…" : "Complete Inspection"}
