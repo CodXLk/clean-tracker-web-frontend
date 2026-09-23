@@ -1875,8 +1875,10 @@ export function NewAssignmentModal({
     didSeedSource.current = key;
 
     // Drop any slot/cleaner/supervisor that no longer belongs to the site (e.g. a cleaner
-    // that has since been removed) so the create call doesn't fail validation.
-    const validProfiles = new Set(siteProfiles.map((p) => p.id));
+    // that has since been removed) so the create call doesn't fail validation. In work-order
+    // mode the valid slots are the work order's own profiles, not the site's.
+    const woProfileIds = workOrderMode ? workOrderMode.cleanerProfiles.map((p) => p.id) : [];
+    const validProfiles = new Set(workOrderMode ? woProfileIds : siteProfiles.map((p) => p.id));
     const validCleaners = new Set((cleanersQuery.data ?? []).map((c) => c.id));
     const validSupers = new Set((supervisorsQuery.data ?? []).map((s) => s.id));
     const cleaned: AssignmentFormInput = {
@@ -1893,10 +1895,35 @@ export function NewAssignmentModal({
         })),
       })),
     };
+    // A work-order add must keep the work order's own config, and every work order slot is
+    // pre-selected by default (assign real cleaners/supervisors to the slots later).
+    if (workOrderMode) {
+      cleaned.workType = "WORK_ORDER";
+      cleaned.workOrderId = workOrderMode.workOrderId;
+      cleaned.poId = workOrderMode.poId;
+      cleaned.siteId = workOrderMode.siteId;
+      cleaned.cleanerIds = [];
+      cleaned.supervisorIds = [];
+      cleaned.profileIds = woProfileIds;
+      cleaned.workOrderSupervisorProfileIds = workOrderMode.supervisorProfileIds;
+      cleaned.groups = cleaned.groups.map((g) => ({
+        ...g,
+        tasks: g.tasks.map((t) => ({ ...t, cleanerIds: [], profileIds: woProfileIds })),
+      }));
+    }
     reset(cleaned);
-    // Default to all site slots (Select All) when the loaded task didn't pin specific ones.
-    if (cleaned.profileIds.length === 0 && siteProfiles.length > 0) {
-      setValue("profileIds", siteProfiles.map((p) => p.id), { shouldValidate: false });
+    // Every slot is selected by default so people can be assigned to them later. Outsourced
+    // sites start empty (the user chooses in-house and/or outsource slots explicitly).
+    if (workOrderMode) {
+      // Work order slots are already pre-selected above.
+    } else if (!hasOutsource) {
+      if (siteProfiles.length > 0) {
+        setValue("profileIds", siteProfiles.map((p) => p.id), { shouldValidate: false });
+      }
+      const allSupers = (supervisorsQuery.data ?? []).map((s) => s.id);
+      if (allSupers.length > 0) {
+        setValue("supervisorIds", allSupers, { shouldValidate: false });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -2225,6 +2252,7 @@ export function NewAssignmentModal({
                       id="assign-date"
                       type="date"
                       readOnly={scopeLocked}
+                      min={workOrderMode?.startDate || undefined}
                       {...register("date")}
                       className={cn(
                         inputClass,

@@ -8,7 +8,13 @@ import { TimeField } from "@/components/shared/TimeField";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { LocationPicker } from "@/features/user-management/components/LocationPicker";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import {
+  SITE_TYPE_LABELS,
+  SITE_TYPE_VALUES,
+} from "@/features/user-management/schemas/site.schema";
 import { useClientCompanies } from "@/features/user-management/hooks/useClientCompanies";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
@@ -62,6 +68,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const update = useUpdateWorkOrder();
   const uploadPhotos = useUploadWorkOrderPhotos();
   const deletePhoto = useDeleteWorkOrderPhoto();
+  const me = useMe();
+  // Client pricing is company-admin/super-admin only.
+  const canViewPricing = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
 
   const [poId, setPoId] = useState(workOrder?.poId ?? "");
   const [siteId, setSiteId] = useState(workOrder?.siteId ?? "");
@@ -70,6 +79,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [otClientCompanyId, setOtClientCompanyId] = useState("");
   const [otClientId, setOtClientId] = useState("");
   const [otSiteName, setOtSiteName] = useState("");
+  const [otSiteType, setOtSiteType] = useState<string>("BUILDING_CLEANING");
   const [otContactPersonName, setOtContactPersonName] = useState("");
   const [otContactNumber, setOtContactNumber] = useState("");
   const [otGoogleMapsLink, setOtGoogleMapsLink] = useState("");
@@ -79,8 +89,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [otGeofenceRadius, setOtGeofenceRadius] = useState("");
   const [otNfcTagId, setOtNfcTagId] = useState("");
   const [description, setDescription] = useState(workOrder?.description ?? "");
+  // Edit-mode site rename (the work order's site can't be swapped, only renamed).
+  const [editSiteName, setEditSiteName] = useState<string>(workOrder?.siteName ?? "");
   const [numberOfCleaners, setNumberOfCleaners] = useState(workOrder?.numberOfCleaners ?? 1);
   const [numberOfSupervisors, setNumberOfSupervisors] = useState(workOrder?.numberOfSupervisors ?? 1);
+  // Optional first day tasks may be scheduled on.
+  const [startDate, setStartDate] = useState<string>(workOrder?.startDate ? workOrder.startDate.slice(0, 10) : "");
   const [startTime, setStartTime] = useState<string>(workOrder?.startTime ? workOrder.startTime.slice(0, 5) : "");
   const [endTime, setEndTime] = useState<string>(workOrder?.endTime ? workOrder.endTime.slice(0, 5) : "");
   const [priceType, setPriceType] = useState<WorkOrderPriceType>(workOrder?.priceType ?? "TOTAL_AMOUNT");
@@ -122,6 +136,15 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const clientOptions: SelectOption[] = useMemo(
     () => (clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
     [clientsQuery.data],
+  );
+  // WORK_ORDER is an internal category and isn't offered for manual selection.
+  const siteTypeOptions: SelectOption[] = useMemo(
+    () =>
+      SITE_TYPE_VALUES.filter((v) => v !== "WORK_ORDER").map((v) => ({
+        value: v,
+        label: SITE_TYPE_LABELS[v],
+      })),
+    [],
   );
 
   function handleOtCompanyChange(id: string) {
@@ -176,6 +199,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       setOtClientCompanyId("");
       setOtClientId("");
       setOtSiteName("");
+      setOtSiteType("BUILDING_CLEANING");
       setOtContactPersonName("");
       setOtContactNumber("");
       setOtGoogleMapsLink("");
@@ -233,6 +257,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       cleaningAllocatedType: parsedPrice != null && parsedAllocated != null ? cleaningAllocatedType : undefined,
     };
     const timePayload = {
+      startDate: startDate || undefined,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
     };
@@ -243,6 +268,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           id: workOrder.id,
           input: {
             poId: trimmedPo,
+            siteName: editSiteName.trim() || undefined,
             description: description.trim() || undefined,
             numberOfCleaners,
             numberOfSupervisors,
@@ -277,6 +303,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
                 clientCompanyId: otClientCompanyId,
                 clientId: otClientId,
                 siteName: otSiteName.trim(),
+                siteType: otSiteType,
                 contactPersonName: otContactPersonName.trim() || undefined,
                 contactNumber: otContactNumber.trim() || undefined,
                 googleMapsLink: otGoogleMapsLink.trim() || undefined,
@@ -332,14 +359,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           </label>
 
           {isEdit ? (
-            <SearchableSelect
-              options={siteOptions}
-              value={siteId || null}
-              onChange={setSiteId}
-              disabled
-              loading={sitesQuery.isLoading}
-              placeholder="Select site"
-              searchPlaceholder="Search sites…"
+            <TextField
+              label="Site name"
+              name="wo-edit-site-name"
+              value={editSiteName}
+              onChange={(e) => setEditSiteName(e.target.value)}
+              placeholder="Site name"
             />
           ) : (
             <>
@@ -385,6 +410,16 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
                     value={otSiteName}
                     onChange={(e) => setOtSiteName(e.target.value)}
                     placeholder="e.g. North Boundary Fence"
+                  />
+                  <SearchableSelect
+                    label="Site type"
+                    required
+                    options={siteTypeOptions}
+                    value={otSiteType}
+                    onChange={setOtSiteType}
+                    placeholder="Select a site type"
+                    searchPlaceholder="Search site types…"
+                    emptyMessage="No site types"
                   />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <SearchableSelect
@@ -498,6 +533,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           />
         </div>
 
+        <TextField
+          label="Start date (optional)"
+          name="wo-start-date"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-on-surface">Work window (optional)</span>
           <div className="rounded-2xl border border-grey-200 bg-grey-100/40 p-3">
@@ -534,6 +577,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           </p>
         </div>
 
+        {canViewPricing && (
         <div className="flex flex-col gap-4">
           <span className="text-sm font-medium text-on-surface">Price</span>
 
@@ -608,6 +652,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             Each can be a total price or an hourly rate, independently.
           </p>
         </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="wo-desc" className="text-sm font-medium text-on-surface">

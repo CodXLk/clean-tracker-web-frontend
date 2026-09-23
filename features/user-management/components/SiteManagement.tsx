@@ -70,7 +70,7 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
     );
   }, [query.data, search, isSupervisor, supervisorSites.sites, workOrderSite]);
 
-  const columns: Column<Site>[] = [
+  const allColumns: Column<Site>[] = [
     {
       header: "Site",
       sortAccessor: (s) => s.name.toLowerCase(),
@@ -185,6 +185,11 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
         ),
     },
   ];
+
+  // Supervisors don't see client-facing details (client company, client, contact).
+  const columns = isSupervisor
+    ? allColumns.filter((c) => !["Client-company", "Client", "Contact"].includes(String(c.header)))
+    : allColumns;
 
   function openCreate() {
     setDetail({ kind: "create" });

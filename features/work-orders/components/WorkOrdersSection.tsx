@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import { WorkOrdersTab } from "./WorkOrdersTab";
 
 const INNER_TABS = ["Work Orders", "Work Order Sites"] as const;
@@ -11,15 +13,22 @@ type InnerTab = (typeof INNER_TABS)[number];
 /**
  * Work Orders section — an inner switch between the work orders table and the
  * work-order-only sites table. The "Add work order site" action lives beside
- * "New work order" and jumps straight into creating a site.
+ * "New work order" and jumps straight into creating a site. Work-order-site
+ * management is company-admin/super-admin only; supervisors see just the list.
  */
 export function WorkOrdersSection() {
+  const me = useMe();
+  const canManageSites = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
   const [tab, setTab] = useState<InnerTab>("Work Orders");
   const [createSiteSignal, setCreateSiteSignal] = useState(0);
 
   function addWorkOrderSite() {
     setTab("Work Order Sites");
     setCreateSiteSignal((n) => n + 1);
+  }
+
+  if (!canManageSites) {
+    return <WorkOrdersTab />;
   }
 
   return (
