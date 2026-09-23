@@ -468,6 +468,8 @@ interface WeekScheduleGridProps {
   canReorderTasks?: boolean;
   onReorderTasks?: (areaId: string, orderedTaskIds: string[]) => void;
   onAddAssignment?: (target: AddAssignmentTarget) => void;
+  /** For work-order sites: the earliest date tasks may be added on. Earlier columns are read-only. */
+  minAddDate?: string;
   /** Toggle a task active/inactive (managed mode). */
   onToggleTaskStatus?: (taskId: string, status: "ACTIVE" | "INACTIVE") => void;
   /** Update a task's critical level inline (managed mode). */
@@ -524,6 +526,7 @@ export function WeekScheduleGrid({
   canReorderTasks = false,
   onReorderTasks,
   onAddAssignment,
+  minAddDate,
   onToggleTaskStatus,
   onSetTaskCriticalLevel,
   onEditTask,
@@ -663,6 +666,11 @@ export function WeekScheduleGrid({
     return workingDays === null || workingDays.includes(dayOfWeekOf(date));
   }
 
+  // Work-order sites can't schedule tasks before their start date; earlier columns are read-only.
+  function isBeforeMinDate(date: string): boolean {
+    return !!minAddDate && date < minAddDate;
+  }
+
   const gridTemplate = "minmax(340px, 2fr) repeat(7, minmax(64px, 1fr))";
 
   /** Empty day-cell strip to complete a band row (site/floor headers). */
@@ -687,14 +695,16 @@ export function WeekScheduleGrid({
           const isToday = dateStr === today;
           const working = isWorkingDate(dateStr);
           const holidayName = !dayView ? holidays?.get(dateStr) : undefined;
+          const beforeMin = !dayView && isBeforeMinDate(dateStr);
           return (
             <div
               key={dateStr}
-              title={holidayName}
+              title={beforeMin ? "Before the work order's start date" : holidayName}
               className={cn(
                 "flex flex-col items-center border-l border-grey-200 py-2.5",
                 isToday && "bg-primary/5",
-                holidayName ? "bg-rose-50" : !working && "bg-grey-100/70",
+                holidayName ? "bg-rose-50" : beforeMin ? "bg-grey-200/60" : !working && "bg-grey-100/70",
+                beforeMin && "opacity-50",
               )}
             >
               <span
@@ -922,8 +932,11 @@ export function WeekScheduleGrid({
     );
 
     // A task with no occurrence in the visible window: highlight the whole row and show its
-    // next available date + work type instead of the day cells.
-    if (managed && (dayView ? row.byWeekday.size === 0 : row.byDate.size === 0)) {
+    // next available date + work type instead of the day cells. Addable rows (managed scope with
+    // an add handler) always keep their day cells so a task can be re-added after its cells were
+    // cleared from the week.
+    const addableRow = !!floorId && !!areaId && !!onAddAssignment;
+    if (managed && !addableRow && (dayView ? row.byWeekday.size === 0 : row.byDate.size === 0)) {
       const recurDesc = recurrenceDescription(row);
       const label = row.nextDate
         ? `${recurDesc ? `${recurDesc} · ` : ""}Next available · ${formatDateShort(row.nextDate)}`
@@ -1004,6 +1017,7 @@ export function WeekScheduleGrid({
             : row.byDate.get(dateStr) ?? [];
           const first = cellOccurrences[0];
           const working = isWorkingDate(dateStr);
+          const beforeMin = !dayView && isBeforeMinDate(dateStr);
           const recurDesc = recurrenceDescription(row);
           const times = cellOccurrences.map((o) => formatTimeShort(o.startTime.slice(0, 5))).join(", ");
           const label = first
@@ -1028,7 +1042,7 @@ export function WeekScheduleGrid({
                 "relative border-l border-grey-200",
                 dayView ? "min-h-[46px]" : "min-h-[38px]",
                 dateStr === today && "bg-primary/[0.04]",
-                !working && "bg-grey-100/60",
+                beforeMin ? "bg-grey-200/50" : !working && "bg-grey-100/60",
               )}
             >
               {first ? (
@@ -1069,7 +1083,7 @@ export function WeekScheduleGrid({
                   )}
                 </button>
               ) : (
-                floorId && areaId && onAddAssignment && (
+                floorId && areaId && onAddAssignment && !beforeMin && (
                   <button
                     type="button"
                     aria-label={dayView ? `Add ${row.name} on ${formatWeekdayLong(dateStr)}` : `Add ${row.name} on this date`}
@@ -1472,14 +1486,16 @@ export function WeekScheduleGrid({
                                 </div>
                                 {weekDates.map((dateStr) => {
                                   const working = isWorkingDate(dateStr);
+                                  const beforeMin = !dayView && isBeforeMinDate(dateStr);
                                   return (
                                     <div
                                       key={dateStr}
                                       className={cn(
                                         "flex items-center justify-center border-l border-grey-200/60",
-                                        !working && "bg-grey-200/30",
+                                        beforeMin ? "bg-grey-200/50" : !working && "bg-grey-200/30",
                                       )}
                                     >
+                                      {!beforeMin && (
                                       <button
                                         type="button"
                                         aria-label={dayView ? `Add assignment in ${displayName} on ${formatWeekdayLong(dateStr)}` : `Add assignment in ${displayName} on ${dateStr}`}
@@ -1497,6 +1513,7 @@ export function WeekScheduleGrid({
                                       >
                                         <Plus size={12} aria-hidden="true" />
                                       </button>
+                                      )}
                                     </div>
                                   );
                                 })}

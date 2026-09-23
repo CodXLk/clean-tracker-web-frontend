@@ -275,6 +275,9 @@ export const GroupTaskFormSchema = z.object({
   /** Present when editing an existing assignment — keeps the task (and its completion
    *  history/overrides) in place instead of deleting and recreating it. */
   id: z.string().uuid().optional(),
+  /** Set when re-adding an existing task to another date via the scope-view "+": the source task's
+   *  id, so the backend lets the same task recur on another day without a name-uniqueness clash. */
+  sourceTaskId: z.string().uuid().optional(),
   name: z.string().min(2, "Task name must be at least 2 characters").max(150, "Name is too long"),
   /** Minutes; empty input maps to undefined (optional per spec). */
   durationMinutes: z
@@ -535,6 +538,7 @@ export function taskToCreateFormInput(
   const newTask: GroupTaskFormInput = {
     ...task,
     id: undefined, // strip id → create a new task, not edit the source
+    sourceTaskId: taskId, // mark this as a re-add of the source task (same task, new day)
     cleanerIds,
     profileIds,
     items: [], // a scope-view add is just the task — no expected items
@@ -630,6 +634,7 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
         const groupTaskKey = group.areaGroupId ? crypto.randomUUID() : undefined;
         return group.areaIds.map((areaId) => ({
           ...(task.id ? { id: task.id } : {}),
+          ...(task.sourceTaskId ? { sourceTaskId: task.sourceTaskId } : {}),
           name: task.name.trim(),
           ...(task.durationMinutes != null ? { durationMinutes: task.durationMinutes } : {}),
           floorId: group.floorId,

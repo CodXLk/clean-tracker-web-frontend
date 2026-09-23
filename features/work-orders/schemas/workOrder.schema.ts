@@ -17,7 +17,7 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   APPROVED: "Approved",
   ONGOING: "Ongoing",
   TASKS_COMPLETED: "Tasks Completed",
-  PENDING_REVIEW: "Pending Review",
+  PENDING_REVIEW: "Client Review Pending",
   COMPLETED: "Completed",
 };
 
@@ -100,6 +100,8 @@ export interface OneTimeSiteInput {
   clientCompanyId: string;
   clientId: string;
   siteName: string;
+  /** Category of the one-time site. Defaults to WORK_ORDER on the backend when omitted. */
+  siteType?: string;
   contactPersonName?: string;
   contactNumber?: string;
   googleMapsLink?: string;
@@ -118,6 +120,8 @@ export interface CreateWorkOrderInput {
   oneTimeSite?: boolean;
   oneTimeSiteDetails?: OneTimeSiteInput;
   description?: string;
+  /** Optional first day the work order may schedule tasks (ISO date). */
+  startDate?: string;
   startTime?: string;
   endTime?: string;
   numberOfCleaners?: number;
@@ -133,7 +137,11 @@ export interface CreateWorkOrderInput {
 // Outbound update payload — matches UpdateWorkOrderRequest (site is fixed).
 export interface UpdateWorkOrderInput {
   poId: string;
+  /** Rename the work order's site (optional). */
+  siteName?: string;
   description?: string;
+  /** Optional first day the work order may schedule tasks (ISO date). */
+  startDate?: string;
   startTime?: string;
   endTime?: string;
   numberOfCleaners?: number;

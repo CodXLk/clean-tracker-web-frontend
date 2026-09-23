@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { Calendar, ListChecks, Hash, X, ChevronLeft, ChevronRight, ImageOff, DollarSign } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRICE_TYPE_LABELS,
@@ -64,6 +66,9 @@ interface WorkOrderDetailModalProps {
 export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDetailModalProps) {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const certLabel = useCertificateLabels();
+  const me = useMe();
+  // Client pricing is company-admin/super-admin only.
+  const canViewPricing = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
   if (!workOrder) return null;
 
   const photos = workOrder.photos;
@@ -81,7 +86,7 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[workOrder.status]}`}>
             {WORK_ORDER_STATUS_LABELS[workOrder.status]}
           </span>
-          {workOrder.priceType && workOrder.priceAmount != null && (
+          {canViewPricing && workOrder.priceType && workOrder.priceAmount != null && (
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               {WORK_ORDER_PRICE_TYPE_LABELS[workOrder.priceType]}: {formatPrice(workOrder)}
             </span>
@@ -95,11 +100,13 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
             label="Dates"
             value={formatDates(workOrder.taskDates)}
           />
-          <StatCard icon={<DollarSign size={15} />} label="Price" value={formatPrice(workOrder)} />
+          {canViewPricing && (
+            <StatCard icon={<DollarSign size={15} />} label="Price" value={formatPrice(workOrder)} />
+          )}
           <StatCard icon={<ListChecks size={15} />} label="Tasks" value={String(workOrder.taskCount)} />
         </div>
 
-        {workOrder.cleaningAllocatedAmount != null && (
+        {canViewPricing && workOrder.cleaningAllocatedAmount != null && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
               icon={<DollarSign size={15} />}

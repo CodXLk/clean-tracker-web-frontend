@@ -61,8 +61,11 @@ function WorkforceContent() {
   // Clients/cleaners only get the operational calendar; site, cleaner and
   // template management stay with management roles.
   const isManager = me.data ? me.data.role !== "CLIENT" && me.data.role !== "CLEANER" : false;
-  const tabs: Tab[] = isManager ? [...MANAGER_TABS] : ["Operations"];
   const isSupervisor = me.data?.role === "SUPERVISOR";
+  // Supervisors manage day-to-day work but not the Sites or Cleaners rosters.
+  const tabs: Tab[] = isManager
+    ? MANAGER_TABS.filter((t) => !isSupervisor || (t !== "Sites" && t !== "Cleaners"))
+    : ["Operations"];
 
   // URL is the source of truth; fall back to Operations for unknown/forbidden tabs.
   const requested = SLUG_TAB[searchParams.get("tab") ?? ""] ?? "Operations";
@@ -225,6 +228,7 @@ function WorkforceContent() {
                   variant="field"
                 />
                 <div className="flex shrink-0 items-center gap-3">
+                  {draftCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setDraftsOpen(true)}
@@ -238,6 +242,7 @@ function WorkforceContent() {
                       </span>
                     )}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleNewAssignmentButton}
@@ -250,6 +255,7 @@ function WorkforceContent() {
 
               {isManager && (
                 <SiteRoster
+                  key={selectedSite?.id ?? "none"}
                   site={selectedSite}
                   canManageSupervisors={!isSupervisor}
                   restrictCleanerSlots={isSupervisor}

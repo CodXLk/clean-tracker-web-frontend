@@ -43,6 +43,9 @@ export function SiteRoster({
   restrictCleanerSlots = false,
 }: SiteRosterProps) {
   const siteId = site?.id;
+  // One-time work-order sites lead with their work order roster; the site's own cleaner/supervisor
+  // slots are secondary and start collapsed at the bottom.
+  const isOneTimeWorkOrder = !!site?.oneTimeSite;
   const cleanerProfilesQuery = useSiteCleanerProfiles(siteId);
   const supervisorProfilesQuery = useSiteSupervisorProfiles(siteId);
   const assignCleaners = useAssignCleanerProfiles();
@@ -54,9 +57,12 @@ export function SiteRoster({
   const [workOrderManage, setWorkOrderManage] = useState<"cleaner" | "supervisor" | null>(null);
   const [selectedOutsourceId, setSelectedOutsourceId] = useState<string>("");
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string>("");
-  // Each roster section collapses independently; outsource and work-order sections start collapsed.
+  // Each roster section collapses independently. Outsource starts collapsed. The site's general
+  // cleaner/supervisor section is open by default, except on one-time work-order sites where the
+  // work order roster leads (expanded) and the general section starts collapsed underneath it.
   const [outsourceOpen, setOutsourceOpen] = useState(false);
-  const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [workOrderOpen, setWorkOrderOpen] = useState(isOneTimeWorkOrder);
+  const [generalOpen, setGeneralOpen] = useState(!isOneTimeWorkOrder);
   // A pending unassign awaiting confirmation — the actual removal runs task cleanup
   // and notifications on the backend, so it must be intentional.
   const [removing, setRemoving] = useState<{
@@ -166,6 +172,26 @@ export function SiteRoster({
           <CertificateBadgeRow badges={siteCertBadges} />
         </div>
       )}
+      <div className="flex flex-col">
+      <div className={isOneTimeWorkOrder ? "order-3 mt-5 border-t border-line pt-5" : "order-1"}>
+      {isOneTimeWorkOrder && (
+        <div
+          className="mb-3 flex w-full cursor-pointer items-center justify-between gap-2"
+          onClick={() => setGeneralOpen((v) => !v)}
+        >
+          <span className="text-xs font-semibold uppercase tracking-wide text-body-2">Site cleaners &amp; supervisors</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setGeneralOpen((v) => !v); }}
+            aria-expanded={generalOpen}
+            aria-label={generalOpen ? "Collapse cleaners and supervisors" : "Expand cleaners and supervisors"}
+            className="text-body-2"
+          >
+            {generalOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+          </button>
+        </div>
+      )}
+      {generalOpen && (
       <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
       <RosterGroup
         title="Cleaners"
@@ -201,10 +227,12 @@ export function SiteRoster({
         }
       />
       </div>
+      )}
+      </div>
 
       {outsourceProjects.length > 0 && outsourceProject && (
         <div
-          className={`mt-5 border-t border-line pt-5 ${outsourceOpen ? "" : "cursor-pointer"}`}
+          className={`order-2 mt-5 border-t border-line pt-5 ${outsourceOpen ? "" : "cursor-pointer"}`}
           onClick={() => { if (!outsourceOpen) setOutsourceOpen(true); }}
         >
           <div
@@ -274,7 +302,7 @@ export function SiteRoster({
 
       {siteWorkOrders.length > 0 && workOrder && (
         <div
-          className={`mt-5 border-t border-line pt-5 ${workOrderOpen ? "" : "cursor-pointer"}`}
+          className={`${isOneTimeWorkOrder ? "order-1" : "order-3 mt-5 border-t border-line pt-5"} ${workOrderOpen ? "" : "cursor-pointer"}`}
           onClick={() => { if (!workOrderOpen) setWorkOrderOpen(true); }}
         >
           <div
@@ -341,6 +369,7 @@ export function SiteRoster({
           )}
         </div>
       )}
+      </div>
 
       <CleanerProfilesModal
         open={cleanersOpen}

@@ -24,6 +24,7 @@ import {
   type OccurrenceRefInput,
 } from "@/features/workforce/hooks/useAssignments";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import { useWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
   useFloors,
@@ -1920,6 +1921,16 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     () => (sitesQuery.data ?? []).find((s) => s.id === siteFilter),
     [sitesQuery.data, siteFilter],
   );
+  // A one-time work-order site can't schedule tasks before the work order's start date;
+  // the scope view greys out earlier columns.
+  const workOrdersQuery = useWorkOrders();
+  const minAddDate = useMemo(() => {
+    if (!selectedSite?.oneTimeSite) return undefined;
+    const wo = (workOrdersQuery.data ?? []).find(
+      (w) => w.siteId === siteFilter && w.status !== "COMPLETED",
+    );
+    return wo?.startDate ?? undefined;
+  }, [selectedSite, workOrdersQuery.data, siteFilter]);
   // Only distinguish working days when one site (with configured days) is selected.
   const workingDays: DayOfWeek[] | null =
     selectedSite && (selectedSite.workingDays?.length ?? 0) > 0
@@ -2715,6 +2726,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
             (dayScope ? dayOccurrencesQuery.isLoading : occurrencesQuery.isLoading)
           }
           onOccurrenceClick={(occurrence) => setInfoOccurrence(occurrence)}
+          minAddDate={minAddDate}
           siteId={managing ? siteFilter : undefined}
           floors={managing ? floors : undefined}
           siteTasks={managing ? siteTasksQuery.data ?? [] : undefined}

@@ -10,6 +10,8 @@ import { ConfirmDialog } from "@/features/user-management/components/ConfirmDial
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { NewAssignmentModal, type WorkOrderTaskConfig } from "@/components/admin/NewAssignmentModal";
 import { useWorkOrders, useDeleteWorkOrder, useUpdateWorkOrderStatus } from "@/features/work-orders/hooks/useWorkOrders";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import {
   WORK_ORDER_STATUS_VALUES,
   WORK_ORDER_STATUS_LABELS,
@@ -49,6 +51,10 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   const workOrdersQuery = useWorkOrders();
   const deleteWorkOrder = useDeleteWorkOrder();
   const updateStatus = useUpdateWorkOrderStatus();
+  const me = useMe();
+  // Creating work orders and viewing client pricing is company-admin/super-admin only.
+  const canManage = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
+  const isSupervisor = me.data?.role === "SUPERVISOR";
 
   const [search, setSearch] = useState("");
   const [formModal, setFormModal] = useState<{ workOrder: WorkOrder | null } | null>(null);
@@ -63,7 +69,9 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
     const list = workOrdersQuery.data ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((w) => w.poId.toLowerCase().includes(q));
+    return list.filter(
+      (w) => w.poId.toLowerCase().includes(q) || (w.siteName ?? "").toLowerCase().includes(q),
+    );
   }, [workOrdersQuery.data, search]);
 
   function confirmDelete() {
@@ -120,7 +128,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search by PO ID…"
+          placeholder="Search by PO ID or site name…"
           className="w-full sm:max-w-xs"
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -134,6 +142,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
               Add work order site
             </button>
           )}
+          {canManage && (
           <button
             type="button"
             onClick={() => {
@@ -145,6 +154,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
             <Plus size={18} aria-hidden="true" />
             New work order
           </button>
+          )}
         </div>
       </div>
 
@@ -174,8 +184,8 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                   <th className="px-5 py-3 font-medium">PO ID</th>
                   <th className="px-5 py-3 font-medium">Site</th>
                   <th className="px-5 py-3 font-medium">Dates</th>
-                  <th className="px-5 py-3 font-medium">Cleaners</th>
-                  <th className="px-5 py-3 font-medium">Tasks</th>
+                  {!isSupervisor && <th className="px-5 py-3 font-medium">Cleaners</th>}
+                  {!isSupervisor && <th className="px-5 py-3 font-medium">Tasks</th>}
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 text-right font-medium">Actions</th>
                 </tr>
@@ -186,11 +196,20 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                     <td className="px-5 py-3.5 font-medium text-on-surface">{w.poId}</td>
                     <td className="px-5 py-3.5 text-grey-700">{w.siteName ?? "—"}</td>
                     <td className="px-5 py-3.5 text-grey-700">{formatDates(w.taskDates)}</td>
+                    {!isSupervisor && (
                     <td className="px-5 py-3.5 text-grey-700">
                       {w.cleanerProfiles.filter((s) => s.cleanerId).length}/{w.numberOfCleaners}
                     </td>
-                    <td className="px-5 py-3.5 text-grey-700">{w.taskCount}</td>
+                    )}
+                    {!isSupervisor && <td className="px-5 py-3.5 text-grey-700">{w.taskCount}</td>}
                     <td className="px-5 py-3.5">
+                      {isSupervisor ? (
+                        <span
+                          className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[w.status]}`}
+                        >
+                          {WORK_ORDER_STATUS_LABELS[w.status]}
+                        </span>
+                      ) : (
                       <select
                         aria-label={`Status for ${w.poId}`}
                         value={w.status}
@@ -206,9 +225,48 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                           </option>
                         ))}
                       </select>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex justify-end">
+                        {isSupervisor ? (
+                          (() => {
+                            // Supervisors only advance a work order to "Tasks Completed" (one-way).
+                            const completedIdx = WORK_ORDER_STATUS_VALUES.indexOf("TASKS_COMPLETED");
+                            const isCompleted = WORK_ORDER_STATUS_VALUES.indexOf(w.status) >= completedIdx;
+                            return (
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={isCompleted}
+                                disabled={isCompleted || updateStatus.isPending}
+                                onClick={() => {
+                                  setBanner(null);
+                                  setPendingStatus({ workOrder: w, status: "TASKS_COMPLETED" });
+                                }}
+                                title={isCompleted ? "Tasks already marked completed" : "Mark tasks completed"}
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                  isCompleted
+                                    ? "cursor-default bg-teal-100 text-teal-700"
+                                    : "bg-grey-100 text-grey-600 hover:bg-teal-50 hover:text-teal-700"
+                                }`}
+                              >
+                                <span
+                                  className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                                    isCompleted ? "bg-teal-500" : "bg-grey-300"
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                                      isCompleted ? "translate-x-3.5" : "translate-x-0.5"
+                                    }`}
+                                  />
+                                </span>
+                                {isCompleted ? "Tasks completed" : "Mark completed"}
+                              </button>
+                            );
+                          })()
+                        ) : (
                         <RowMenu
                           label={`Actions for ${w.poId}`}
                           items={[
@@ -247,6 +305,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                             },
                           ]}
                         />
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -316,7 +375,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         description={
           pendingStatus
             ? pendingStatus.status === "PENDING_REVIEW"
-              ? `Mark work order "${pendingStatus.workOrder.poId}" as Pending Review? The client will be emailed and notified to review and give feedback.`
+              ? `Mark work order "${pendingStatus.workOrder.poId}" as Client Review Pending? The client will be emailed and notified to review and give feedback.`
               : pendingStatus.status === "TASKS_COMPLETED"
                 ? `Mark work order "${pendingStatus.workOrder.poId}" as Tasks Completed? Company admins and client service managers will be emailed and notified to send it to the client for review.`
                 : `Change work order "${pendingStatus.workOrder.poId}" status to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}?`
