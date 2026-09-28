@@ -31,6 +31,8 @@ interface SearchableSelectProps {
   error?: string;
   emptyMessage?: string;
   hint?: string;
+  /** Show the in-menu search field (default true). */
+  searchable?: boolean;
 }
 
 export function SearchableSelect({
@@ -46,6 +48,7 @@ export function SearchableSelect({
   error,
   emptyMessage = "No results found",
   hint,
+  searchable = true,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -128,9 +131,9 @@ export function SearchableSelect({
     if (open) {
       setQuery("");
       // Focus the search field once the panel is rendered.
-      requestAnimationFrame(() => searchRef.current?.focus());
+      if (searchable) requestAnimationFrame(() => searchRef.current?.focus());
     }
-  }, [open]);
+  }, [open, searchable]);
 
   const isDisabled = disabled || loading;
 
@@ -178,16 +181,18 @@ export function SearchableSelect({
               }}
               className="z-[70] flex flex-col overflow-hidden rounded-xl border border-grey-300 bg-white shadow-lg"
             >
-              <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
-                <Search size={15} className="shrink-0 text-grey-500" aria-hidden="true" />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="w-full text-sm text-on-surface outline-none placeholder:text-grey-500/70"
-                />
-              </div>
+              {searchable && (
+                <div className="flex items-center gap-2 border-b border-grey-200 px-3 py-2">
+                  <Search size={15} className="shrink-0 text-grey-500" aria-hidden="true" />
+                  <input
+                    ref={searchRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={searchPlaceholder}
+                    className="w-full text-sm text-on-surface outline-none placeholder:text-grey-500/70"
+                  />
+                </div>
+              )}
               <ul role="listbox" className="flex-1 overflow-y-auto py-1">
                 {filtered.length === 0 ? (
                   <li className="px-3.5 py-3 text-sm text-grey-500">{emptyMessage}</li>
