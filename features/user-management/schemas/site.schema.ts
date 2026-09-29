@@ -147,6 +147,7 @@ export const SiteSchema = z.object({
   oneTimeSite: z.boolean().optional().default(false),
   oneTimeSiteCompleted: z.boolean().optional().default(false),
   cleanerProfiles: z.array(SiteCleanerProfileSchema).default([]),
+  supervisorProfiles: z.array(SiteSupervisorProfileSchema).default([]),
   cleaningTemplates: z.array(SiteCleaningTemplateSchema).default([]),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),

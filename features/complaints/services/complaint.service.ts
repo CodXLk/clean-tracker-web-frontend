@@ -51,12 +51,14 @@ export async function completeComplaint(
   photos: File[] = [],
 ): Promise<Complaint> {
   const formData = new FormData();
-  if (note?.trim()) {
-    formData.append(
-      "data",
-      new Blob([JSON.stringify({ note: note.trim() })], { type: "application/json" }),
-    );
-  }
+  // Always include the JSON `data` part so the request is a well-formed multipart even
+  // when there is no note and no photos (an empty body makes the proxy fail to parse it).
+  formData.append(
+    "data",
+    new Blob([JSON.stringify({ note: note?.trim() ? note.trim() : null })], {
+      type: "application/json",
+    }),
+  );
   for (const photo of photos) {
     formData.append("photos", photo);
   }

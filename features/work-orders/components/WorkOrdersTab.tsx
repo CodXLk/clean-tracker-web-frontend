@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2 } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -52,6 +53,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   const deleteWorkOrder = useDeleteWorkOrder();
   const updateStatus = useUpdateWorkOrderStatus();
   const me = useMe();
+  const router = useRouter();
   // Creating work orders and viewing client pricing is company-admin/super-admin only.
   const canManage = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
   const isSupervisor = me.data?.role === "SUPERVISOR";
@@ -61,6 +63,8 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   const [detail, setDetail] = useState<WorkOrder | null>(null);
   const [manage, setManage] = useState<{ workOrder: WorkOrder; kind: "cleaner" | "supervisor" } | null>(null);
   const [addTasks, setAddTasks] = useState<WorkOrder | null>(null);
+  // A just-created work order awaiting the "add tasks now?" prompt.
+  const [promptAddTasks, setPromptAddTasks] = useState<WorkOrder | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WorkOrder | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ workOrder: WorkOrder; status: WorkOrderStatus } | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -326,7 +330,10 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         open={!!formModal}
         onClose={() => setFormModal(null)}
         workOrder={formModal?.workOrder ?? null}
-        onCreated={(poId) => setBanner({ kind: "success", text: `Work order ${poId} created. Assign cleaners and add tasks.` })}
+        onCreated={(created) => {
+          setBanner({ kind: "success", text: `Work order ${created.poId} created. Assign cleaners and add tasks.` });
+          setPromptAddTasks(created);
+        }}
         onUpdated={(poId) => setBanner({ kind: "success", text: `Work order ${poId} updated.` })}
       />
 
@@ -345,11 +352,32 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
           onClose={() => setAddTasks(null)}
           workOrderMode={addTasksConfig}
           onCreated={() => {
+            const siteId = addTasks?.siteId;
             setAddTasks(null);
-            setBanner({ kind: "success", text: `Tasks added to work order ${addTasks?.poId}.` });
+            // After adding the work order's tasks, jump to Operations focused on that site.
+            if (siteId) {
+              router.push(`/admin/workforce?tab=operations&site=${siteId}`);
+            }
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!promptAddTasks}
+        tone="primary"
+        title="Add tasks to work order?"
+        description={
+          promptAddTasks
+            ? `Work order ${promptAddTasks.poId} was created. Do you want to add its tasks now?`
+            : ""
+        }
+        confirmLabel="Add tasks"
+        onConfirm={() => {
+          setAddTasks(promptAddTasks);
+          setPromptAddTasks(null);
+        }}
+        onClose={() => setPromptAddTasks(null)}
+      />
 
       <ConfirmDialog
         open={!!pendingDelete}

@@ -30,6 +30,7 @@ export const OutsourceCleanerProfileSchema = z.object({
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
   shifts: z.array(OutsourceAssignedShiftSchema).default([]),
+  taskCount: z.number().nullable().optional(),
 });
 export type OutsourceCleanerProfile = z.infer<typeof OutsourceCleanerProfileSchema>;
 
@@ -40,6 +41,7 @@ export const OutsourceSupervisorProfileSchema = z.object({
   label: z.string(),
   supervisorId: z.string().uuid().nullable().optional(),
   supervisorName: z.string().nullable().optional(),
+  taskCount: z.number().nullable().optional(),
 });
 export type OutsourceSupervisorProfile = z.infer<typeof OutsourceSupervisorProfileSchema>;
 

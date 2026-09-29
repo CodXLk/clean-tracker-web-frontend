@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Plus, Pencil, Trash2, Clock, CalendarClock, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Clock, CalendarClock, Eye, ArrowUpRight } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
+import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { DataTable, type Column } from "./DataTable";
 import { RowMenu } from "./RowMenu";
@@ -29,9 +30,11 @@ interface SiteManagementProps {
   workOrderSite?: boolean;
   /** Bump this value to programmatically open the create form (used by the Work Orders section). */
   openCreateSignal?: number;
+  /** When provided, each site row links to the Operations tab for that site. */
+  onOpenOperations?: (siteId: string) => void;
 }
 
-export function SiteManagement({ workOrderSite = false, openCreateSignal }: SiteManagementProps = {}) {
+export function SiteManagement({ workOrderSite = false, openCreateSignal, onOpenOperations }: SiteManagementProps = {}) {
   const query = useSites();
   const deleteMutation = useDeleteSite();
 
@@ -75,9 +78,22 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
       header: "Site",
       sortAccessor: (s) => s.name.toLowerCase(),
       cell: (s) => (
-        <div>
-          <span className="font-medium text-on-surface">{s.name}</span>
-          {s.streetAddress && <span className="block text-xs text-grey-500">{s.streetAddress}</span>}
+        <div className="flex items-center gap-1.5">
+          <div className="min-w-0">
+            <span className="font-medium text-on-surface">{s.name}</span>
+            {s.streetAddress && <span className="block text-xs text-grey-500">{s.streetAddress}</span>}
+          </div>
+          {onOpenOperations && !isSupervisor && (
+            <button
+              type="button"
+              onClick={() => onOpenOperations(s.id)}
+              aria-label={`Open ${s.name} in Operations`}
+              title="Open in Operations"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-grey-500 transition-colors hover:bg-primary/10 hover:text-primary"
+            >
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -88,21 +104,6 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
         <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-ink">
           {s.clientCompanyName}
         </span>
-      ),
-    },
-    {
-      header: "Client",
-      sortAccessor: (s) => s.clientName.toLowerCase(),
-      cell: (s) => s.clientName,
-    },
-    {
-      header: "Contact",
-      sortAccessor: (s) => s.contactPersonName ?? "",
-      cell: (s) => (
-        <div>
-          <span className="text-on-surface">{s.contactPersonName ?? "—"}</span>
-          {s.contactNumber && <span className="block text-xs text-grey-500">{s.contactNumber}</span>}
-        </div>
       ),
     },
     {
@@ -124,20 +125,24 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
         ),
     },
     {
-      header: "Map",
-      cell: (s) =>
-        s.googleMapsLink ? (
-          <a
-            href={s.googleMapsLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-ink hover:underline"
-          >
-            View <ExternalLink size={12} aria-hidden="true" />
-          </a>
-        ) : (
-          "—"
-        ),
+      header: "Cleaners",
+      cell: (s) => (
+        <ProfileAvatars
+          people={s.cleanerProfiles
+            .filter((p) => p.cleanerName)
+            .map((p) => ({ id: p.id, name: p.cleanerName! }))}
+        />
+      ),
+    },
+    {
+      header: "Supervisors",
+      cell: (s) => (
+        <ProfileAvatars
+          people={s.supervisorProfiles
+            .filter((p) => p.supervisorName)
+            .map((p) => ({ id: p.id, name: p.supervisorName! }))}
+        />
+      ),
     },
     {
       header: "",
@@ -186,9 +191,9 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
     },
   ];
 
-  // Supervisors don't see client-facing details (client company, client, contact).
+  // Supervisors don't see the client-facing company column.
   const columns = isSupervisor
-    ? allColumns.filter((c) => !["Client-company", "Client", "Contact"].includes(String(c.header)))
+    ? allColumns.filter((c) => !["Client-company"].includes(String(c.header)))
     : allColumns;
 
   function openCreate() {
@@ -265,6 +270,30 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal }: Site
           deleteMutation.reset();
         }}
       />
+    </div>
+  );
+}
+
+/** Overlapping initials avatars for a site's assigned cleaners or supervisors. */
+function ProfileAvatars({ people }: { people: { id: string; name: string }[] }) {
+  if (people.length === 0) return <span className="text-xs text-grey-400">—</span>;
+  const shown = people.slice(0, 5);
+  const extra = people.length - shown.length;
+  return (
+    <div className="flex items-center">
+      {shown.map((p) => (
+        <InitialsAvatar
+          key={p.id}
+          name={p.name}
+          size={28}
+          className="-ml-1.5 ring-2 ring-white first:ml-0"
+        />
+      ))}
+      {extra > 0 && (
+        <span className="-ml-1.5 flex h-7 min-w-[28px] items-center justify-center rounded-full bg-grey-200 px-1 text-[11px] font-semibold text-grey-600 ring-2 ring-white">
+          +{extra}
+        </span>
+      )}
     </div>
   );
 }

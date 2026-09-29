@@ -195,6 +195,34 @@ export function useAssignWorkOrderCleaners() {
   });
 }
 
+export function useAddWorkOrderCleanerProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data } = await clientApi.post(ENDPOINTS.workOrders.addCleanerProfile(id));
+      return WorkOrderCleanerProfileListSchema.parse(data);
+    },
+    onSuccess: (_d, { id }) => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.cleanerProfiles(id) });
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
+  });
+}
+
+export function useRemoveWorkOrderCleanerProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, profileId }: { id: string; profileId: string }) => {
+      const { data } = await clientApi.delete(ENDPOINTS.workOrders.removeCleanerProfile(id, profileId));
+      return WorkOrderCleanerProfileListSchema.parse(data);
+    },
+    onSuccess: (_d, { id }) => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.cleanerProfiles(id) });
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
+  });
+}
+
 // ── Work-order supervisor slots ──────────────────────────────────────────────────
 
 export function useWorkOrderSupervisorProfiles(id: string | undefined) {
@@ -216,6 +244,34 @@ export function useAssignWorkOrderSupervisors() {
       profiles: { profileId: string; supervisorId: string | null }[];
     }) => {
       const { data } = await clientApi.put(ENDPOINTS.workOrders.supervisorProfiles(id), { profiles });
+      return WorkOrderSupervisorProfileListSchema.parse(data);
+    },
+    onSuccess: (_d, { id }) => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.supervisorProfiles(id) });
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
+  });
+}
+
+export function useAddWorkOrderSupervisorProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data } = await clientApi.post(ENDPOINTS.workOrders.addSupervisorProfile(id));
+      return WorkOrderSupervisorProfileListSchema.parse(data);
+    },
+    onSuccess: (_d, { id }) => {
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.supervisorProfiles(id) });
+      queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
+  });
+}
+
+export function useRemoveWorkOrderSupervisorProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, profileId }: { id: string; profileId: string }) => {
+      const { data } = await clientApi.delete(ENDPOINTS.workOrders.removeSupervisorProfile(id, profileId));
       return WorkOrderSupervisorProfileListSchema.parse(data);
     },
     onSuccess: (_d, { id }) => {

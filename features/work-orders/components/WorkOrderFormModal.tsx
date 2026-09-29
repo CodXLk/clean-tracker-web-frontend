@@ -58,7 +58,7 @@ interface WorkOrderFormModalProps {
   onClose: () => void;
   /** When provided, the modal edits this work order instead of creating a new one. */
   workOrder?: WorkOrder | null;
-  onCreated?: (poId: string) => void;
+  onCreated?: (workOrder: WorkOrder) => void;
   onUpdated?: (poId: string) => void;
 }
 
@@ -328,7 +328,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           if (pendingFiles.length > 0) {
             await uploadPhotos.mutateAsync({ id: created.id, files: pendingFiles }).catch(() => {});
           }
-          onCreated?.(trimmedPo);
+          onCreated?.(created);
           handleClose();
         },
       },

@@ -114,6 +114,18 @@ export default function ComplaintsPage() {
     { label: "Resolved", value: pad(kpis.resolved), color: "green" as const },
   ];
 
+  function openComplaint(complaint: Complaint) {
+    completeComplaintMutation.reset();
+    resolveComplaintMutation.reset();
+    setSelected(complaint);
+  }
+
+  function closeComplaint() {
+    completeComplaintMutation.reset();
+    resolveComplaintMutation.reset();
+    setSelected(null);
+  }
+
   function handleResolve(id: string) {
     resolveComplaintMutation.mutate(id, { onSuccess: () => setSelected(null) });
   }
@@ -209,7 +221,7 @@ export default function ComplaintsPage() {
           ) : (
             <div className="flex flex-wrap gap-4">
               {filtered.map((complaint) => (
-                <ComplaintRow key={complaint.id} complaint={complaint} onClick={() => setSelected(complaint)} />
+                <ComplaintRow key={complaint.id} complaint={complaint} onClick={() => openComplaint(complaint)} />
               ))}
             </div>
           )}
@@ -269,7 +281,7 @@ export default function ComplaintsPage() {
                 return (
                   <button
                     key={complaint.id}
-                    onClick={() => setSelected(complaint)}
+                    onClick={() => openComplaint(complaint)}
                     className="flex w-full rounded-2xl bg-white p-4 shadow-sm text-left gap-3 transition-shadow hover:shadow-md"
                   >
                     <div
@@ -312,13 +324,14 @@ export default function ComplaintsPage() {
 
       <AdminComplaintDetailModal
         open={selected !== null}
-        onClose={() => setSelected(null)}
+        onClose={closeComplaint}
         complaint={selected}
         role={role}
         onResolve={handleResolve}
         onComplete={handleComplete}
         resolving={resolveComplaintMutation.isPending}
         completing={completeComplaintMutation.isPending}
+        actionError={completeComplaintMutation.error ?? resolveComplaintMutation.error}
       />
     </>
   );

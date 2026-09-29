@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ComponentType } from "react";
-import { Plus, UserCog, Users, X, ChevronDown, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, UserCog, Users, X, ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { CleanerProfilesModal } from "./CleanerProfilesModal";
 import { SupervisorProfilesModal } from "./SupervisorProfilesModal";
@@ -26,6 +27,8 @@ interface RosterEntry {
   id: string;
   label: string;
   personName: string | null;
+  /** Cleaner id used to open that cleaner's schedule (only set for cleaner slots). */
+  personId?: string | null;
 }
 
 interface SiteRosterProps {
@@ -50,6 +53,17 @@ export function SiteRoster({
   const supervisorProfilesQuery = useSiteSupervisorProfiles(siteId);
   const assignCleaners = useAssignCleanerProfiles();
   const assignSupervisors = useAssignSupervisorProfiles();
+  const router = useRouter();
+
+  // Open a cleaner's schedule (Dashboard → Cleaners Schedule) with that cleaner preselected.
+  function viewCleanerSchedule(cleanerId: string) {
+    router.push(`/admin/dashboard?tab=cleaners-schedule&cleaner=${cleanerId}`);
+  }
+
+  // Open a supervisor's schedule (Dashboard → Supervisor Schedule) with that supervisor preselected.
+  function viewSupervisorSchedule(supervisorId: string) {
+    router.push(`/admin/dashboard?tab=supervisor-schedule&supervisor=${supervisorId}`);
+  }
 
   const [cleanersOpen, setCleanersOpen] = useState(false);
   const [supervisorsOpen, setSupervisorsOpen] = useState(false);
@@ -203,8 +217,10 @@ export function SiteRoster({
           id: p.id,
           label: p.label || `Cleaner ${p.profileIndex}`,
           personName: p.cleanerName ?? null,
+          personId: p.cleanerId ?? null,
         }))}
         onManage={() => setCleanersOpen(true)}
+        onView={(entry) => entry.personId && viewCleanerSchedule(entry.personId)}
         onRemoveRequest={(entry) =>
           setRemoving({ type: "cleaner", profileId: entry.id, name: entry.personName ?? "", label: entry.label })
         }
@@ -220,8 +236,10 @@ export function SiteRoster({
           id: p.id,
           label: p.label || `Supervisor ${p.profileIndex}`,
           personName: p.supervisorName ?? null,
+          personId: p.supervisorId ?? null,
         }))}
         onManage={() => setSupervisorsOpen(true)}
+        onView={(entry) => entry.personId && viewSupervisorSchedule(entry.personId)}
         onRemoveRequest={(entry) =>
           setRemoving({ type: "supervisor", profileId: entry.id, name: entry.personName ?? "", label: entry.label })
         }
@@ -347,8 +365,10 @@ export function SiteRoster({
                 id: p.id,
                 label: p.label || `Work Order Cleaner ${p.profileIndex}`,
                 personName: p.cleanerName ?? null,
+                personId: p.cleanerId ?? null,
               }))}
               onManage={() => setWorkOrderManage("cleaner")}
+              onView={(entry) => entry.personId && viewCleanerSchedule(entry.personId)}
               onRemoveRequest={() => setWorkOrderManage("cleaner")}
             />
             <RosterGroup
@@ -361,8 +381,10 @@ export function SiteRoster({
                 id: p.id,
                 label: p.label || `Work Order Supervisor ${p.profileIndex}`,
                 personName: p.supervisorName ?? null,
+                personId: p.supervisorId ?? null,
               }))}
               onManage={() => setWorkOrderManage("supervisor")}
+              onView={(entry) => entry.personId && viewSupervisorSchedule(entry.personId)}
               onRemoveRequest={() => setWorkOrderManage("supervisor")}
             />
           </div>
@@ -419,6 +441,7 @@ function RosterGroup({
   emptyLabel,
   canManage,
   onManage,
+  onView,
   onRemoveRequest,
 }: {
   title: string;
@@ -428,6 +451,7 @@ function RosterGroup({
   emptyLabel: string;
   canManage: boolean;
   onManage: () => void;
+  onView?: (entry: RosterEntry) => void;
   onRemoveRequest: (entry: RosterEntry) => void;
 }) {
   return (
@@ -465,6 +489,17 @@ function RosterGroup({
                   <span className="text-[11px] text-body-2">{entry.label}</span>
                   <span className="text-xs font-medium text-ink">{entry.personName}</span>
                 </span>
+                {onView && entry.personId && (
+                  <button
+                    type="button"
+                    aria-label={`View ${entry.personName}'s schedule`}
+                    title="View schedule"
+                    onClick={() => onView(entry)}
+                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-body-2 transition-colors hover:bg-line hover:text-primary"
+                  >
+                    <Eye size={13} aria-hidden />
+                  </button>
+                )}
                 {canManage && (
                   <button
                     type="button"
