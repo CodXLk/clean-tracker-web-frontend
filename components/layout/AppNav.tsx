@@ -149,6 +149,8 @@ function useVisibleNavItems(): NavItemConfig[] {
   if (me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN") return ADMIN_NAV_ITEMS;
   if (me?.role === "CLIENT") return hasClientPortal ? CLIENT_NAV_ITEMS_WITH_PORTAL : CLIENT_NAV_ITEMS;
   if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
+  // Until the role is known, show nothing rather than flashing a wrong list (e.g. "Home").
+  if (!me) return [];
   return NON_CLIENT_NAV_ITEMS;
 }
 

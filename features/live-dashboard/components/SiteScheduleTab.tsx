@@ -80,7 +80,13 @@ export function SiteScheduleTab() {
   const siteMetas = useMemo(() => {
     const sorted = [...(sitesQuery.data ?? [])]
       .filter(isSelectableInOperations)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        // Work order sites lead, then alphabetical within each group.
+        const aWo = Boolean(a.workOrderSite || a.oneTimeSite);
+        const bWo = Boolean(b.workOrderSite || b.oneTimeSite);
+        if (aWo !== bWo) return aWo ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
     let generalIdx = 0;
     let workOrderIdx = 0;
     const metas = new Map<string, SiteMeta>();
