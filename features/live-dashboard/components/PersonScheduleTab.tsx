@@ -280,9 +280,11 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
         });
       }
     }
-    const entries = [...byId.entries()].sort((a, b) =>
-      a[1].siteName.localeCompare(b[1].siteName),
-    );
+    const entries = [...byId.entries()].sort((a, b) => {
+      // Work order sites lead, then alphabetical within each group.
+      if (a[1].isWorkOrder !== b[1].isWorkOrder) return a[1].isWorkOrder ? -1 : 1;
+      return a[1].siteName.localeCompare(b[1].siteName);
+    });
     let generalIdx = 0;
     let workOrderIdx = 0;
     const metas = new Map<string, SiteMeta>();
