@@ -16,6 +16,18 @@ interface AdminComplaintDetailModalProps {
   onComplete?: (id: string, note: string, photos: File[]) => void;
   resolving?:  boolean;
   completing?: boolean;
+  /** Surfaces a failed complete/resolve request so the cleaner sees why it didn't go through. */
+  actionError?: unknown;
+}
+
+function errorMessage(error: unknown): string | null {
+  if (!error) return null;
+  if (error && typeof error === "object" && "response" in error) {
+    const data = (error as { response?: { data?: { message?: string } } }).response?.data;
+    if (data?.message) return data.message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Something went wrong. Please try again.";
 }
 
 const STATUS_LABEL: Record<Complaint["status"], string> = {
@@ -41,6 +53,7 @@ export function AdminComplaintDetailModal({
   onComplete,
   resolving,
   completing,
+  actionError,
 }: AdminComplaintDetailModalProps) {
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -138,7 +151,13 @@ export function AdminComplaintDetailModal({
           </div>
 
           <h3 className="text-base font-semibold text-on-surface">{complaint.title}</h3>
-          <p className="mt-1 text-sm text-grey-500">{complaint.description}</p>
+
+          <div className="mt-3">
+            <p className="text-xs font-medium text-grey-500">Reported issue</p>
+            <p className="mt-1 whitespace-pre-line text-sm text-on-surface">
+              {complaint.description?.trim() ? complaint.description : "No note was added."}
+            </p>
+          </div>
 
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div>
@@ -196,7 +215,7 @@ export function AdminComplaintDetailModal({
 
           {complaint.photos.length > 0 && (
             <div className="mt-5">
-              <p className="mb-2 text-xs font-medium text-grey-500">Photos</p>
+              <p className="mb-2 text-xs font-medium text-grey-500">Reported photos</p>
               <div className="grid grid-cols-4 gap-2">
                 {complaint.photos.map((p) => (
                   <button
@@ -255,6 +274,14 @@ export function AdminComplaintDetailModal({
         </div>
 
         <div className="px-6 pb-6 pt-4">
+          {errorMessage(actionError) && (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl bg-error/10 px-3 py-2 text-sm text-error"
+            >
+              {errorMessage(actionError)}
+            </p>
+          )}
           {canComplete ? (
             <div className="flex flex-col gap-3">
               <div className="flex gap-2">

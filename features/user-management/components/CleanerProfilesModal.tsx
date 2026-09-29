@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserCog, Plus, Minus, AlertTriangle, ArrowLeft } from "lucide-react";
+import { UserCog, Plus, Minus, ArrowLeft } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -37,7 +37,7 @@ function hhmm(value: string): string {
   return value.slice(0, 5);
 }
 
-type View = "assign" | "add" | "remove";
+type View = "assign" | "add";
 
 function personName(first?: string | null, last?: string | null): string {
   return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
@@ -87,15 +87,11 @@ export function CleanerProfilesModal({
   // Add view: whether to copy an existing slot's scope, and which slot to copy from.
   const [copyEnabled, setCopyEnabled] = useState(false);
   const [copySourceId, setCopySourceId] = useState<string>("");
-  // Remove view: which empty slot to remove.
-  const [removeTargetId, setRemoveTargetId] = useState<string>("");
 
   const profiles = useMemo(
     () => [...(profilesQuery.data ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [profilesQuery.data],
   );
-
-  const emptyProfiles = useMemo(() => profiles.filter((p) => taskCountOf(p) === 0), [profiles]);
 
   // Sync local selections when the profiles load / modal opens / slots change.
   const loadedKey = useMemo(
@@ -118,7 +114,6 @@ export function CleanerProfilesModal({
     setView("assign");
     setCopyEnabled(false);
     setCopySourceId("");
-    setRemoveTargetId("");
     assign.reset();
     addProfile.reset();
     removeProfile.reset();
@@ -218,24 +213,10 @@ export function CleanerProfilesModal({
     );
   }
 
-  function handleRemove() {
-    if (!site || !removeTargetId) return;
-    removeProfile.mutate(
-      { siteId: site.id, profileId: removeTargetId },
-      {
-        onSuccess: () => {
-          setView("assign");
-          setRemoveTargetId("");
-        },
-      },
-    );
-  }
-
-  // Entering the remove view pre-selects the sole empty slot (if there is exactly one).
-  function openRemoveView() {
-    setRemoveTargetId(emptyProfiles.length === 1 ? emptyProfiles[0]!.id : "");
-    removeProfile.reset();
-    setView("remove");
+  function handleRemoveSlot(profileId: string) {
+    if (!site) return;
+    addProfile.reset();
+    removeProfile.mutate({ siteId: site.id, profileId });
   }
 
   function openAddView() {
@@ -250,9 +231,7 @@ export function CleanerProfilesModal({
   const title =
     view === "add"
       ? "Add a cleaner slot"
-      : view === "remove"
-        ? "Remove a cleaner slot"
-        : "Cleaner slots";
+      : "Cleaner slots";
 
   const description = site
     ? view === "assign"
@@ -339,82 +318,6 @@ export function CleanerProfilesModal({
             </PillButton>
           </div>
         </div>
-      ) : view === "remove" ? (
-        // ── Remove a cleaner slot (only slots without tasks) ──────────────────────
-        <div className="flex flex-col gap-4">
-          {emptyProfiles.length === 0 ? (
-            <div className="flex items-start gap-3 rounded-xl bg-amber-50 px-3 py-3">
-              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
-              <p className="text-sm text-amber-800">
-                Every cleaner slot has tasks assigned, so none can be removed. To reduce the number of
-                cleaners, first release a cleaner from all of its tasks (reassign or remove those
-                tasks), then come back here.
-              </p>
-            </div>
-          ) : emptyProfiles.length === 1 ? (
-            <div className="flex items-start gap-3 rounded-xl bg-error/5 px-3 py-3">
-              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-error" aria-hidden="true" />
-              <p className="text-sm text-on-surface">
-                <span className="font-semibold">{profileLabel(emptyProfiles[0]!)}</span> has no tasks
-                assigned and will be removed.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-grey-500">
-                More than one slot has no tasks assigned. Choose which one to remove:
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {emptyProfiles.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2 rounded-xl border border-grey-200 px-3 py-2.5 text-sm text-on-surface hover:bg-grey-50"
-                  >
-                    <input
-                      type="radio"
-                      name="remove-target"
-                      checked={removeTargetId === p.id}
-                      onChange={() => setRemoveTargetId(p.id)}
-                    />
-                    <span className="font-medium">{profileLabel(p)}</span>
-                    {p.cleanerName && <span className="text-grey-500">· {p.cleanerName}</span>}
-                    <span className="ml-auto text-xs text-grey-400">No tasks</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {removeProfile.isError && (
-            <p className="text-sm text-error">{getErrorMessage(removeProfile.error)}</p>
-          )}
-
-          <div className="mt-1 flex justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setView("assign")}
-              disabled={removeProfile.isPending}
-              className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
-            >
-              <ArrowLeft size={16} aria-hidden="true" />
-              Back
-            </button>
-            {emptyProfiles.length > 0 && (
-              <PillButton
-                type="button"
-                variant="orange"
-                onClick={handleRemove}
-                disabled={removeProfile.isPending || !removeTargetId}
-                className="w-auto px-6 !bg-error"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Minus size={16} aria-hidden="true" />
-                  {removeProfile.isPending ? "Removing…" : "Remove slot"}
-                </span>
-              </PillButton>
-            )}
-          </div>
-        </div>
       ) : profiles.length === 0 ? (
         // ── No slots yet ──────────────────────────────────────────────────────────
         <div className="flex flex-col gap-4">
@@ -456,14 +359,6 @@ export function CleanerProfilesModal({
                   <Plus size={14} aria-hidden="true" />
                   Add cleaner
                 </button>
-                <button
-                  type="button"
-                  onClick={openRemoveView}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-grey-100"
-                >
-                  <Minus size={14} aria-hidden="true" />
-                  Remove cleaner
-                </button>
               </div>
             )}
           </div>
@@ -477,15 +372,34 @@ export function CleanerProfilesModal({
               const count = taskCountOf(p);
               return (
                 <div key={p.id} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-on-surface">{profileLabel(p)}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        count === 0 ? "bg-grey-100 text-grey-500" : "bg-teal-50 text-teal-700"
-                      }`}
-                    >
-                      {count === 0 ? "No tasks" : `${count} task${count === 1 ? "" : "s"}`}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-on-surface">{profileLabel(p)}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          count === 0 ? "bg-grey-100 text-grey-500" : "bg-teal-50 text-teal-700"
+                        }`}
+                      >
+                        {count === 0 ? "No tasks" : `${count} task${count === 1 ? "" : "s"}`}
+                      </span>
+                    </div>
+                    {!restrictToAssignOnly && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSlot(p.id)}
+                        disabled={removeProfile.isPending || count > 0}
+                        aria-label={`Remove ${profileLabel(p)}`}
+                        title={
+                          count > 0
+                            ? "Tasks are assigned to this profile. Remove the tasks first, then delete the profile."
+                            : undefined
+                        }
+                        className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Minus size={12} aria-hidden="true" />
+                        Remove
+                      </button>
+                    )}
                   </div>
                   <SearchableSelect
                     options={cleanerOptions}
@@ -498,6 +412,11 @@ export function CleanerProfilesModal({
                       hasConflict ? "This cleaner is already assigned to another slot." : undefined
                     }
                   />
+                  {!restrictToAssignOnly && count > 0 && (
+                    <p className="text-[11px] text-grey-500">
+                      Tasks are assigned to this profile. Remove the tasks first, then delete the profile.
+                    </p>
+                  )}
                   {siteShifts.length > 0 && (
                     <div className="mt-1.5 flex flex-col gap-1">
                       <span className="text-[11px] font-medium text-grey-500">General shifts</span>
@@ -541,6 +460,9 @@ export function CleanerProfilesModal({
           {assign.isError && <p className="text-sm text-error">{getErrorMessage(assign.error)}</p>}
           {assignShifts.isError && (
             <p className="text-sm text-error">{getErrorMessage(assignShifts.error)}</p>
+          )}
+          {removeProfile.isError && (
+            <p className="text-sm text-error">{getErrorMessage(removeProfile.error)}</p>
           )}
 
           <div className="mt-1 flex justify-end gap-2">

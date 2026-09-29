@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { UserCog, Plus, Minus } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
+import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
@@ -10,8 +12,12 @@ import { candidateCertMeta } from "@/features/users/components/CertificateBadge"
 import {
   useWorkOrderCleanerProfiles,
   useAssignWorkOrderCleaners,
+  useAddWorkOrderCleanerProfile,
+  useRemoveWorkOrderCleanerProfile,
   useWorkOrderSupervisorProfiles,
   useAssignWorkOrderSupervisors,
+  useAddWorkOrderSupervisorProfile,
+  useRemoveWorkOrderSupervisorProfile,
   useEligibleWorkOrderCleaners,
   useEligibleWorkOrderSupervisors,
 } from "@/features/work-orders/hooks/useWorkOrders";
@@ -21,6 +27,10 @@ const UNASSIGNED = "";
 
 function personName(first?: string | null, last?: string | null): string {
   return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
+}
+
+function taskCountOf(p: { taskCount?: number | null }): number {
+  return p.taskCount ?? 0;
 }
 
 interface WorkOrderProfilesModalProps {
@@ -41,11 +51,17 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
   const eligibleSupervisors = useEligibleWorkOrderSupervisors(open && !isCleaner);
 
   const assignCleaners = useAssignWorkOrderCleaners();
+  const addCleaner = useAddWorkOrderCleanerProfile();
+  const removeCleaner = useRemoveWorkOrderCleanerProfile();
   const assignSupervisors = useAssignWorkOrderSupervisors();
+  const addSupervisor = useAddWorkOrderSupervisorProfile();
+  const removeSupervisor = useRemoveWorkOrderSupervisorProfile();
 
   const profilesQuery = isCleaner ? cleanerProfilesQuery : supervisorProfilesQuery;
   const eligibleQuery = isCleaner ? eligibleCleaners : eligibleSupervisors;
   const assignMutation = isCleaner ? assignCleaners : assignSupervisors;
+  const addMutation = isCleaner ? addCleaner : addSupervisor;
+  const removeMutation = isCleaner ? removeCleaner : removeSupervisor;
 
   const profiles = useMemo(
     () => [...(profilesQuery.data ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
@@ -81,6 +97,8 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
     setSyncedKey(null);
     setSelections({});
     assignMutation.reset();
+    addMutation.reset();
+    removeMutation.reset();
   }
 
   const staffOptions: SelectOption[] = useMemo(() => {
@@ -128,6 +146,21 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
     }
   }
 
+  function handleAdd() {
+    if (!workOrder) return;
+    removeMutation.reset();
+    if (isCleaner) addCleaner.mutate({ id: workOrder.id });
+    else addSupervisor.mutate({ id: workOrder.id });
+  }
+
+  function handleRemove(profileId: string) {
+    if (!workOrder) return;
+    addMutation.reset();
+    if (isCleaner) removeCleaner.mutate({ id: workOrder.id, profileId });
+    else removeSupervisor.mutate({ id: workOrder.id, profileId });
+  }
+
+  const busy = addMutation.isPending || removeMutation.isPending;
   const noun = isCleaner ? "cleaner" : "supervisor";
   const title = `Work order ${noun}s${workOrder ? ` — ${workOrder.poId}` : ""}`;
 
@@ -169,23 +202,73 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
             </div>
           )}
 
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-on-surface">
+              {profiles.length} {noun} slot{profiles.length === 1 ? "" : "s"}
+            </span>
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-full border border-teal-500 px-3 py-1.5 text-xs font-semibold text-teal-600 transition-colors hover:bg-teal-50 disabled:opacity-60"
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add slot
+            </button>
+          </div>
+
           <div className="flex flex-col gap-3">
-            {profiles.map((p) => (
-              <div key={p.id} className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-on-surface">{p.label}</span>
-                <SearchableSelect
-                  options={staffOptions}
-                  value={selections[p.id] ?? UNASSIGNED}
-                  onChange={(value) => setSelections((prev) => ({ ...prev, [p.id]: value }))}
-                  placeholder={`Select a ${noun}`}
-                  searchPlaceholder={`Search ${noun}s…`}
-                  emptyMessage={`No ${noun}s available`}
-                />
-              </div>
-            ))}
+            {profiles.map((p) => {
+              const count = taskCountOf(p);
+              const hasTasks = count > 0;
+              return (
+                <div key={p.id} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-on-surface">{p.label}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          hasTasks ? "bg-teal-50 text-teal-700" : "bg-grey-100 text-grey-500"
+                        }`}
+                      >
+                        {hasTasks ? `${count} task${count === 1 ? "" : "s"}` : "No tasks"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(p.id)}
+                      disabled={busy || hasTasks}
+                      aria-label={`Remove ${p.label}`}
+                      title={
+                        hasTasks
+                          ? "Tasks are assigned to this profile. Remove the tasks first, then delete the profile."
+                          : undefined
+                      }
+                      className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Minus size={12} aria-hidden="true" />
+                      Remove
+                    </button>
+                  </div>
+                  <SearchableSelect
+                    options={staffOptions}
+                    value={selections[p.id] ?? UNASSIGNED}
+                    onChange={(value) => setSelections((prev) => ({ ...prev, [p.id]: value }))}
+                    placeholder={`Select a ${noun}`}
+                    searchPlaceholder={`Search ${noun}s…`}
+                    emptyMessage={`No ${noun}s available`}
+                  />
+                  {hasTasks && (
+                    <p className="text-[11px] text-grey-500">
+                      Tasks are assigned to this profile. Remove the tasks first, then delete the profile.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
             {profiles.length === 0 && (
               <p className="rounded-xl border border-dashed border-grey-200 px-3 py-6 text-center text-sm text-grey-500">
-                No {noun} slots. Edit the work order to set the number of {noun}s.
+                No {noun} slots. Add one to assign a {noun}.
               </p>
             )}
           </div>
@@ -195,8 +278,10 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
               A {noun} can only fill one slot — remove the duplicate selection.
             </p>
           )}
-          {assignMutation.isError && (
-            <p className="text-sm font-medium text-error">{getErrorMessage(assignMutation.error)}</p>
+          {(assignMutation.isError || addMutation.isError || removeMutation.isError) && (
+            <p className="text-sm font-medium text-error">
+              {getErrorMessage(assignMutation.error ?? addMutation.error ?? removeMutation.error)}
+            </p>
           )}
 
           <div className="flex justify-end gap-2 pt-1">
@@ -207,14 +292,18 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
             >
               Cancel
             </button>
-            <button
+            <PillButton
               type="button"
+              variant="teal"
               onClick={handleSave}
               disabled={duplicate || assignMutation.isPending || profiles.length === 0}
-              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="w-auto px-6"
             >
-              {assignMutation.isPending ? "Saving…" : "Save"}
-            </button>
+              <span className="inline-flex items-center gap-2">
+                <UserCog size={16} aria-hidden="true" />
+                {assignMutation.isPending ? "Saving…" : "Save"}
+              </span>
+            </PillButton>
           </div>
         </div>
       )}

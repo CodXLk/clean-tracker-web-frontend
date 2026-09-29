@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Building2, Check, ChevronDown, Search } from "lucide-react";
+import { Building2, Check, ChevronDown, Search, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 interface SiteOption {
@@ -19,10 +19,34 @@ interface SiteFilterSelectProps {
   /** Show the type-ahead search box in the panel. Default true. */
   searchable?: boolean;
   className?: string;
+  /** Leading icon (defaults to Building2 for sites). */
+  icon?: LucideIcon;
+  ariaLabel?: string;
+  placeholder?: string;
+  /** Button text when there are no options. */
+  emptyLabel?: string;
+  searchPlaceholder?: string;
+  noResultsLabel?: string;
+  noOptionsLabel?: string;
 }
 
-/** Compact typeahead site picker for the workforce toolbar (wildcard name search). */
-export function SiteFilterSelect({ sites, value, onChange, loading, variant = "compact", searchable = true, className }: SiteFilterSelectProps) {
+/** Compact typeahead picker for the workforce toolbar (wildcard name search). */
+export function SiteFilterSelect({
+  sites,
+  value,
+  onChange,
+  loading,
+  variant = "compact",
+  searchable = true,
+  className,
+  icon: Icon = Building2,
+  ariaLabel = "Select site",
+  placeholder = "Select site",
+  emptyLabel = "No sites",
+  searchPlaceholder = "Search sites…",
+  noResultsLabel = "No sites match your search.",
+  noOptionsLabel = "No sites available.",
+}: SiteFilterSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,7 +84,7 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
     <div className={cn("relative", isField && "w-full sm:max-w-xs", className)} ref={containerRef}>
       <button
         type="button"
-        aria-label="Select site"
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={loading}
@@ -72,9 +96,9 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
             : "h-9 min-w-[10rem] max-w-[15rem] px-3 text-xs font-medium border-grey-200 hover:border-grey-300 hover:bg-grey-100",
         )}
       >
-        <Building2 size={isField ? 16 : 14} className="shrink-0 text-grey-400" aria-hidden="true" />
+        <Icon size={isField ? 16 : 14} className="shrink-0 text-grey-400" aria-hidden="true" />
         <span className={cn("flex-1 truncate text-left", selected ? "text-on-surface" : "text-grey-500")}>
-          {loading ? "Loading…" : selected ? selected.name : sites.length === 0 ? "No sites" : "Select site"}
+          {loading ? "Loading…" : selected ? selected.name : sites.length === 0 ? emptyLabel : placeholder}
         </span>
         <ChevronDown size={isField ? 16 : 14} className="shrink-0 text-grey-500" aria-hidden="true" />
       </button>
@@ -93,7 +117,7 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search sites…"
+                placeholder={searchPlaceholder}
                 className={cn(
                   "w-full text-on-surface outline-none placeholder:text-grey-500",
                   isField ? "text-sm" : "text-xs",
@@ -104,7 +128,7 @@ export function SiteFilterSelect({ sites, value, onChange, loading, variant = "c
           <ul role="listbox" className={cn("overflow-y-auto py-1", isField ? "max-h-64" : "max-h-56")}>
             {filtered.length === 0 ? (
               <li className={cn("px-3 py-2.5 text-grey-500", isField ? "text-sm" : "text-xs")}>
-                {query.trim() ? "No sites match your search." : "No sites available."}
+                {query.trim() ? noResultsLabel : noOptionsLabel}
               </li>
             ) : (
               filtered.map((s) => {

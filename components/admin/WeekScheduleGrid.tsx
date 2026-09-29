@@ -671,7 +671,7 @@ export function WeekScheduleGrid({
     return !!minAddDate && date < minAddDate;
   }
 
-  const gridTemplate = "minmax(340px, 2fr) repeat(7, minmax(64px, 1fr))";
+  const gridTemplate = "minmax(460px, 2.5fr) repeat(7, minmax(64px, 1fr))";
 
   /** Empty day-cell strip to complete a band row (site/floor headers). */
   function bandCells(className?: string) {
@@ -1146,7 +1146,7 @@ export function WeekScheduleGrid({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[960px]">
+        <div className="min-w-[1080px]">
           <div className="sticky top-0 z-10 flex bg-surface">
             {managed && <div className="w-11 shrink-0 border-b-2 border-grey-300" aria-hidden="true" />}
             <div className="min-w-0 flex-1">

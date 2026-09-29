@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FileText } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
@@ -85,11 +85,27 @@ function WorkforceContent() {
     [sitesQuery.data],
   );
   const [operationsSiteId, setOperationsSiteId] = useState("");
+  // Preselect a site when arriving with ?site=<id> (e.g. from the schedule "Open in Operations" eye,
+  // or right after creating a work order). Apply an incoming param once — even if a site is already
+  // selected (this page stays mounted across tabs) — without overriding later manual changes.
+  const siteParam = searchParams.get("site");
+  const appliedSiteParamRef = useRef<string | null>(null);
   useEffect(() => {
-    if (operationsSites.length > 0 && !operationsSites.some((s) => s.id === operationsSiteId)) {
+    if (operationsSites.length === 0) return;
+    if (
+      siteParam &&
+      siteParam !== appliedSiteParamRef.current &&
+      operationsSites.some((s) => s.id === siteParam)
+    ) {
+      appliedSiteParamRef.current = siteParam;
+      setOperationsSiteId(siteParam);
+      return;
+    }
+    const valid = operationsSites.some((s) => s.id === operationsSiteId);
+    if (!valid) {
       setOperationsSiteId(operationsSites[0]!.id);
     }
-  }, [operationsSites, operationsSiteId]);
+  }, [operationsSites, operationsSiteId, siteParam]);
   const selectedSite = operationsSites.find((s) => s.id === operationsSiteId) ?? null;
 
   // Work orders let one-time sites lock task-adding to WORK_ORDER and show their PO id in the picker.
@@ -270,7 +286,14 @@ function WorkforceContent() {
             </>
           )}
 
-          {tab === "Sites" && <SiteManagement />}
+          {tab === "Sites" && (
+            <SiteManagement
+              onOpenOperations={(siteId) => {
+                setOperationsSiteId(siteId);
+                setTab("Operations");
+              }}
+            />
+          )}
           {tab === "Work Orders" && <WorkOrdersSection />}
           {tab === "Cleaners" && <CleanerManagement />}
           {tab === "Supervisors" && <StaffManagement role="SUPERVISOR" noun="supervisor" />}

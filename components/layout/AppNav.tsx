@@ -6,7 +6,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
-  ClipboardCheck,
   ClipboardList,
   ContactRound,
   Footprints,
@@ -19,7 +18,6 @@ import {
   MoreVertical,
   Package,
   PackageCheck,
-  Radar,
   Repeat,
   User,
   Users,
@@ -69,8 +67,6 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
   { label: "Outsource Projects", href: "/admin/outsource", icon: Handshake },
-  { label: "Cleaners Dashboard", href: "/admin/cleaners-dashboard", icon: Radar },
-  { label: "Inspections Dashboard", href: "/admin/inspections", icon: ClipboardCheck },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Clients", href: "/admin/clients", icon: ContactRound },
@@ -91,12 +87,22 @@ const CLEANER_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && CLEANER_HREFS.has(item.href),
 );
 
-/** Super admins don't need the cleaner-facing Home page or the cleaner Tasks tab (task
- *  completion is a cleaner activity); Inspections stay since they're surfaced in the Admin Panel. */
-const SUPER_ADMIN_HIDDEN_HREFS = new Set(["/dashboard", "/dashboard/tasks"]);
-const SUPER_ADMIN_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => !item.href || !SUPER_ADMIN_HIDDEN_HREFS.has(item.href),
-);
+/** Company admins and super admins share one explicitly-ordered admin nav. Client Inventory,
+ *  Client Site Management, Home, Tasks and Inspections are intentionally excluded. */
+const ADMIN_ORDERED_HREFS = [
+  "/admin/dashboard",
+  "/admin/workforce",
+  "/admin/inventory",
+  "/admin/users",
+  "/admin/outsource",
+  "/admin/clients",
+  "/admin/complaints",
+  "/admin/cleaner-logs",
+  "/dashboard/profile",
+];
+const ADMIN_NAV_ITEMS: NavItemConfig[] = ADMIN_ORDERED_HREFS
+  .map((href) => NAV_ITEMS.find((item) => item.href === href))
+  .filter((item): item is NavItemConfig => Boolean(item));
 
 /** Supervisors get a fixed subset of the Admin Panel — kept in sync with proxy.ts,
  *  which also enforces this at the route level (see SUPERVISOR_ALLOWED_HREFS). */
@@ -140,7 +146,7 @@ function useVisibleNavItems(): NavItemConfig[] {
   const hasClientPortal = (portalSites.data?.length ?? 0) > 0;
 
   if (me?.role === "CLEANER") return CLEANER_NAV_ITEMS;
-  if (me?.role === "SUPER_ADMIN") return SUPER_ADMIN_NAV_ITEMS;
+  if (me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN") return ADMIN_NAV_ITEMS;
   if (me?.role === "CLIENT") return hasClientPortal ? CLIENT_NAV_ITEMS_WITH_PORTAL : CLIENT_NAV_ITEMS;
   if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
   return NON_CLIENT_NAV_ITEMS;
@@ -166,8 +172,6 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/companies", "Client Companies"],
   ["/admin/workforce", "Workforce"],
   ["/admin/outsource", "Outsource Projects"],
-  ["/admin/cleaners-dashboard", "Cleaners Dashboard"],
-  ["/admin/inspections", "Inspections Dashboard"],
   ["/admin/complaints", "Complaints"],
   ["/admin/inventory", "Inventory"],
   ["/admin/item-requests", "Client Inventory"],
@@ -383,7 +387,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
       <nav
         aria-label="Main navigation"
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2"
+        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-2 pt-3"
       >
         {items.map((item) =>
           item.children ? (

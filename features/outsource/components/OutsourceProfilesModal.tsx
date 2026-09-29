@@ -29,6 +29,10 @@ function personName(first?: string | null, last?: string | null): string {
   return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
 }
 
+function taskCountOf(p: { taskCount?: number | null }): number {
+  return p.taskCount ?? 0;
+}
+
 interface OutsourceProfilesModalProps {
   open: boolean;
   onClose: () => void;
@@ -183,31 +187,54 @@ export function OutsourceProfilesModal({ open, onClose, project, kind }: Outsour
           </div>
 
           <div className="flex flex-col gap-3">
-            {profiles.map((p) => (
-              <div key={p.id} className="flex flex-col gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-on-surface">{p.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(p.id)}
-                    disabled={busy}
-                    aria-label={`Remove ${p.label}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 disabled:opacity-60"
-                  >
-                    <Minus size={12} aria-hidden="true" />
-                    Remove
-                  </button>
+            {profiles.map((p) => {
+              const count = taskCountOf(p);
+              const hasTasks = count > 0;
+              return (
+                <div key={p.id} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-on-surface">{p.label}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          hasTasks ? "bg-teal-50 text-teal-700" : "bg-grey-100 text-grey-500"
+                        }`}
+                      >
+                        {hasTasks ? `${count} task${count === 1 ? "" : "s"}` : "No tasks"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(p.id)}
+                      disabled={busy || hasTasks}
+                      aria-label={`Remove ${p.label}`}
+                      title={
+                        hasTasks
+                          ? "Tasks are assigned to this profile. Remove the tasks first, then delete the profile."
+                          : undefined
+                      }
+                      className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Minus size={12} aria-hidden="true" />
+                      Remove
+                    </button>
+                  </div>
+                  <SearchableSelect
+                    options={staffOptions}
+                    value={selections[p.id] ?? UNASSIGNED}
+                    onChange={(value) => setSelections((prev) => ({ ...prev, [p.id]: value }))}
+                    placeholder={`Select an outsource ${noun}`}
+                    searchPlaceholder={`Search outsource ${noun}s…`}
+                    emptyMessage={`No outsource ${noun}s available`}
+                  />
+                  {hasTasks && (
+                    <p className="text-[11px] text-grey-500">
+                      Tasks are assigned to this profile. Remove the tasks first, then delete the profile.
+                    </p>
+                  )}
                 </div>
-                <SearchableSelect
-                  options={staffOptions}
-                  value={selections[p.id] ?? UNASSIGNED}
-                  onChange={(value) => setSelections((prev) => ({ ...prev, [p.id]: value }))}
-                  placeholder={`Select an outsource ${noun}`}
-                  searchPlaceholder={`Search outsource ${noun}s…`}
-                  emptyMessage={`No outsource ${noun}s available`}
-                />
-              </div>
-            ))}
+              );
+            })}
             {profiles.length === 0 && (
               <p className="rounded-xl border border-dashed border-grey-200 px-3 py-6 text-center text-sm text-grey-500">
                 No {noun} slots. Add one to assign an outsource {noun}.
