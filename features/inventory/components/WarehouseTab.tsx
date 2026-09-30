@@ -1,15 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Package, DollarSign, AlertTriangle, Boxes, Plus, Pencil, Trash2, PackagePlus } from "lucide-react";
+import { Package, DollarSign, AlertTriangle, Boxes, Plus, Pencil, Trash2, PackagePlus, Eye } from "lucide-react";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { DataTable, type Column } from "@/features/user-management/components/DataTable";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
-import { useInventoryItems, useLowStock, useDeleteItem } from "@/features/inventory/hooks/useInventory";
+import { useInventoryItems, useDeleteItem } from "@/features/inventory/hooks/useInventory";
 import { ItemFormModal } from "./ItemFormModal";
+import { ItemDetailModal } from "./ItemDetailModal";
 import { AdjustStockModal } from "./AdjustStockModal";
 import { CATEGORY_LABELS, type InventoryItem } from "@/features/inventory/schemas/inventory.schema";
 import { fmtQty, fmtMoney } from "@/features/inventory/lib/inventory";
@@ -20,12 +21,12 @@ interface WarehouseTabProps {
 
 export function WarehouseTab({ canManage }: WarehouseTabProps) {
   const itemsQuery = useInventoryItems();
-  const lowStockQuery = useLowStock();
   const deleteMutation = useDeleteItem();
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
+  const [viewing, setViewing] = useState<InventoryItem | null>(null);
   const [adjusting, setAdjusting] = useState<InventoryItem | null>(null);
   const [deleting, setDeleting] = useState<InventoryItem | null>(null);
 
@@ -36,6 +37,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
   }, [items, search]);
 
   const totalValue = items.reduce((sum, i) => sum + i.stockValue, 0);
+  const warehouseLow = items.filter((i) => i.lowStock).length;
 
   const columns: Column<InventoryItem>[] = [
     {
@@ -45,6 +47,9 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium text-on-surface">{i.name}</span>
+            {i.lowStock && (
+              <span className="rounded-full bg-[#ED5F25]/10 px-2 py-0.5 text-xs font-medium text-[#ED5F25]">Low stock</span>
+            )}
             {!i.active && <span className="rounded-full bg-grey-100 px-2 py-0.5 text-xs text-grey-500">Inactive</span>}
           </div>
           {i.itemCode && <span className="text-xs text-grey-500">Code: {i.itemCode}</span>}
@@ -65,10 +70,15 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
       header: "Main stock",
       sortAccessor: (i) => i.mainStockQuantity,
       cell: (i) => (
-        <span className="font-medium text-on-surface">
+        <span className={i.lowStock ? "font-semibold text-[#ED5F25]" : "font-medium text-on-surface"}>
           {fmtQty(i.mainStockQuantity)} <span className="text-xs text-grey-500">{i.unit}</span>
         </span>
       ),
+    },
+    {
+      header: "Reorder level",
+      sortAccessor: (i) => i.minStock ?? -1,
+      cell: (i) => (i.minStock != null ? `${fmtQty(i.minStock)} ${i.unit}` : "\u2014"),
     },
     { header: "Value", sortAccessor: (i) => i.stockValue, cell: (i) => fmtMoney(i.stockValue) },
   ];
@@ -83,6 +93,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
           <RowMenu
             label={`Actions for ${i.name}`}
             items={[
+              { label: "View", icon: Eye, onClick: () => setViewing(i) },
               { label: "Adjust stock", icon: PackagePlus, onClick: () => setAdjusting(i) },
               { label: "Edit", icon: Pencil, onClick: () => { setEditing(i); setFormOpen(true); } },
               { label: "Delete", icon: Trash2, destructive: true, onClick: () => setDeleting(i) },
@@ -98,7 +109,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <AdminStatCard icon={Boxes} iconBg="bg-primary/10" iconColor="text-ink" value={items.length} label="Items in catalog" />
         <AdminStatCard icon={DollarSign} iconBg="bg-success/10" iconColor="text-success" value={fmtMoney(totalValue)} label="Total stock value" />
-        <AdminStatCard icon={AlertTriangle} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={lowStockQuery.data?.length ?? 0} label="Low-stock (all sites)" />
+        <AdminStatCard icon={AlertTriangle} iconBg="bg-[#ED5F25]/10" iconColor="text-[#ED5F25]" value={warehouseLow} label="Low warehouse stock" />
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -127,6 +138,7 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
       />
 
       <ItemFormModal open={formOpen} onClose={() => setFormOpen(false)} item={editing} />
+      <ItemDetailModal open={!!viewing} onClose={() => setViewing(null)} item={viewing} />
       <AdjustStockModal open={!!adjusting} onClose={() => setAdjusting(null)} item={adjusting} />
       <ConfirmDialog
         open={!!deleting}

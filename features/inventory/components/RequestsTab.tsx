@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Eye } from "lucide-react";
+import { Plus, Eye, History } from "lucide-react";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
+import { RowMenu } from "@/features/user-management/components/RowMenu";
 import { useRequests } from "@/features/inventory/hooks/useInventory";
 import { RequestFormModal } from "./RequestFormModal";
 import { RequestDetailModal } from "./RequestDetailModal";
+import { AuditLogModal } from "./AuditLogModal";
 import { StatusBadge } from "./StatusBadge";
 import { fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { InventoryRequest, RequestStatus } from "@/features/inventory/schemas/inventory.schema";
@@ -27,6 +29,7 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
   const [filter, setFilter] = useState<Filter>("All");
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState<InventoryRequest | null>(null);
+  const [auditReq, setAuditReq] = useState<InventoryRequest | null>(null);
 
   const query = useRequests(filter === "All" ? {} : { status: STATUS_MAP[filter] });
   const requests = query.data ?? [];
@@ -63,7 +66,7 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
                   <th className="px-5 py-3 font-medium">Items</th>
                   <th className="px-5 py-3 font-medium">Raised</th>
                   <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 text-right font-medium">View</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -81,14 +84,13 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
                     <td className="px-5 py-3.5"><StatusBadge status={req.status} /></td>
                     <td className="px-5 py-3.5">
                       <div className="flex justify-end">
-                        <button
-                          type="button"
-                          aria-label={`View request for ${req.siteName}`}
-                          onClick={() => setViewing(req)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-grey-100 hover:text-ink"
-                        >
-                          <Eye size={16} aria-hidden="true" />
-                        </button>
+                        <RowMenu
+                          label={`Actions for request for ${req.siteName}`}
+                          items={[
+                            { label: "View", icon: Eye, onClick: () => setViewing(req) },
+                            { label: "View audit log", icon: History, onClick: () => setAuditReq(req) },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -105,6 +107,13 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
         onClose={() => setViewing(null)}
         request={viewing}
         canManage={canManage}
+      />
+      <AuditLogModal
+        open={!!auditReq}
+        onClose={() => setAuditReq(null)}
+        refType="REQUEST"
+        refId={auditReq?.id ?? null}
+        title="Request audit log"
       />
     </div>
   );

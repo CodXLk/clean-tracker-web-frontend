@@ -6,6 +6,7 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
   InventoryItemListSchema,
   InventoryItemSchema,
+  InventoryItemUnitListSchema,
   SiteInventoryListSchema,
   TransactionListSchema,
   InventoryEventListSchema,
@@ -96,6 +97,71 @@ export function useDeleteItem() {
     onSuccess: () => invalidateAll(qc),
   });
 }
+
+// ── Item media (photo + SDS) ────────────────────────────────────────────────────
+
+export function useUploadItemPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await clientApi.post(ENDPOINTS.inventory.itemPhoto(id), form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return InventoryItemSchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useDeleteItemPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await clientApi.delete(ENDPOINTS.inventory.itemPhoto(id));
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useUploadItemSds() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await clientApi.post(ENDPOINTS.inventory.itemSds(id), form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return InventoryItemSchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useDeleteItemSds() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await clientApi.delete(ENDPOINTS.inventory.itemSds(id));
+    },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useItemUnits(itemId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...inventoryKeys.all, "units", itemId ?? "none"],
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.inventory.itemUnits(itemId!));
+      return InventoryItemUnitListSchema.parse(data);
+    },
+    enabled: !!itemId && enabled,
+  });
+}
+
+
 
 // ── Site inventory ──────────────────────────────────────────────────────────────
 
@@ -204,10 +270,13 @@ export function useCreateRequest() {
 export function useRequestAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, action, note }: {
-      id: string; action: "approve" | "reject" | "cancel"; note?: string;
+    mutationFn: async ({ id, action, note, lines }: {
+      id: string;
+      action: "approve" | "reject" | "cancel";
+      note?: string;
+      lines?: { itemId: string; quantity: number }[];
     }) => {
-      const { data } = await clientApi.post(ENDPOINTS.inventory.requestAction(id, action), { note });
+      const { data } = await clientApi.post(ENDPOINTS.inventory.requestAction(id, action), { note, lines });
       return data;
     },
     onSuccess: () => invalidateAll(qc),
@@ -343,6 +412,19 @@ export function useMyCleanerInventory() {
       const { data } = await clientApi.get(ENDPOINTS.inventory.cleanerInventoryMine);
       return CleanerInventorySchema.parse(data);
     },
+  });
+}
+
+export function useSetCleanerMinStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cleanerId, itemId, minStock }: {
+      cleanerId: string; itemId: string; minStock?: number;
+    }) => {
+      const { data } = await clientApi.post(ENDPOINTS.inventory.cleanerMinStock(cleanerId), { itemId, minStock });
+      return CleanerInventorySchema.parse(data);
+    },
+    onSuccess: () => invalidateAll(qc),
   });
 }
 

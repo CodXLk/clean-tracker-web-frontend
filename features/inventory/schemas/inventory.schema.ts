@@ -7,6 +7,7 @@ export const InventoryCategorySchema = z.enum([
   "EQUIPMENT",
   "CONSUMABLE",
   "TOOL",
+  "CHEMICAL",
   "OTHER",
 ]);
 export type InventoryCategory = z.infer<typeof InventoryCategorySchema>;
@@ -16,6 +17,7 @@ export const CATEGORY_LABELS: Record<InventoryCategory, string> = {
   EQUIPMENT: "Equipment",
   CONSUMABLE: "Consumable",
   TOOL: "Tool",
+  CHEMICAL: "Chemical",
   OTHER: "Other",
 };
 
@@ -77,17 +79,40 @@ export const InventoryItemSchema = z.object({
   unit: z.string(),
   unitPrice: z.number(),
   costPrice: z.number().nullable().optional(),
-  sellingPrice: z.number().nullable().optional(),
+  minStock: z.number().nullable().optional(),
+  lowStock: z.boolean().optional(),
   supplierId: z.string().uuid().nullable().optional(),
   supplierName: z.string().nullable().optional(),
   mainStockQuantity: z.number(),
   stockValue: z.number(),
   active: z.boolean(),
+  hasPhoto: z.boolean().optional(),
+  hasSds: z.boolean().optional(),
+  sdsFilename: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
 export const InventoryItemListSchema = z.array(InventoryItemSchema);
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
+
+export const ItemUnitStatusSchema = z.enum(["AVAILABLE", "ISSUED", "RETIRED"]);
+export type ItemUnitStatus = z.infer<typeof ItemUnitStatusSchema>;
+
+export const ITEM_UNIT_STATUS_LABELS: Record<ItemUnitStatus, string> = {
+  AVAILABLE: "Available",
+  ISSUED: "Issued",
+  RETIRED: "Retired",
+};
+
+export const InventoryItemUnitSchema = z.object({
+  id: z.string().uuid(),
+  itemId: z.string().uuid(),
+  unitCode: z.string(),
+  status: ItemUnitStatusSchema,
+  createdAt: z.string().nullable().optional(),
+});
+export const InventoryItemUnitListSchema = z.array(InventoryItemUnitSchema);
+export type InventoryItemUnit = z.infer<typeof InventoryItemUnitSchema>;
 
 export const ItemFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(150, "Name is too long"),
@@ -96,8 +121,8 @@ export const ItemFormSchema = z.object({
   unit: z.string().min(1, "Unit is required").max(20, "Unit is too long"),
   unitPrice: z.number().min(0, "Price cannot be negative"),
   costPrice: z.number().min(0, "Cannot be negative").optional(),
-  sellingPrice: z.number().min(0, "Cannot be negative").optional(),
-  supplierId: z.string().uuid().optional().or(z.literal("")),
+  minStock: z.number().min(0, "Cannot be negative").optional(),
+  supplierId: z.string().uuid("Supplier is required"),
   openingStock: z.number().min(0, "Cannot be negative").optional(),
 });
 export type ItemFormInput = z.infer<typeof ItemFormSchema>;
@@ -179,6 +204,11 @@ export const INVENTORY_EVENT_TYPE_VALUES = [
   "DELIVERY_APPROVED",
   "DELIVERY_RECEIVED",
   "DELIVERY_CANCELLED",
+  "PO_CREATED",
+  "PO_SENT",
+  "PO_STATUS_CHANGED",
+  "PO_RECEIVED",
+  "PO_CANCELLED",
 ] as const;
 export const InventoryEventTypeSchema = z.enum(INVENTORY_EVENT_TYPE_VALUES);
 export type InventoryEventType = z.infer<typeof InventoryEventTypeSchema>;
@@ -196,6 +226,11 @@ export const INVENTORY_EVENT_TYPE_LABELS: Record<InventoryEventType, string> = {
   DELIVERY_APPROVED: "Receipt approved",
   DELIVERY_RECEIVED: "Delivery received",
   DELIVERY_CANCELLED: "Delivery cancelled",
+  PO_CREATED: "PO created",
+  PO_SENT: "PO sent",
+  PO_STATUS_CHANGED: "PO status changed",
+  PO_RECEIVED: "PO received",
+  PO_CANCELLED: "PO cancelled",
 };
 
 export const InventoryEventSchema = z.object({
@@ -288,6 +323,8 @@ const CleanerInventoryLineSchema = z.object({
   unit: z.string(),
   category: InventoryCategorySchema,
   quantity: z.number(),
+  minStock: z.number().nullable().optional(),
+  lowStock: z.boolean().optional(),
 });
 
 export const CleanerInventorySchema = z.object({
@@ -318,7 +355,7 @@ export type Supplier = z.infer<typeof SupplierSchema>;
 
 export const SupplierFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(150, "Name is too long"),
-  email: z.string().email("Enter a valid email").max(150).optional().or(z.literal("")),
+  email: z.string().min(1, "Email is required").email("Enter a valid email").max(150),
   phone: z.string().max(30, "Phone is too long").optional().or(z.literal("")),
   address: z.string().max(500, "Address is too long").optional().or(z.literal("")),
   clientSelfSupplying: z.boolean(),
@@ -329,6 +366,7 @@ export type SupplierFormInput = z.infer<typeof SupplierFormSchema>;
 // ── Purchase orders ─────────────────────────────────────────────────────────────
 
 export const PurchaseOrderStatusSchema = z.enum([
+  "DRAFT",
   "SENT",
   "AWAITING_CLIENT",
   "CLIENT_DISPATCHED",
@@ -339,6 +377,7 @@ export const PurchaseOrderStatusSchema = z.enum([
 export type PurchaseOrderStatus = z.infer<typeof PurchaseOrderStatusSchema>;
 
 export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  DRAFT: "Draft",
   SENT: "Sent",
   AWAITING_CLIENT: "Awaiting client",
   CLIENT_DISPATCHED: "Client dispatched",
@@ -369,6 +408,7 @@ export const PurchaseOrderSchema = z.object({
   siteName: z.string().nullable().optional(),
   status: PurchaseOrderStatusSchema,
   expectedDate: z.string().nullable().optional(),
+  deliveryAddress: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   totalCost: z.number().nullable().optional(),
   lines: z.array(PurchaseOrderLineSchema),
