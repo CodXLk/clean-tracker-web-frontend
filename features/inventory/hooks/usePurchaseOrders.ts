@@ -17,13 +17,14 @@ export const purchaseOrderKeys = {
 export type CreatePurchaseOrderLineInput = {
   itemId: string;
   quantity: number;
-  unitCost?: number;
 };
 
 export type CreatePurchaseOrderInput = {
   supplierId: string;
   expectedDate?: string;
+  deliveryAddress?: string;
   note?: string;
+  draft?: boolean;
   lines: CreatePurchaseOrderLineInput[];
 };
 
@@ -44,6 +45,30 @@ export function useCreatePurchaseOrder() {
   return useMutation({
     mutationFn: async (input: CreatePurchaseOrderInput) => {
       const { data } = await clientApi.post(ENDPOINTS.purchaseOrders.create, input);
+      return PurchaseOrderSchema.parse(data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: purchaseOrderKeys.all }),
+  });
+}
+
+export function useSendPurchaseOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await clientApi.post(ENDPOINTS.purchaseOrders.send(id), {});
+      return PurchaseOrderSchema.parse(data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: purchaseOrderKeys.all }),
+  });
+}
+
+export function useUpdatePurchaseOrderStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: PurchaseOrderStatus }) => {
+      const { data } = await clientApi.post(ENDPOINTS.purchaseOrders.status(id), null, {
+        params: { status },
+      });
       return PurchaseOrderSchema.parse(data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: purchaseOrderKeys.all }),

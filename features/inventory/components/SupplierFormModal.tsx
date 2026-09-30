@@ -69,7 +69,7 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
   function onSubmit(values: SupplierFormInput) {
     const payload = {
       name: values.name,
-      email: values.email?.trim() || undefined,
+      email: values.email.trim(),
       phone: values.phone?.trim() || undefined,
       address: values.address?.trim() || undefined,
       clientSelfSupplying: values.clientSelfSupplying,
@@ -90,7 +90,7 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         <TextField label="Supplier name" required error={errors.name?.message} {...register("name")} />
         <div className="grid grid-cols-2 gap-4">
-          <TextField label="Email" type="email" placeholder="Optional" error={errors.email?.message} {...register("email")} />
+          <TextField label="Email" type="email" required placeholder="supplier@email.com" error={errors.email?.message} {...register("email")} />
           <TextField label="Phone" placeholder="Optional" error={errors.phone?.message} {...register("phone")} />
         </div>
         <TextField label="Address" placeholder="Optional" error={errors.address?.message} {...register("address")} />
