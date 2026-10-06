@@ -226,12 +226,16 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     } else if (!siteId) {
       return "Select a site.";
     }
-    if (priceAmount.trim() && !(Number(priceAmount) > 0)) return "Enter a valid price greater than zero.";
+    if (priceAmount.trim()) {
+      const price = Number(priceAmount);
+      if (Number.isNaN(price) || price < 0) return "Enter a valid price (0 or more).";
+    }
     if (cleaningAllocatedAmount.trim()) {
-      if (!(Number(cleaningAllocatedAmount) > 0)) return "Enter a valid cleaning allocated amount.";
+      const allocated = Number(cleaningAllocatedAmount);
+      if (Number.isNaN(allocated) || allocated < 0) return "Enter a valid cleaning allocated amount (0 or more).";
       if (!priceAmount.trim()) return "Enter the price before the cleaning allocated amount.";
       // Only comparable when both use the same basis (both total or both per-hour).
-      if (priceType === cleaningAllocatedType && Number(cleaningAllocatedAmount) > Number(priceAmount))
+      if (priceType === cleaningAllocatedType && allocated > Number(priceAmount))
         return "Cleaning allocated amount cannot exceed the price.";
     }
     if ((startTime && !endTime) || (!startTime && endTime))
