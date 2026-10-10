@@ -7,6 +7,7 @@ import { SiteSelector } from "@/components/shared/SiteSelector";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ModalPortal } from "@/components/shared/ModalPortal";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
+import { getCurrentPosition, distanceMeters } from "@/lib/geolocation";
 import { cn } from "@/lib/utils/cn";
 import { acquireCheckInPayload as acquirePayload } from "@/features/attendance/lib/acquireCheckInPayload";
 import { useCheckIn, useCheckOut, useAttendanceHeartbeat } from "@/features/attendance/hooks/useAttendance";
@@ -96,7 +97,9 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const { data: todayTasks = [] } = useMyTasks(today);
   const { data: complaintsData } = useComplaints();
   // Completing complaints (and the checkout gate for them) is a cleaner-only obligation.
-  const isCleaner = useMe().data?.role === "CLEANER";
+  const myRole = useMe().data?.role;
+  const isCleaner = myRole === "CLEANER";
+  const isSupervisor = myRole === "SUPERVISOR";
 
   // Per-site error message and a remount key to reset the slider after a failure.
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -127,21 +130,66 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
   const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
 
-  // Check-in is only offered for sites that actually have work today (any status), so a
-  // stale checked-out site with no tasks doesn't surface a "Shift complete" card.
+  // Supervisors can check in to any site they're assigned to on any day (site visits/inspections
+  // aren't bound to a schedule), so they see every assigned site. Cleaners only see sites that
+  // actually have work for them today.
   const siteHasTasksToday = (siteId: string) => todayTasks.some((t) => t.siteId === siteId);
-  const visibleSites = sites.filter((s) => siteHasTasksToday(s.siteId));
+  const visibleSites = isSupervisor ? sites : sites.filter((s) => siteHasTasksToday(s.siteId));
 
   // Which of the cleaner's visible sites this single card/slider acts on. Defaults to
   // the checked-in site, but the cleaner can switch via the selector when they have more
   // than one.
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [siteTouched, setSiteTouched] = useState(false);
+  // When location resolves a matching site, pin to it until the user manually changes sites.
+  const [geoResolved, setGeoResolved] = useState(false);
+
+  // Schedule/time fallback used when location is unavailable: prefer a site whose shift window
+  // currently allows check-in.
+  const schedulePreferredSiteId = visibleSites.find((s) => s.checkInAllowed)?.siteId ?? null;
 
   useEffect(() => {
-    if (siteTouched) return;
-    setSelectedSiteId(checkedInSiteId ?? visibleSites[0]?.siteId ?? null);
-  }, [checkedInSiteId, visibleSites, siteTouched]);
+    if (siteTouched || geoResolved) return;
+    setSelectedSiteId(checkedInSiteId ?? schedulePreferredSiteId ?? visibleSites[0]?.siteId ?? null);
+  }, [checkedInSiteId, schedulePreferredSiteId, visibleSites, siteTouched, geoResolved]);
+
+  // Location-first default (requirement 6): on load, compare the device location to each assigned
+  // site's geofence and auto-select the nearest matching site. If location is denied/unavailable or
+  // nothing matches, the schedule/time fallback above stays in effect.
+  useEffect(() => {
+    if (!isCleaner) return;
+    if (siteTouched || geoResolved || checkedInSiteId) return;
+    const candidates = visibleSites.filter(
+      (s) => s.hasCoordinates && s.latitude != null && s.longitude != null,
+    );
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    getCurrentPosition()
+      .then((pos) => {
+        if (cancelled || siteTouched) return;
+        let best: CleanerSite | null = null;
+        let bestDist = Infinity;
+        for (const s of candidates) {
+          const dist = distanceMeters(pos.lat, pos.lng, s.latitude!, s.longitude!);
+          const radius = s.geofenceRadiusMeters ?? 100;
+          if (dist <= radius && dist < bestDist) {
+            best = s;
+            bestDist = dist;
+          }
+        }
+        if (best) {
+          setGeoResolved(true);
+          setSelectedSiteId(best.siteId);
+        }
+      })
+      .catch(() => {
+        // Location denied/unavailable — keep the schedule/time default.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCleaner, siteTouched, geoResolved, checkedInSiteId, visibleSites.length]);
 
   function bumpReset(siteId: string) {
     setResetKeys((prev) => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }));

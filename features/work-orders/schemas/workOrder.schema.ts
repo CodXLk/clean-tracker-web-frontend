@@ -21,6 +21,17 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   COMPLETED: "Completed",
 };
 
+// Once a supervisor marks tasks completed the work order leaves active operations: its tasks and
+// its "manage profiles" row are hidden from the Operations tab until status moves back below this.
+const WORK_ORDER_INACTIVE_STATUSES: ReadonlySet<WorkOrderStatus> = new Set([
+  "TASKS_COMPLETED",
+  "PENDING_REVIEW",
+  "COMPLETED",
+]);
+export function isWorkOrderActiveInOperations(status: WorkOrderStatus): boolean {
+  return !WORK_ORDER_INACTIVE_STATUSES.has(status);
+}
+
 // Mirrors backend WorkOrderPriceType.
 export const WORK_ORDER_PRICE_TYPE_VALUES = ["TOTAL_AMOUNT", "RATE_PER_HOUR"] as const;
 export const WorkOrderPriceTypeSchema = z.enum(WORK_ORDER_PRICE_TYPE_VALUES);
@@ -39,6 +50,7 @@ export const WorkOrderCleanerProfileSchema = z.object({
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
   taskCount: z.number().nullable().optional(),
+  approvalStatus: z.enum(["PENDING", "APPROVED"]).nullable().optional(),
 });
 export type WorkOrderCleanerProfile = z.infer<typeof WorkOrderCleanerProfileSchema>;
 export const WorkOrderCleanerProfileListSchema = z.array(WorkOrderCleanerProfileSchema);
@@ -51,6 +63,7 @@ export const WorkOrderSupervisorProfileSchema = z.object({
   supervisorId: z.string().uuid().nullable().optional(),
   supervisorName: z.string().nullable().optional(),
   taskCount: z.number().nullable().optional(),
+  approvalStatus: z.enum(["PENDING", "APPROVED"]).nullable().optional(),
 });
 export type WorkOrderSupervisorProfile = z.infer<typeof WorkOrderSupervisorProfileSchema>;
 export const WorkOrderSupervisorProfileListSchema = z.array(WorkOrderSupervisorProfileSchema);
@@ -134,6 +147,10 @@ export interface CreateWorkOrderInput {
   cleaningAllocatedType?: WorkOrderPriceType;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];
+  outsourceEnabled?: boolean;
+  numberOfOutsourceCleaners?: number;
+  numberOfOutsourceSupervisors?: number;
+  outsourceCompanyId?: string;
 }
 
 // Outbound update payload — matches UpdateWorkOrderRequest (site is fixed).

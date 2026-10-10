@@ -14,6 +14,7 @@ import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes"
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import {
   certificateNumberLabel,
+  isFilelessCertificate,
   type UserDocument,
 } from "@/features/users/schemas/document.schema";
 
@@ -92,14 +93,16 @@ function DocumentRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <a
-          href={`/api/documents/${doc.id}/file`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-full border border-grey-200 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
-        >
-          View
-        </a>
+        {doc.hasFile && (
+          <a
+            href={`/api/documents/${doc.id}/file`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full border border-grey-200 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
+          >
+            View
+          </a>
+        )}
         {isManagement && !readOnly && (
           <button
             type="button"
@@ -151,6 +154,8 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
 
   const documents = documentsQuery.data ?? [];
   const busy = upload.isPending || remove.isPending || verify.isPending;
+  // ABN (and similar) are captured by number only — no file to upload.
+  const fileless = isFilelessCertificate(certificateType);
 
   const certificateTypeOptions = useMemo<SelectOption[]>(
     () => (certOptions.data ?? []).map((t) => ({ value: t.key, label: t.label })),
@@ -182,17 +187,25 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
 
   function handleUpload() {
     setLocalError(null);
-    if (!file) {
-      setLocalError("Please choose a file to upload.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setLocalError("File is too large (max 10MB).");
-      return;
-    }
     if (!certificateType) {
       setLocalError("Please select the document type from the drop down.");
       return;
+    }
+    if (fileless) {
+      if (documentNumber.trim().length === 0) {
+        const numberLabel = certificateNumberLabel(certificateType) ?? "number";
+        setLocalError(`Please enter the ${numberLabel}.`);
+        return;
+      }
+    } else {
+      if (!file) {
+        setLocalError("Please choose a file to upload.");
+        return;
+      }
+      if (file.size > MAX_BYTES) {
+        setLocalError("File is too large (max 10MB).");
+        return;
+      }
     }
     if (certificateType === "OTHER" && otherLabel.trim().length === 0) {
       setLocalError("Please enter a label for the 'Other' certificate.");
@@ -201,7 +214,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
     upload.mutate(
       {
         userId,
-        file,
+        file: fileless ? undefined : file,
         certificateType,
         otherLabel: certificateType === "OTHER" ? otherLabel.trim() : undefined,
         documentNumber: documentNumber.trim() || undefined,
@@ -300,6 +313,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
               />
             </label>
           </div>
+          {!fileless && (
           <div className="flex flex-col gap-1.5 text-sm">
             <span className="text-grey-600">File (image or PDF, max 10MB)</span>
             <input
@@ -352,6 +366,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
               </button>
             )}
           </div>
+          )}
           {submitError && (
             <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
               {submitError}
@@ -368,7 +383,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  <Upload className="h-4 w-4" /> Upload
+                  <Upload className="h-4 w-4" /> {fileless ? "Add" : "Upload"}
                 </>
               )}
             </button>

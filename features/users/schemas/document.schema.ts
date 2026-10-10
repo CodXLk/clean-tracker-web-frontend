@@ -97,6 +97,13 @@ export function certificateNumberLabel(type: string): string | undefined {
   return CERTIFICATE_NUMBER_LABELS[type as CertificateType];
 }
 
+// Certificate types captured by number only (no file to upload) — e.g. ABN registration.
+export const FILELESS_CERTIFICATE_KEYS: readonly string[] = ["ABN_REGISTRATION"] as const;
+
+export function isFilelessCertificate(key: string): boolean {
+  return FILELESS_CERTIFICATE_KEYS.includes(key);
+}
+
 // One selectable certificate type from the backend catalog (built-in or custom).
 // `key` is a built-in CertificateType name or a custom certificate code.
 export const CertificateOptionSchema = z.object({
@@ -124,7 +131,8 @@ export const UserDocumentSchema = z.object({
   verified: z.boolean(),
   verifiedAt: z.string().nullable().optional(),
   uploadedAt: z.string().nullable().optional(),
-  downloadUrl: z.string(),
+  hasFile: z.boolean().default(true),
+  downloadUrl: z.string().nullable().optional(),
 });
 
 export type UserDocument = z.infer<typeof UserDocumentSchema>;

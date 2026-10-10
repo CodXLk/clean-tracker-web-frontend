@@ -81,6 +81,7 @@ export const SiteCleanerProfileSchema = z.object({
   cleanerId: z.string().uuid().nullable().optional(),
   cleanerName: z.string().nullable().optional(),
   taskCount: z.number().nullable().optional(),
+  approvalStatus: z.enum(["PENDING", "APPROVED"]).nullable().optional(),
   shifts: z.array(AssignedShiftSchema).default([]),
 });
 export type SiteCleanerProfile = z.infer<typeof SiteCleanerProfileSchema>;
@@ -92,6 +93,7 @@ export const SiteSupervisorProfileSchema = z.object({
   label: z.string(),
   supervisorId: z.string().uuid().nullable().optional(),
   supervisorName: z.string().nullable().optional(),
+  approvalStatus: z.enum(["PENDING", "APPROVED"]).nullable().optional(),
 });
 export type SiteSupervisorProfile = z.infer<typeof SiteSupervisorProfileSchema>;
 

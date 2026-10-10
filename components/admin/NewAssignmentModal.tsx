@@ -2865,7 +2865,7 @@ export function NewAssignmentModal({
                 )}
               </div>
 
-              {hasOutsource && !workOrderMode && (
+              {hasOutsource && (
                 <>
                   {/* Outsource cleaners — from the site's outsource project */}
                   <div className="mt-6 rounded-2xl border border-[#ED5F25]/30 bg-[#ED5F25]/5 p-4">

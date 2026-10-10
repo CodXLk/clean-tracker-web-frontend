@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Eye, History } from "lucide-react";
-import { FilterTabs } from "@/components/shared/FilterTabs";
+import { FilterSelect } from "@/components/shared/FilterSelect";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorMessage } from "@/components/shared/ErrorMessage";
@@ -37,7 +37,7 @@ export function RequestsTab({ canManage }: RequestsTabProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <FilterTabs<Filter> options={[...FILTERS]} value={filter} onChange={setFilter} />
+        <FilterSelect<Filter> options={[...FILTERS]} value={filter} onChange={setFilter} label="" />
         <button
           type="button"
           onClick={() => setFormOpen(true)}

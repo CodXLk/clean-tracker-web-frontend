@@ -17,6 +17,7 @@ import { SiteRoster } from "@/features/user-management/components/SiteRoster";
 import { isSelectableInOperations } from "@/features/user-management/schemas/site.schema";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
 import { StaffManagement } from "@/features/users/components/StaffManagement";
+import { LeaveManagementTab } from "@/features/leave/components/LeaveManagementTab";
 import { DocumentReviewModal } from "@/features/users/components/DocumentReviewModal";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils/cn";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-const MANAGER_TABS = ["Operations", "Work Orders", "Sites", "Cleaners", "Supervisors", "Task Templates"] as const;
+const MANAGER_TABS = ["Operations", "Work Orders", "Sites", "Cleaners", "Supervisors", "Leave", "Task Templates"] as const;
 type Tab = (typeof MANAGER_TABS)[number];
 
 /** URL-friendly slug per tab, so the selection survives refreshes and can be linked. */
@@ -38,6 +39,7 @@ const TAB_SLUG: Record<Tab, string> = {
   Sites: "sites",
   Cleaners: "cleaners",
   Supervisors: "supervisors",
+  Leave: "leave",
   "Task Templates": "templates",
 };
 const SLUG_TAB: Record<string, Tab> = {
@@ -46,6 +48,7 @@ const SLUG_TAB: Record<string, Tab> = {
   sites: "Sites",
   cleaners: "Cleaners",
   supervisors: "Supervisors",
+  leave: "Leave",
   templates: "Task Templates",
 };
 
@@ -297,6 +300,7 @@ function WorkforceContent() {
           {tab === "Work Orders" && <WorkOrdersSection />}
           {tab === "Cleaners" && <CleanerManagement />}
           {tab === "Supervisors" && <StaffManagement role="SUPERVISOR" noun="supervisor" />}
+          {tab === "Leave" && <LeaveManagementTab />}
           {tab === "Task Templates" && <TaskTemplatesTab />}
         </div>
 

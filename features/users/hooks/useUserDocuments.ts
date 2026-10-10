@@ -30,7 +30,8 @@ export function useUserDocuments(userId: string | undefined, enabled = true) {
 
 export interface UploadDocumentInput {
   userId: string;
-  file: File;
+  /** Omitted for number-only records (e.g. ABN has no file). */
+  file?: File | null;
   /** Certificate key: a built-in CertificateType name or a custom certificate code. */
   certificateType: string;
   otherLabel?: string;
@@ -45,7 +46,7 @@ export function useUploadDocument() {
   return useMutation({
     mutationFn: async (input: UploadDocumentInput) => {
       const formData = new FormData();
-      formData.append("file", input.file);
+      if (input.file) formData.append("file", input.file);
       formData.append("certificateType", input.certificateType);
       if (input.otherLabel) formData.append("otherLabel", input.otherLabel);
       if (input.documentNumber) formData.append("documentNumber", input.documentNumber);

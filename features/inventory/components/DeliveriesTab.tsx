@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Truck, PackageCheck, Ban, Eye, History } from "lucide-react";
-import { FilterTabs } from "@/components/shared/FilterTabs";
+import { FilterSelect } from "@/components/shared/FilterSelect";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DataTable, type Column } from "@/features/user-management/components/DataTable";
 import { RowMenu } from "@/features/user-management/components/RowMenu";
@@ -90,7 +90,7 @@ export function DeliveriesTab({ canManage }: DeliveriesTabProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <FilterTabs<Filter> options={[...FILTERS]} value={filter} onChange={setFilter} />
+        <FilterSelect<Filter> options={[...FILTERS]} value={filter} onChange={setFilter} label="" />
         {canManage && (
           <button
             type="button"
