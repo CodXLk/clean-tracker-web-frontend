@@ -79,6 +79,11 @@ export const ENDPOINTS = {
     default: (id: string) => `/shifts/${id}/default`,
     cleaners: (id: string) => `/shifts/${id}/cleaners`,
   },
+  outsourceCompanies: {
+    list:   "/outsource-companies",
+    create: "/outsource-companies",
+    byId:   (id: string) => `/outsource-companies/${id}`,
+  },
   outsourceProjects: {
     list:   "/outsource-projects",
     create: "/outsource-projects",
@@ -112,6 +117,9 @@ export const ENDPOINTS = {
     addSupervisorProfile: (id: string) => `/work-orders/${id}/supervisor-profiles/add`,
     removeSupervisorProfile: (id: string, profileId: string) =>
       `/work-orders/${id}/supervisor-profiles/${profileId}`,
+    hours:           (id: string) => `/work-orders/${id}/hours`,
+    hoursSupervisor: (id: string) => `/work-orders/${id}/hours/supervisor`,
+    hoursAdmin:      (id: string) => `/work-orders/${id}/hours/admin`,
   },
   floors: {
     list:   "/floors",
@@ -246,6 +254,23 @@ export const ENDPOINTS = {
     read:        (id: string) => `/notifications/${id}/read`,
     readAll:     "/notifications/read-all",
   },
+  assignmentApprovals: {
+    mine:    "/assignment-approvals/mine",
+    approve: "/assignment-approvals/approve",
+    alerts:  "/assignment-approvals/alerts",
+  },
+  leave: {
+    mine:        "/leave-requests/mine",
+    create:      "/leave-requests",
+    list:        "/leave-requests",
+    cancel:      (id: string) => `/leave-requests/${id}/cancel`,
+    addCover:    (id: string) => `/leave-requests/${id}/covers`,
+    removeCover: (coverId: string) => `/leave-requests/covers/${coverId}`,
+    approve:     (id: string) => `/leave-requests/${id}/approve`,
+    reject:      (id: string) => `/leave-requests/${id}/reject`,
+    myCovers:    "/leave-requests/covers/mine",
+    acceptCover: (coverId: string) => `/leave-requests/covers/${coverId}/accept`,
+  },
   roles: {
     list: "/roles",
   },
@@ -352,6 +377,11 @@ export const BACKEND = {
     default: (id: string) => `/api/v1/shifts/${id}/default`,
     cleaners: (id: string) => `/api/v1/shifts/${id}/cleaners`,
   },
+  outsourceCompanies: {
+    list:   "/api/v1/outsource-companies",
+    create: "/api/v1/outsource-companies",
+    byId:   (id: string) => `/api/v1/outsource-companies/${id}`,
+  },
   outsourceProjects: {
     list:   "/api/v1/outsource-projects",
     create: "/api/v1/outsource-projects",
@@ -385,6 +415,9 @@ export const BACKEND = {
     addSupervisorProfile: (id: string) => `/api/v1/work-orders/${id}/supervisor-profiles/add`,
     removeSupervisorProfile: (id: string, profileId: string) =>
       `/api/v1/work-orders/${id}/supervisor-profiles/${profileId}`,
+    hours:           (id: string) => `/api/v1/work-orders/${id}/hours`,
+    hoursSupervisor: (id: string) => `/api/v1/work-orders/${id}/hours/supervisor`,
+    hoursAdmin:      (id: string) => `/api/v1/work-orders/${id}/hours/admin`,
   },
   floors: {
     list:   "/api/v1/floors",
@@ -518,6 +551,23 @@ export const BACKEND = {
     unreadCount: "/api/v1/notifications/unread-count",
     read:        (id: string) => `/api/v1/notifications/${id}/read`,
     readAll:     "/api/v1/notifications/read-all",
+  },
+  assignmentApprovals: {
+    mine:    "/api/v1/assignment-approvals/mine",
+    approve: "/api/v1/assignment-approvals/approve",
+    alerts:  "/api/v1/assignment-approvals/alerts",
+  },
+  leave: {
+    mine:        "/api/v1/leave-requests/mine",
+    create:      "/api/v1/leave-requests",
+    list:        "/api/v1/leave-requests",
+    cancel:      (id: string) => `/api/v1/leave-requests/${id}/cancel`,
+    addCover:    (id: string) => `/api/v1/leave-requests/${id}/covers`,
+    removeCover: (coverId: string) => `/api/v1/leave-requests/covers/${coverId}`,
+    approve:     (id: string) => `/api/v1/leave-requests/${id}/approve`,
+    reject:      (id: string) => `/api/v1/leave-requests/${id}/reject`,
+    myCovers:    "/api/v1/leave-requests/covers/mine",
+    acceptCover: (coverId: string) => `/api/v1/leave-requests/covers/${coverId}/accept`,
   },
   roles: {
     list: "/api/v1/roles",

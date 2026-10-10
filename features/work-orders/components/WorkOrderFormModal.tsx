@@ -21,6 +21,10 @@ import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes"
 import { AddCertificateTypeButton } from "@/features/users/components/AddCertificateTypeButton";
 import { MANDATORY_CERTIFICATE_KEYS, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import {
+  useOutsourceCompanies,
+  useCreateOutsourceCompany,
+} from "@/features/outsource/hooks/useOutsourceCompanies";
+import {
   useCreateWorkOrder,
   useUpdateWorkOrder,
   useUploadWorkOrderPhotos,
@@ -117,6 +121,13 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Outsource (create-time only): provisions an outsource project on the work order's site.
+  const [outsourceEnabled, setOutsourceEnabled] = useState(false);
+  const [outCleaners, setOutCleaners] = useState(1);
+  const [outSupervisors, setOutSupervisors] = useState(1);
+  const [outCompanyId, setOutCompanyId] = useState("");
+  const [newCompanyName, setNewCompanyName] = useState("");
+
   const pending = isEdit ? update.isPending : create.isPending;
   const mutationError = isEdit ? update.error : create.error;
   const isError = isEdit ? update.isError : create.isError;
@@ -125,6 +136,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const certOptions = useCertificateTypes();
   const companiesQuery = useClientCompanies();
   const clientsQuery = useClients(otClientCompanyId || undefined, { enabled: !!otClientCompanyId });
+  const outsourceCompaniesQuery = useOutsourceCompanies(outsourceEnabled);
+  const createOutsourceCompany = useCreateOutsourceCompany();
   const siteOptions: SelectOption[] = useMemo(
     () => (sitesQuery.data ?? []).map((s) => ({ value: s.id, label: s.name })),
     [sitesQuery.data],
@@ -233,10 +246,6 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     if (cleaningAllocatedAmount.trim()) {
       const allocated = Number(cleaningAllocatedAmount);
       if (Number.isNaN(allocated) || allocated < 0) return "Enter a valid cleaning allocated amount (0 or more).";
-      if (!priceAmount.trim()) return "Enter the price before the cleaning allocated amount.";
-      // Only comparable when both use the same basis (both total or both per-hour).
-      if (priceType === cleaningAllocatedType && allocated > Number(priceAmount))
-        return "Cleaning allocated amount cannot exceed the price.";
     }
     if ((startTime && !endTime) || (!startTime && endTime))
       return "Enter both a start and end time, or leave both empty.";
@@ -257,8 +266,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     const pricePayload = {
       priceType: parsedPrice != null ? priceType : undefined,
       priceAmount: parsedPrice,
-      cleaningAllocatedAmount: parsedPrice != null ? parsedAllocated : undefined,
-      cleaningAllocatedType: parsedPrice != null && parsedAllocated != null ? cleaningAllocatedType : undefined,
+      cleaningAllocatedAmount: parsedAllocated,
+      cleaningAllocatedType: parsedAllocated != null ? cleaningAllocatedType : undefined,
     };
     const timePayload = {
       startDate: startDate || undefined,
@@ -326,6 +335,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
         ...timePayload,
         requiredCertificatesAllWorkers: certsAll,
         requiredCertificatesAnyWorker: certsAny,
+        ...(outsourceEnabled
+          ? {
+              outsourceEnabled: true,
+              numberOfOutsourceCleaners: outCleaners,
+              numberOfOutsourceSupervisors: outSupervisors,
+              outsourceCompanyId: outCompanyId || undefined,
+            }
+          : {}),
       },
       {
         onSuccess: async (created) => {
@@ -737,6 +754,90 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             <AddCertificateTypeButton onCreated={(key) => toggleCert(key, "any")} />
           </div>
         </div>
+
+        {/* Outsource (create-time only) */}
+        {!isEdit && (
+          <div className="flex flex-col gap-3 rounded-xl border border-grey-200 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-on-surface">
+              <input
+                type="checkbox"
+                checked={outsourceEnabled}
+                onChange={(e) => setOutsourceEnabled(e.target.checked)}
+              />
+              Enable outsource for this work order
+            </label>
+            {outsourceEnabled && (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-xs font-medium text-grey-600">Outsource cleaners</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={outCleaners}
+                      onChange={(e) => setOutCleaners(Number(e.target.value))}
+                      className="h-11 rounded-xl border border-grey-300 px-3 text-sm outline-none focus:border-primary"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-xs font-medium text-grey-600">Outsource supervisors</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={outSupervisors}
+                      onChange={(e) => setOutSupervisors(Number(e.target.value))}
+                      className="h-11 rounded-xl border border-grey-300 px-3 text-sm outline-none focus:border-primary"
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-xs font-medium text-grey-600">Outsource company</span>
+                  <select
+                    value={outCompanyId}
+                    onChange={(e) => setOutCompanyId(e.target.value)}
+                    className="h-11 rounded-xl border border-grey-300 bg-white px-3 text-sm outline-none focus:border-primary"
+                  >
+                    <option value="">Select a company…</option>
+                    {(outsourceCompaniesQuery.data ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end gap-2">
+                  <label className="flex flex-1 flex-col gap-1 text-sm">
+                    <span className="text-xs font-medium text-grey-600">Add a new company</span>
+                    <input
+                      value={newCompanyName}
+                      onChange={(e) => setNewCompanyName(e.target.value)}
+                      placeholder="Company name"
+                      className="h-11 rounded-xl border border-grey-300 px-3 text-sm outline-none focus:border-primary"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!newCompanyName.trim() || createOutsourceCompany.isPending}
+                    onClick={() =>
+                      createOutsourceCompany.mutate(
+                        { name: newCompanyName.trim() },
+                        {
+                          onSuccess: (company) => {
+                            setOutCompanyId(company.id);
+                            setNewCompanyName("");
+                          },
+                        },
+                      )
+                    }
+                    className="h-11 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Photos */}
         <div className="flex flex-col gap-2">

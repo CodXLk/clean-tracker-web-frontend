@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils/cn";
 import { useUIStore } from "@/store/ui.store";
 import { NotificationBell } from "@/components/admin/NotificationBell";
 import { AppNav, useIsDrawerNav, sectionTitle } from "@/components/layout/AppNav";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { AssignmentAlertsModal } from "@/features/assignment-approvals/components/AssignmentAlertsModal";
+
+const MANAGEMENT_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER"]);
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -25,6 +29,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const title = sectionTitle(pathname);
   const useDrawerNav = useIsDrawerNav();
+  const isManagement = MANAGEMENT_ROLES.has(useMe().data?.role ?? "");
 
   return (
     <div className="min-h-screen bg-surface-muted">
@@ -67,6 +72,8 @@ export function AppShell({ children }: AppShellProps) {
 
         {children}
       </div>
+
+      <AssignmentAlertsModal enabled={isManagement} />
     </div>
   );
 }

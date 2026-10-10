@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2 } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2, Clock } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SearchInput } from "@/components/shared/SearchInput";
@@ -22,6 +22,7 @@ import {
 import { WorkOrderFormModal } from "./WorkOrderFormModal";
 import { WorkOrderDetailModal } from "./WorkOrderDetailModal";
 import { WorkOrderProfilesModal } from "./WorkOrderProfilesModal";
+import { WorkOrderHoursModal } from "./WorkOrderHoursModal";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -62,6 +63,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   const [formModal, setFormModal] = useState<{ workOrder: WorkOrder | null } | null>(null);
   const [detail, setDetail] = useState<WorkOrder | null>(null);
   const [manage, setManage] = useState<{ workOrder: WorkOrder; kind: "cleaner" | "supervisor" } | null>(null);
+  const [hoursFor, setHoursFor] = useState<WorkOrder | null>(null);
   const [addTasks, setAddTasks] = useState<WorkOrder | null>(null);
   // A just-created work order awaiting the "add tasks now?" prompt.
   const [promptAddTasks, setPromptAddTasks] = useState<WorkOrder | null>(null);
@@ -301,6 +303,11 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                               icon: UserCog,
                               onClick: () => setManage({ workOrder: w, kind: "supervisor" }),
                             },
+                            ...((
+                              ["TASKS_COMPLETED", "PENDING_REVIEW", "COMPLETED"] as WorkOrderStatus[]
+                            ).includes(w.status)
+                              ? [{ label: "Review hours", icon: Clock, onClick: () => setHoursFor(w) }]
+                              : []),
                             {
                               label: "Remove",
                               icon: Trash2,
@@ -346,6 +353,9 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         kind={manage?.kind ?? "cleaner"}
       />
 
+      {hoursFor && (
+        <WorkOrderHoursModal workOrderId={hoursFor.id} poId={hoursFor.poId} onClose={() => setHoursFor(null)} />
+      )}
       {addTasksConfig && (
         <NewAssignmentModal
           open={!!addTasks}

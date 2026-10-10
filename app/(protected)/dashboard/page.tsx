@@ -9,6 +9,8 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { CheckInBadge } from "@/components/shared/CheckInBadge";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { CheckInPanel } from "@/features/attendance/components/CheckInPanel";
+import { PendingAssignmentsCard } from "@/features/assignment-approvals/components/PendingAssignmentsCard";
+import { LeaveStaffSection } from "@/features/leave/components/LeaveStaffSection";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
@@ -222,6 +224,9 @@ function DashboardContent() {
                 </h2>
               </div>
               <CheckInPanel sites={sites} isLoading={isLoading} />
+              <div className="mt-4">
+                <PendingAssignmentsCard />
+              </div>
             </section>
 
             <section aria-labelledby="complaints-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
@@ -259,6 +264,12 @@ function DashboardContent() {
                 <p className="text-sm text-grey-500">No open complaints right now.</p>
               )}
             </section>
+
+            {(isCleaner || isSupervisor) && (
+              <div className="lg:col-span-2">
+                <LeaveStaffSection />
+              </div>
+            )}
 
             <section aria-labelledby="shifts-heading" className="rounded-2xl bg-surface p-5 shadow-sm lg:col-span-2">
               <div className="mb-4 flex items-center gap-2">
@@ -405,6 +416,9 @@ function DashboardContent() {
               </div>
 
               <CheckInPanel sites={sites} isLoading={isLoading} />
+              <div className="mt-4">
+                <PendingAssignmentsCard />
+              </div>
             </section>
 
             {/* Today's Sites KPI */}

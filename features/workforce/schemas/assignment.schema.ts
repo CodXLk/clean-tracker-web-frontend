@@ -658,10 +658,10 @@ export function toCreateAssignmentPayload(input: AssignmentFormInput): Record<st
           ...(!isWorkOrder && input.supervisorIds.length > 0
             ? { supervisorIds: input.supervisorIds }
             : {}),
-          ...(!isWorkOrder && input.outsourceCleanerProfileIds.length > 0
+          ...(input.outsourceCleanerProfileIds.length > 0
             ? { outsourceCleanerProfileIds: input.outsourceCleanerProfileIds }
             : {}),
-          ...(!isWorkOrder && input.outsourceSupervisorProfileIds.length > 0
+          ...(input.outsourceSupervisorProfileIds.length > 0
             ? { outsourceSupervisorProfileIds: input.outsourceSupervisorProfileIds }
             : {}),
           ...((task.items ?? []).length > 0

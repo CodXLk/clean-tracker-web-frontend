@@ -18,6 +18,7 @@ import { useSiteOutsourceProjects } from "@/features/outsource/hooks/useOutsourc
 import { OutsourceProfilesModal } from "@/features/outsource/components/OutsourceProfilesModal";
 import { useSiteWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
 import { WorkOrderProfilesModal } from "@/features/work-orders/components/WorkOrderProfilesModal";
+import { isWorkOrderActiveInOperations } from "@/features/work-orders/schemas/workOrder.schema";
 import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
 import { CertificateBadgeRow, type CertBadge } from "@/features/users/components/CertificateBadge";
 import { certificateAbbreviation, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
@@ -29,6 +30,8 @@ interface RosterEntry {
   personName: string | null;
   /** Cleaner id used to open that cleaner's schedule (only set for cleaner slots). */
   personId?: string | null;
+  /** True when the assigned person hasn't accepted the assignment yet. */
+  pending?: boolean;
 }
 
 interface SiteRosterProps {
@@ -96,7 +99,13 @@ export function SiteRoster({
   );
 
   const { projects: outsourceProjects } = useSiteOutsourceProjects(siteId);
-  const { workOrders: siteWorkOrders } = useSiteWorkOrders(siteId);
+  const { workOrders: allSiteWorkOrders } = useSiteWorkOrders(siteId);
+  // Completed work orders (tasks marked done by supervisor and later) drop out of Operations:
+  // their manage-profiles row is hidden until status moves back below TASKS_COMPLETED.
+  const siteWorkOrders = useMemo(
+    () => allSiteWorkOrders.filter((w) => isWorkOrderActiveInOperations(w.status)),
+    [allSiteWorkOrders],
+  );
 
   // Keep the selected project/work-order valid as the lists load or change.
   const outsourceProject = useMemo(
@@ -218,6 +227,7 @@ export function SiteRoster({
           label: p.label || `Cleaner ${p.profileIndex}`,
           personName: p.cleanerName ?? null,
           personId: p.cleanerId ?? null,
+          pending: p.approvalStatus === "PENDING",
         }))}
         onManage={() => setCleanersOpen(true)}
         onView={(entry) => entry.personId && viewCleanerSchedule(entry.personId)}
@@ -237,6 +247,7 @@ export function SiteRoster({
           label: p.label || `Supervisor ${p.profileIndex}`,
           personName: p.supervisorName ?? null,
           personId: p.supervisorId ?? null,
+          pending: p.approvalStatus === "PENDING",
         }))}
         onManage={() => setSupervisorsOpen(true)}
         onView={(entry) => entry.personId && viewSupervisorSchedule(entry.personId)}
@@ -366,6 +377,7 @@ export function SiteRoster({
                 label: p.label || `Work Order Cleaner ${p.profileIndex}`,
                 personName: p.cleanerName ?? null,
                 personId: p.cleanerId ?? null,
+                pending: p.approvalStatus === "PENDING",
               }))}
               onManage={() => setWorkOrderManage("cleaner")}
               onView={(entry) => entry.personId && viewCleanerSchedule(entry.personId)}
@@ -382,6 +394,7 @@ export function SiteRoster({
                 label: p.label || `Work Order Supervisor ${p.profileIndex}`,
                 personName: p.supervisorName ?? null,
                 personId: p.supervisorId ?? null,
+                pending: p.approvalStatus === "PENDING",
               }))}
               onManage={() => setWorkOrderManage("supervisor")}
               onView={(entry) => entry.personId && viewSupervisorSchedule(entry.personId)}
@@ -489,6 +502,14 @@ function RosterGroup({
                   <span className="text-[11px] text-body-2">{entry.label}</span>
                   <span className="text-xs font-medium text-ink">{entry.personName}</span>
                 </span>
+                {entry.pending && (
+                  <span
+                    title="Awaiting the assignee's acceptance"
+                    className="ml-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                  >
+                    Pending
+                  </span>
+                )}
                 {onView && entry.personId && (
                   <button
                     type="button"

@@ -25,6 +25,7 @@ import {
 } from "@/features/workforce/hooks/useAssignments";
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
+import { isWorkOrderActiveInOperations } from "@/features/work-orders/schemas/workOrder.schema";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
   useFloors,
@@ -1924,6 +1925,20 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   // A one-time work-order site can't schedule tasks before the work order's start date;
   // the scope view greys out earlier columns.
   const workOrdersQuery = useWorkOrders();
+  // Work orders whose tasks are marked completed by the supervisor (TASKS_COMPLETED+) drop out of
+  // Operations: their occurrences are hidden from the calendar until status moves back below it.
+  const inactiveWorkOrderPoIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const wo of workOrdersQuery.data ?? []) {
+      if (wo.poId && !isWorkOrderActiveInOperations(wo.status)) set.add(wo.poId);
+    }
+    return set;
+  }, [workOrdersQuery.data]);
+  const isOccurrenceVisible = useCallback(
+    (o: TaskOccurrence) =>
+      !(o.assignmentType === "WORK_ORDER" && o.poId != null && inactiveWorkOrderPoIds.has(o.poId)),
+    [inactiveWorkOrderPoIds],
+  );
   const minAddDate = useMemo(() => {
     if (!selectedSite?.oneTimeSite) return undefined;
     const wo = (workOrdersQuery.data ?? []).find(
@@ -2135,7 +2150,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   const [syncedFrom, setSyncedFrom] = useState<typeof serverOccurrences>(undefined);
   if (serverOccurrences !== syncedFrom) {
     setSyncedFrom(serverOccurrences);
-    setEvents((serverOccurrences ?? []).map(mapOccurrenceToEvent));
+    setEvents((serverOccurrences ?? []).filter(isOccurrenceVisible).map(mapOccurrenceToEvent));
   }
 
   // Upcoming dates a task will lose when deactivated — shown in the confirm dialog so the
@@ -2160,7 +2175,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
   eventsRef.current = events;
 
   function revertToServer() {
-    setEvents((serverOccurrences ?? []).map(mapOccurrenceToEvent));
+    setEvents((serverOccurrences ?? []).filter(isOccurrenceVisible).map(mapOccurrenceToEvent));
   }
 
   function navigatePrev() {
@@ -2716,7 +2731,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       {viewMode === "schedule" ? (
         <WeekScheduleGrid
           weekDates={weekDates}
-          occurrences={dayScope ? dayOccurrencesQuery.data ?? [] : serverOccurrences ?? []}
+          occurrences={(dayScope ? dayOccurrencesQuery.data ?? [] : serverOccurrences ?? []).filter(isOccurrenceVisible)}
           today={today}
           workingDays={workingDays}
           dayView={scopeView === "day"}
