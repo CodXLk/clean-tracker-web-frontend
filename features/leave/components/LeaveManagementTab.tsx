@@ -20,9 +20,13 @@ type Filter = (typeof FILTERS)[number];
 const filterLabel = (f: Filter) => (f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase());
 
 function coverSummary(l: LeaveRequest): string {
-  if (l.covers.length === 0) return "—";
-  const accepted = l.covers.filter((c) => c.approvalStatus === "APPROVED").length;
-  return `${accepted}/${l.covers.length} accepted`;
+  const totalSites = l.affectedSites.length;
+  if (totalSites === 0) return "—";
+  const confirmedSiteIds = new Set(
+    l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => c.siteId),
+  );
+  const covered = l.affectedSites.filter((s) => confirmedSiteIds.has(s.siteId)).length;
+  return `${covered}/${totalSites} sites covered`;
 }
 
 export function LeaveManagementTab() {
@@ -33,8 +37,30 @@ export function LeaveManagementTab() {
   const [managing, setManaging] = useState<LeaveRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const allCoversAccepted = (l: LeaveRequest) =>
-    l.covers.length === 0 || l.covers.every((c) => c.approvalStatus === "APPROVED");
+  // Leave can only be approved when every affected site has a cover the replacement has confirmed.
+  // Returns null when ready, otherwise a precise reason explaining what's still missing.
+  const coverBlockReason = (l: LeaveRequest): string | null => {
+    if (l.affectedSites.length === 0) return "This leave request has no sites to cover.";
+    const assignedSiteIds = new Set(l.covers.map((c) => c.siteId));
+    const confirmedSiteIds = new Set(
+      l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => c.siteId),
+    );
+    const unassigned = l.affectedSites.filter((s) => !assignedSiteIds.has(s.siteId));
+    const awaiting = l.affectedSites.filter(
+      (s) => assignedSiteIds.has(s.siteId) && !confirmedSiteIds.has(s.siteId),
+    );
+    const names = (sites: typeof l.affectedSites) => sites.map((s) => s.siteName).join(", ");
+    if (unassigned.length > 0 && awaiting.length > 0) {
+      return `Assign a replacement for ${names(unassigned)} and wait for confirmation at ${names(awaiting)}.`;
+    }
+    if (unassigned.length > 0) {
+      return `Assign a covering cleaner or supervisor for ${names(unassigned)} first.`;
+    }
+    if (awaiting.length > 0) {
+      return `Waiting for the replacement to confirm cover for ${names(awaiting)}.`;
+    }
+    return null;
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,8 +92,7 @@ export function LeaveManagementTab() {
               </thead>
               <tbody>
                 {requests.map((l) => (
-                  <tr key={l.id} className="border-b border-grey-100 align-top last:border-0">
-                    <td className="px-5 py-3.5">
+                  <tr key={l.id} className="border-b border-grey-100 align-top last:border-0">                    <td className="px-5 py-3.5">
                       <span className="font-medium text-on-surface">{l.requesterName}</span>
                       <span className="block text-xs text-grey-500">
                         {l.requesterRole === "SUPERVISOR" ? "Supervisor" : "Cleaner"}
@@ -98,8 +123,8 @@ export function LeaveManagementTab() {
                           </button>
                           <button
                             type="button"
-                            disabled={approve.isPending || !allCoversAccepted(l)}
-                            title={allCoversAccepted(l) ? undefined : "All covers must be accepted first"}
+                            disabled={approve.isPending || coverBlockReason(l) !== null}
+                            title={coverBlockReason(l) ?? undefined}
                             onClick={() => approve.mutate(l.id, { onError: (e) => setError(getErrorMessage(e)) })}
                             className="rounded-full bg-success px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                           >
@@ -126,7 +151,12 @@ export function LeaveManagementTab() {
         </div>
       )}
 
-      {managing && <LeaveCoversModal leave={managing} onClose={() => setManaging(null)} />}
+      {managing && (
+        <LeaveCoversModal
+          leave={requests.find((r) => r.id === managing.id) ?? managing}
+          onClose={() => setManaging(null)}
+        />
+      )}
     </div>
   );
 }
