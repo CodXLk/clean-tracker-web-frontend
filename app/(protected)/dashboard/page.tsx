@@ -520,6 +520,8 @@ function DashboardContent() {
               </Link>
             </section>
 
+            {(isCleaner || isSupervisor) && <LeaveStaffSection />}
+
             {/* Upcoming Shifts */}
             <section
               aria-labelledby="shifts-heading-mobile"

@@ -14,6 +14,7 @@ import {
   Repeat,
   Star,
   CalendarCheck,
+  CalendarClock,
   ShieldCheck,
 } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
@@ -81,6 +82,7 @@ export default function ProfilePage() {
 
   // Users assigned more than one role can switch the active role without re-entering credentials.
   const canSwitchRole = (me.data?.roles?.length ?? 0) > 1;
+  const canRequestLeave = me.data?.role === "CLEANER" || me.data?.role === "SUPERVISOR";
 
   const today = useMemo(() => toLocalDateString(new Date()), []);
   const accountCreatedDate = me.data?.createdAt
@@ -208,6 +210,19 @@ export default function ProfilePage() {
                   );
                 })}
 
+                {canRequestLeave && (
+                  <button
+                    onClick={() => router.push("/dashboard/leave")}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <CalendarClock size={18} className="text-grey-700" />
+                      <span className="text-sm font-medium text-on-surface">My leave</span>
+                    </div>
+                    <ChevronRight size={16} className="text-grey-500" />
+                  </button>
+                )}
+
                 {canSwitchRole && (
                   <button
                     onClick={() => router.push("/select-role")}
@@ -318,6 +333,19 @@ export default function ProfilePage() {
                   </button>
                 );
               })}
+
+              {canRequestLeave && (
+                <button
+                  onClick={() => router.push("/dashboard/leave")}
+                  className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm text-left transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <CalendarClock size={18} className="text-grey-700" />
+                    <span className="text-sm font-medium text-on-surface">My leave</span>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </button>
+              )}
 
               {canSwitchRole && (
                 <button
