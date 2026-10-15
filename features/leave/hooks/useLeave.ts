@@ -78,12 +78,14 @@ export function useAddLeaveCover() {
     mutationFn: async (input: {
       leaveId: string;
       siteId: string;
-      coveringUserId: string;
+      coverRole: "CLEANING" | "SUPERVISING";
+      coveringUserId?: string;
       coveringCleanerId?: string;
     }) => {
       await clientApi.post(ENDPOINTS.leave.addCover(input.leaveId), {
         siteId: input.siteId,
-        coveringUserId: input.coveringUserId,
+        coverRole: input.coverRole,
+        coveringUserId: input.coveringUserId ?? null,
         coveringCleanerId: input.coveringCleanerId ?? null,
       });
     },

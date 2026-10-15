@@ -48,9 +48,9 @@ export function SupplierFormModal({ open, onClose, supplier }: SupplierFormModal
   const clientSelfSupplying = watch("clientSelfSupplying");
 
   useEffect(() => {
-    if (!open) return;
+    // Reset in both directions so a closed form never keeps the previous supplier's values.
     reset(
-      supplier
+      open && supplier
         ? {
             name: supplier.name,
             email: supplier.email ?? "",

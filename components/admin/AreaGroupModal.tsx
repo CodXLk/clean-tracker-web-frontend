@@ -36,9 +36,8 @@ export function AreaGroupModal({ open, floor, areas, group, onClose }: AreaGroup
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setName(group?.name ?? "");
-    setSelected(new Set(group?.areas.map((a) => a.id) ?? []));
+    setName(open && group ? group.name : "");
+    setSelected(new Set(open && group ? group.areas.map((a) => a.id) : []));
     setTouched(false);
   }, [open, group]);
 

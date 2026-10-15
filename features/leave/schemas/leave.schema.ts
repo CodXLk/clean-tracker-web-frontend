@@ -2,11 +2,14 @@ import { z } from "zod";
 
 export const LEAVE_TYPES = ["DAY_WISE", "SITE_SPECIFIC"] as const;
 export const LEAVE_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
+export const COVER_ROLES = ["CLEANING", "SUPERVISING"] as const;
+export type CoverRole = (typeof COVER_ROLES)[number];
 
 export const LeaveCoverSchema = z.object({
   id: z.string().uuid(),
   siteId: z.string().uuid(),
   siteName: z.string().nullable().optional(),
+  coverRole: z.enum(COVER_ROLES).default("CLEANING"),
   coveringUserId: z.string().uuid(),
   coveringCleanerId: z.string().uuid().nullable().optional(),
   coveringName: z.string().nullable().optional(),
@@ -18,6 +21,7 @@ export type LeaveCover = z.infer<typeof LeaveCoverSchema>;
 export const LeaveSiteRefSchema = z.object({
   siteId: z.string().uuid(),
   siteName: z.string(),
+  coverRole: z.enum(COVER_ROLES).default("CLEANING"),
 });
 export type LeaveSiteRef = z.infer<typeof LeaveSiteRefSchema>;
 
@@ -43,6 +47,7 @@ export const MyLeaveCoverSchema = z.object({
   leaveRequestId: z.string().uuid(),
   siteId: z.string().uuid(),
   siteName: z.string().nullable().optional(),
+  coverRole: z.enum(COVER_ROLES).default("CLEANING"),
   requesterName: z.string().nullable().optional(),
   startDate: z.string(),
   endDate: z.string(),

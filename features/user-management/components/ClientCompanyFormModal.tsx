@@ -44,9 +44,8 @@ export function ClientCompanyFormModal({ open, onClose, company }: ClientCompany
   });
 
   useEffect(() => {
-    if (!open) return;
     reset(
-      company
+      open && company
         ? {
             name: company.name,
             contactNumber: company.contactNumber ?? "",
