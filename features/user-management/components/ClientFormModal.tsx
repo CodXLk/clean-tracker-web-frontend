@@ -49,9 +49,8 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
   });
 
   useEffect(() => {
-    if (!open) return;
     reset(
-      client
+      open && client
         ? {
             clientCompanyId: client.clientCompanyId,
             name: client.name,

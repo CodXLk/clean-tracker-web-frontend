@@ -62,9 +62,8 @@ export function TaskTemplateModal({ open, onClose, template, embedded }: TaskTem
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    setName(template?.name ?? "");
-    setTasks(toEditableTasks(template));
+    setName(open && template ? template.name : "");
+    setTasks(open ? toEditableTasks(template) : [blankTask()]);
     setError(null);
   }, [open, template]);
 

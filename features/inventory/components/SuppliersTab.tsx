@@ -119,7 +119,14 @@ export function SuppliersTab({ canManage }: SuppliersTabProps) {
         emptyDescription={canManage ? "Register your first supplier to raise purchase orders." : "No suppliers registered."}
       />
 
-      <SupplierFormModal open={formOpen} onClose={() => setFormOpen(false)} supplier={editing} />
+      <SupplierFormModal
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        supplier={editing}
+      />
       <ConfirmDialog
         open={!!deleting}
         title="Deactivate supplier"

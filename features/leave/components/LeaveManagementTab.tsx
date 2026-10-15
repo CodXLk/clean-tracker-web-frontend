@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Users } from "lucide-react";
+import { Eye, Loader2, Users } from "lucide-react";
 import { FilterSelect } from "@/components/shared/FilterSelect";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { LeaveCoversModal } from "@/features/leave/components/LeaveCoversModal";
+import { LeaveDetailsModal } from "@/features/leave/components/LeaveDetailsModal";
 import { useApproveLeave, useLeaveRequests, useRejectLeave } from "@/features/leave/hooks/useLeave";
 import type { LeaveRequest } from "@/features/leave/schemas/leave.schema";
 
@@ -19,14 +20,19 @@ const FILTERS = ["ALL", "PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const
 type Filter = (typeof FILTERS)[number];
 const filterLabel = (f: Filter) => (f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase());
 
+/** A cover is required per (site, role). This key pairs them up. */
+const pairKey = (s: LeaveRequest["affectedSites"][number]) => `${s.siteId}:${s.coverRole}`;
+const pairLabel = (s: LeaveRequest["affectedSites"][number]) =>
+  `${s.coverRole === "SUPERVISING" ? "supervising at" : "cleaning at"} ${s.siteName}`;
+
 function coverSummary(l: LeaveRequest): string {
-  const totalSites = l.affectedSites.length;
-  if (totalSites === 0) return "—";
-  const confirmedSiteIds = new Set(
-    l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => c.siteId),
+  const total = l.affectedSites.length;
+  if (total === 0) return "—";
+  const confirmed = new Set(
+    l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => `${c.siteId}:${c.coverRole}`),
   );
-  const covered = l.affectedSites.filter((s) => confirmedSiteIds.has(s.siteId)).length;
-  return `${covered}/${totalSites} sites covered`;
+  const covered = l.affectedSites.filter((s) => confirmed.has(pairKey(s))).length;
+  return `${covered}/${total} covered`;
 }
 
 export function LeaveManagementTab() {
@@ -35,21 +41,20 @@ export function LeaveManagementTab() {
   const approve = useApproveLeave();
   const reject = useRejectLeave();
   const [managing, setManaging] = useState<LeaveRequest | null>(null);
+  const [viewing, setViewing] = useState<LeaveRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Leave can only be approved when every affected site has a cover the replacement has confirmed.
+  // Leave can only be approved when every affected site+role has a cover the replacement confirmed.
   // Returns null when ready, otherwise a precise reason explaining what's still missing.
   const coverBlockReason = (l: LeaveRequest): string | null => {
     if (l.affectedSites.length === 0) return "This leave request has no sites to cover.";
-    const assignedSiteIds = new Set(l.covers.map((c) => c.siteId));
-    const confirmedSiteIds = new Set(
-      l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => c.siteId),
+    const assigned = new Set(l.covers.map((c) => `${c.siteId}:${c.coverRole}`));
+    const confirmed = new Set(
+      l.covers.filter((c) => c.approvalStatus === "APPROVED").map((c) => `${c.siteId}:${c.coverRole}`),
     );
-    const unassigned = l.affectedSites.filter((s) => !assignedSiteIds.has(s.siteId));
-    const awaiting = l.affectedSites.filter(
-      (s) => assignedSiteIds.has(s.siteId) && !confirmedSiteIds.has(s.siteId),
-    );
-    const names = (sites: typeof l.affectedSites) => sites.map((s) => s.siteName).join(", ");
+    const unassigned = l.affectedSites.filter((s) => !assigned.has(pairKey(s)));
+    const awaiting = l.affectedSites.filter((s) => assigned.has(pairKey(s)) && !confirmed.has(pairKey(s)));
+    const names = (sites: typeof l.affectedSites) => sites.map(pairLabel).join(", ");
     if (unassigned.length > 0 && awaiting.length > 0) {
       return `Assign a replacement for ${names(unassigned)} and wait for confirmation at ${names(awaiting)}.`;
     }
@@ -116,6 +121,13 @@ export function LeaveManagementTab() {
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           <button
                             type="button"
+                            onClick={() => setViewing(l)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
+                          >
+                            <Eye size={14} /> View
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setManaging(l)}
                             className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
                           >
@@ -140,7 +152,15 @@ export function LeaveManagementTab() {
                           </button>
                         </div>
                       ) : (
-                        <div className="text-right text-grey-400">—</div>
+                        <div className="flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setViewing(l)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
+                          >
+                            <Eye size={14} /> View
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -155,6 +175,13 @@ export function LeaveManagementTab() {
         <LeaveCoversModal
           leave={requests.find((r) => r.id === managing.id) ?? managing}
           onClose={() => setManaging(null)}
+        />
+      )}
+
+      {viewing && (
+        <LeaveDetailsModal
+          leave={requests.find((r) => r.id === viewing.id) ?? viewing}
+          onClose={() => setViewing(null)}
         />
       )}
     </div>

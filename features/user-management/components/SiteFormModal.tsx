@@ -189,11 +189,10 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
     [],
   );
 
-  // Reset the form each time the modal opens (create vs edit).
+  // Reset the form each time the modal opens (create vs edit); clear when it closes.
   useEffect(() => {
-    if (!open) return;
     reset(
-      site
+      open && site
         ? {
             clientCompanyId: site.clientCompanyId,
             clientId: site.clientId,

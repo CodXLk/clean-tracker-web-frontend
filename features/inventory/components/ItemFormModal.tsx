@@ -88,13 +88,14 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
   const isChemical = category === "CHEMICAL";
 
   useEffect(() => {
-    if (!open) return;
     setPhotoFile(null);
     setSdsFile(null);
     setRemovePhoto(false);
     setRemoveSds(false);
+    // Reset in both directions: seed on open (edit), else clear — so a closed form never
+    // keeps the previous item's values and leaks them into the next "Add".
     reset(
-      item
+      open && item
         ? {
             name: item.name,
             itemCode: item.itemCode ?? "",

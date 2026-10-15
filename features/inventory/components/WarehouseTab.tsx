@@ -137,7 +137,14 @@ export function WarehouseTab({ canManage }: WarehouseTabProps) {
         emptyDescription={canManage ? "Add your first warehouse item to begin." : "No inventory items."}
       />
 
-      <ItemFormModal open={formOpen} onClose={() => setFormOpen(false)} item={editing} />
+      <ItemFormModal
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        item={editing}
+      />
       <ItemDetailModal open={!!viewing} onClose={() => setViewing(null)} item={viewing} />
       <AdjustStockModal open={!!adjusting} onClose={() => setAdjusting(null)} item={adjusting} />
       <ConfirmDialog

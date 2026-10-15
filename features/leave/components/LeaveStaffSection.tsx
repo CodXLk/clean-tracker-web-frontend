@@ -52,7 +52,16 @@ export function LeaveStaffSection() {
             {covers.map((c) => (
               <li key={c.coverId} className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-on-surface">{c.siteName}</p>
+                  <p className="truncate text-sm font-medium text-on-surface">
+                    {c.siteName}
+                    <span
+                      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        c.coverRole === "SUPERVISING" ? "bg-violet-100 text-violet-700" : "bg-sky-100 text-sky-700"
+                      }`}
+                    >
+                      {c.coverRole === "SUPERVISING" ? "Supervising" : "Cleaning"}
+                    </span>
+                  </p>
                   <p className="truncate text-xs text-grey-500">
                     Cover for {c.requesterName} · {fmt(c.startDate)}–{fmt(c.endDate)}
                   </p>
