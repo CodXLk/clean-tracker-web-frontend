@@ -9,12 +9,10 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CalendarModal } from "@/components/modals/CalendarModal";
 import { FilterTabs } from "@/components/shared/FilterTabs";
-import { TaskSummaryCard } from "@/components/shared/TaskSummaryCard";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
 import { PausedResumeBanner } from "@/features/attendance/components/PausedResumeBanner";
-import { getTaskCategoryIcon } from "@/lib/utils/taskCategoryIcon";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
 import { useTaskViewStore } from "@/features/tasks/store/taskView.store";
@@ -23,12 +21,8 @@ import { TaskListView } from "@/features/tasks/components/TaskListView";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
-  assignmentTypeLabel,
-  formatTaskTime,
   toLocalDateString,
-  toSummaryStatus,
 } from "@/features/tasks/lib/task-utils";
-import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
 
 interface AreaCount {
@@ -118,10 +112,6 @@ export default function TasksPage() {
     return Array.from(byKey.values());
   }, [occurrences, selectedFloor, isCleaner]);
 
-  const periodicalTasks = useMemo(
-    () => occurrences.filter((o) => o.assignmentType === "PERIODICAL_TASK"),
-    [occurrences],
-  );
 
   const kpis = useMemo(() => {
     let pending = 0;
@@ -169,19 +159,7 @@ export default function TasksPage() {
           ) : occurrences.length === 0 ? (
             <p className="py-16 text-center text-sm text-grey-500">No tasks scheduled for you today.</p>
           ) : (
-            <div className={cn("grid grid-cols-1 gap-4", periodicalTasks.length > 0 && "lg:grid-cols-2")}>
-              {periodicalTasks.length > 0 && (
-                <section aria-labelledby="periodical-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
-                  <h2 id="periodical-heading" className="mb-4 text-sm font-semibold text-on-surface">
-                    Periodical Task
-                  </h2>
-                  <div className="flex flex-col gap-3">
-                    {periodicalTasks.map((task) => (
-                      <PeriodicalCard key={`${task.taskId}-${task.occurrenceDate}`} task={task} />
-                    ))}
-                  </div>
-                </section>
-              )}
+            <div className="grid grid-cols-1 gap-4">
 
               <section aria-labelledby="floors-heading" className="rounded-2xl bg-surface p-5 shadow-sm">
                 <h2 id="floors-heading" className="mb-4 text-sm font-semibold text-on-surface">
@@ -276,19 +254,6 @@ export default function TasksPage() {
             </p>
           ) : (
             <div className="flex flex-col gap-8">
-              {/* Periodical Task list (hidden entirely when the site has none) */}
-              {periodicalTasks.length > 0 && (
-                <section aria-labelledby="periodical-heading-mobile" className="flex flex-col gap-3">
-                  <h2 id="periodical-heading-mobile" className="text-base font-medium text-ink">
-                    Periodical Task
-                  </h2>
-                  <div className="flex flex-col gap-3">
-                    {periodicalTasks.map((task) => (
-                      <PeriodicalCard key={`${task.taskId}-${task.occurrenceDate}`} task={task} />
-                    ))}
-                  </div>
-                </section>
-              )}
 
               {/* Floor tabs + Area grid */}
               <section aria-labelledby="floors-heading-mobile" className="flex flex-col gap-4">
@@ -348,30 +313,6 @@ export default function TasksPage() {
   );
 }
 
-function PeriodicalCard({ task }: { task: TaskOccurrence }) {
-  const due = formatTaskTime(task.startTime);
-  const card = (
-    <TaskSummaryCard
-      title={task.name}
-      category={assignmentTypeLabel(task.assignmentType ?? "OTHER")}
-      priority="medium"
-      status={toSummaryStatus(task.status)}
-      dueLabel={due ? `Due: ${due}` : task.siteName}
-      icon={getTaskCategoryIcon("periodical")}
-    />
-  );
-  if (task.areaId) {
-    return (
-      <Link
-        href={`/dashboard/tasks/${encodeURIComponent(task.areaName ?? "Area")}?areaId=${task.areaId}&date=${task.occurrenceDate}`}
-        className="block"
-      >
-        {card}
-      </Link>
-    );
-  }
-  return card;
-}
 
 interface KpiCardProps {
   label: string;
