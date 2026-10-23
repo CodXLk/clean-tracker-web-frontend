@@ -56,6 +56,9 @@ interface SiteFormModalProps {
   workOrderSite?: boolean;
 }
 
+/** Mirrors AttendanceService.DEFAULT_GEOFENCE_RADIUS_METERS (used when a site has no radius). */
+const DEFAULT_GEOFENCE_RADIUS_METERS = 100;
+
 /** Duration + overnight flag for a general-task window (end earlier than start = next day). */
 function windowInfo(start?: string, end?: string): { overnight: boolean; duration: string } | null {
   if (!start || !end) return null;
@@ -290,7 +293,12 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
 
   function onSubmit(values: SiteFormInput) {
     if (isEdit && site) {
-      updateMutation.mutate({ id: site.id, input: values }, { onSuccess: onClose });
+      // The update API ignores an omitted radius, so clearing the field sends the system default.
+      const input =
+        values.geofenceRadiusMeters == null && site.geofenceRadiusMeters != null
+          ? { ...values, geofenceRadiusMeters: DEFAULT_GEOFENCE_RADIUS_METERS }
+          : values;
+      updateMutation.mutate({ id: site.id, input }, { onSuccess: onClose });
     } else {
       createMutation.mutate(values, {
         onSuccess: (created) => {
@@ -440,6 +448,21 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
         </div>
 
         <TextField label="Street address" error={errors.streetAddress?.message} {...register("streetAddress")} />
+
+        <TextField
+          label="Check-in radius (meters)"
+          type="number"
+          min={1}
+          step={1}
+          inputMode="numeric"
+          placeholder={String(DEFAULT_GEOFENCE_RADIUS_METERS)}
+          hint={`How close to the map point cleaners must be to check in by location, and to stay checked in. Leave empty to use the default of ${DEFAULT_GEOFENCE_RADIUS_METERS} m.`}
+          error={errors.geofenceRadiusMeters?.message}
+          {...register("geofenceRadiusMeters", {
+            setValueAs: (v: unknown) =>
+              v === "" || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v),
+          })}
+        />
         </FormSection>
 
         <FormSection icon={Nfc} title="NFC check-in tag">
