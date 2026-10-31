@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2, Clock } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, Users, UserCog, ListPlus, Building2, Wallet } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SearchInput } from "@/components/shared/SearchInput";
@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/features/user-management/components/ConfirmDial
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { NewAssignmentModal, type WorkOrderTaskConfig } from "@/components/admin/NewAssignmentModal";
 import { useWorkOrders, useDeleteWorkOrder, useUpdateWorkOrderStatus } from "@/features/work-orders/hooks/useWorkOrders";
+import { useWorkOrderHours } from "@/features/work-orders/hooks/useWorkOrderHours";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import {
@@ -22,7 +23,7 @@ import {
 import { WorkOrderFormModal } from "./WorkOrderFormModal";
 import { WorkOrderDetailModal } from "./WorkOrderDetailModal";
 import { WorkOrderProfilesModal } from "./WorkOrderProfilesModal";
-import { WorkOrderHoursModal } from "./WorkOrderHoursModal";
+import { WorkOrderSharesModal } from "./WorkOrderSharesModal";
 
 function formatDate(value?: string | null): string {
   if (!value) return "—";
@@ -63,13 +64,21 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   const [formModal, setFormModal] = useState<{ workOrder: WorkOrder | null } | null>(null);
   const [detail, setDetail] = useState<WorkOrder | null>(null);
   const [manage, setManage] = useState<{ workOrder: WorkOrder; kind: "cleaner" | "supervisor" } | null>(null);
-  const [hoursFor, setHoursFor] = useState<WorkOrder | null>(null);
+  const [shares, setShares] = useState<{ workOrder: WorkOrder; complete: boolean } | null>(null);
   const [addTasks, setAddTasks] = useState<WorkOrder | null>(null);
   // A just-created work order awaiting the "add tasks now?" prompt.
   const [promptAddTasks, setPromptAddTasks] = useState<WorkOrder | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WorkOrder | null>(null);
   const [pendingStatus, setPendingStatus] = useState<{ workOrder: WorkOrder; status: WorkOrderStatus } | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  // Client review / completion needs the final cleaners share approved first — check before confirming.
+  const needsFinalShare =
+    !!pendingStatus && (pendingStatus.status === "PENDING_REVIEW" || pendingStatus.status === "COMPLETED");
+  const shareCheck = useWorkOrderHours(pendingStatus?.workOrder.id, needsFinalShare);
+  const shareBlocked =
+    needsFinalShare && !!shareCheck.data && shareCheck.data.entries.length > 0 && !shareCheck.data.approved;
+  const shareUnit = shareCheck.data?.mode === "RATE_PER_HOUR" ? "hours" : "amount";
 
   const workOrders = useMemo(() => {
     const list = workOrdersQuery.data ?? [];
@@ -93,6 +102,11 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
   function confirmStatusChange() {
     if (!pendingStatus) return;
     const { workOrder, status } = pendingStatus;
+    if (shareBlocked) {
+      setPendingStatus(null);
+      setShares({ workOrder, complete: false });
+      return;
+    }
     updateStatus.mutate(
       { id: workOrder.id, status },
       {
@@ -234,13 +248,14 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-end gap-2">
                         {isSupervisor ? (
                           (() => {
-                            // Supervisors only advance a work order to "Tasks Completed" (one-way).
+                            // Supervisors only advance a work order to "Tasks Completed" (one-way), after setting the cleaners share.
                             const completedIdx = WORK_ORDER_STATUS_VALUES.indexOf("TASKS_COMPLETED");
                             const isCompleted = WORK_ORDER_STATUS_VALUES.indexOf(w.status) >= completedIdx;
                             return (
+                              <>
                               <button
                                 type="button"
                                 role="switch"
@@ -248,7 +263,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                                 disabled={isCompleted || updateStatus.isPending}
                                 onClick={() => {
                                   setBanner(null);
-                                  setPendingStatus({ workOrder: w, status: "TASKS_COMPLETED" });
+                                  setShares({ workOrder: w, complete: true });
                                 }}
                                 title={isCompleted ? "Tasks already marked completed" : "Mark tasks completed"}
                                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
@@ -270,6 +285,18 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                                 </span>
                                 {isCompleted ? "Tasks completed" : "Mark completed"}
                               </button>
+                              <RowMenu
+                                label={`Actions for ${w.poId}`}
+                                items={[
+                                  { label: "View details", icon: Eye, onClick: () => setDetail(w) },
+                                  {
+                                    label: "Cleaners share",
+                                    icon: Wallet,
+                                    onClick: () => setShares({ workOrder: w, complete: false }),
+                                  },
+                                ]}
+                              />
+                              </>
                             );
                           })()
                         ) : (
@@ -303,11 +330,11 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                               icon: UserCog,
                               onClick: () => setManage({ workOrder: w, kind: "supervisor" }),
                             },
-                            ...((
-                              ["TASKS_COMPLETED", "PENDING_REVIEW", "COMPLETED"] as WorkOrderStatus[]
-                            ).includes(w.status)
-                              ? [{ label: "Review hours", icon: Clock, onClick: () => setHoursFor(w) }]
-                              : []),
+                            {
+                              label: "Review cleaners share",
+                              icon: Wallet,
+                              onClick: () => setShares({ workOrder: w, complete: false }),
+                            },
                             {
                               label: "Remove",
                               icon: Trash2,
@@ -353,8 +380,19 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         kind={manage?.kind ?? "cleaner"}
       />
 
-      {hoursFor && (
-        <WorkOrderHoursModal workOrderId={hoursFor.id} poId={hoursFor.poId} onClose={() => setHoursFor(null)} />
+      {shares && (
+        <WorkOrderSharesModal
+          workOrderId={shares.workOrder.id}
+          poId={shares.workOrder.poId}
+          completeTasks={shares.complete}
+          onClose={() => setShares(null)}
+          onCompleted={() =>
+            setBanner({
+              kind: "success",
+              text: `Work order ${shares.workOrder.poId} tasks completed — company admins and client service managers have been notified.`,
+            })
+          }
+        />
       )}
       {addTasksConfig && (
         <NewAssignmentModal
@@ -409,18 +447,21 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
 
       <ConfirmDialog
         open={!!pendingStatus}
-        title="Change work order status"
+        tone={shareBlocked ? "primary" : "danger"}
+        title={shareBlocked ? "Final cleaners share required" : "Change work order status"}
         description={
           pendingStatus
-            ? pendingStatus.status === "PENDING_REVIEW"
+            ? shareBlocked
+              ? `Before moving work order "${pendingStatus.workOrder.poId}" to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}, set the final ${shareUnit} for each assigned cleaner and approve it.`
+              : pendingStatus.status === "PENDING_REVIEW"
               ? `Mark work order "${pendingStatus.workOrder.poId}" as Client Review Pending? The client will be emailed and notified to review and give feedback.`
               : pendingStatus.status === "TASKS_COMPLETED"
                 ? `Mark work order "${pendingStatus.workOrder.poId}" as Tasks Completed? Company admins and client service managers will be emailed and notified to send it to the client for review.`
                 : `Change work order "${pendingStatus.workOrder.poId}" status to ${WORK_ORDER_STATUS_LABELS[pendingStatus.status]}?`
             : ""
         }
-        confirmLabel="Yes, continue"
-        isPending={updateStatus.isPending}
+        confirmLabel={shareBlocked ? "Review cleaners share" : "Yes, continue"}
+        isPending={updateStatus.isPending || (needsFinalShare && shareCheck.isLoading)}
         error={updateStatus.isError ? getErrorMessage(updateStatus.error) : undefined}
         onConfirm={confirmStatusChange}
         onClose={() => {

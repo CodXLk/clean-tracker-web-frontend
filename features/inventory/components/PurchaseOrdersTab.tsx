@@ -26,9 +26,11 @@ import { StatusBadge } from "./StatusBadge";
 import { fmtDate, fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/features/inventory/schemas/inventory.schema";
 
-const FILTERS = ["All", "Sent", "Awaiting client", "Client dispatched", "Partially received", "Received", "Cancelled"] as const;
+const FILTERS = ["All", "Draft", "Awaiting supplier confirmation", "Confirmed", "Ready for purchase", "Pending received", "Sent", "Awaiting client", "Client dispatched", "Partially received", "Received", "Cancelled"] as const;
 type Filter = (typeof FILTERS)[number];
 const STATUS_MAP: Record<Exclude<Filter, "All">, PurchaseOrderStatus> = {
+  Draft: "DRAFT", "Awaiting supplier confirmation": "AWAITING_SUPPLIER_CONFIRMATION", Confirmed: "CONFIRMED",
+  "Ready for purchase": "READY_FOR_PURCHASE", "Pending received": "PENDING_RECEIVED",
   Sent: "SENT",
   "Awaiting client": "AWAITING_CLIENT",
   "Client dispatched": "CLIENT_DISPATCHED",
@@ -52,6 +54,7 @@ export function PurchaseOrdersTab({ canManage }: PurchaseOrdersTabProps) {
   const [filter, setFilter] = useState<Filter>("All");
   const [formOpen, setFormOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState<PurchaseOrderDraft | null>(null);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null);
   const [auditPo, setAuditPo] = useState<PurchaseOrder | null>(null);
   const [receiving, setReceiving] = useState<PurchaseOrder | null>(null);
@@ -67,10 +70,12 @@ export function PurchaseOrdersTab({ canManage }: PurchaseOrdersTabProps) {
   const drafts = draftsQuery.data ?? [];
 
   function openNew() {
+    setEditingOrder(null);
     setResumeDraft(null);
     setFormOpen(true);
   }
   function openDraft(d: PurchaseOrderDraft) {
+    setEditingOrder(null);
     setResumeDraft(d);
     setFormOpen(true);
   }
@@ -86,7 +91,7 @@ export function PurchaseOrdersTab({ canManage }: PurchaseOrdersTabProps) {
         </div>
       ),
     },
-    { header: "Supplier", sortAccessor: (p) => p.supplierName, cell: (p) => p.supplierName },
+    { header: "Supplier / method", sortAccessor: (p) => p.supplierName, cell: (p) => <div>{p.supplierName ?? (p.suppliers.length ? `${p.suppliers.length} suppliers` : "Not assigned")}{p.workflowVersion === 2 && <p className="text-xs text-grey-500">{p.procurementMethod === "HAND_CARRY" ? "Hand Carry" : "Supplier Delivery"}</p>}</div> },
     { header: "Status", sortAccessor: (p) => p.status, cell: (p) => <StatusBadge status={p.status} /> },
     { header: "Expected", sortAccessor: (p) => p.expectedDate ?? "", cell: (p) => (p.expectedDate ? fmtDate(p.expectedDate) : "—") },
     { header: "Items", cell: (p) => `${p.lines.length}` },
@@ -99,16 +104,19 @@ export function PurchaseOrdersTab({ canManage }: PurchaseOrdersTabProps) {
         const items: ActionItem[] = [{ label: "View", icon: Eye, onClick: () => setViewing(p) }];
         items.push({ label: "View audit log", icon: History, onClick: () => setAuditPo(p) });
         if (canManage) {
-          if (p.status === "SENT" || p.status === "PARTIALLY_RECEIVED") {
+          if (p.workflowVersion === 2 && p.status === "DRAFT" && !p.suppliers.some(supplier => supplier.recipientEmail)) {
+            items.push({ label: "Edit draft", icon: Pencil, onClick: () => { setResumeDraft(null); setEditingOrder(p); setFormOpen(true); } });
+          }
+          if (p.workflowVersion !== 2 && (p.status === "SENT" || p.status === "PARTIALLY_RECEIVED")) {
             items.push({ label: "Receive (GRN)", icon: PackageCheck, onClick: () => setReceiving(p) });
           }
-          if (p.status === "SENT") {
+          if (p.workflowVersion !== 2 && p.status === "SENT") {
             items.push({ label: "Mark awaiting client", icon: ClipboardCheck, onClick: () => statusMutation.mutate({ id: p.id, status: "AWAITING_CLIENT" }) });
           }
-          if (p.status === "SENT" || p.status === "AWAITING_CLIENT") {
+          if (p.workflowVersion !== 2 && (p.status === "SENT" || p.status === "AWAITING_CLIENT")) {
             items.push({ label: "Mark client dispatched", icon: Truck, onClick: () => statusMutation.mutate({ id: p.id, status: "CLIENT_DISPATCHED" }) });
           }
-          if (p.status !== "RECEIVED" && p.status !== "CANCELLED") {
+          if (p.status !== "RECEIVED" && p.status !== "CANCELLED" && !(p.workflowVersion === 2 && p.status === "PARTIALLY_RECEIVED")) {
             items.push({ label: "Cancel", icon: Ban, destructive: true, onClick: () => setCancelling(p) });
           }
         }
@@ -189,7 +197,7 @@ export function PurchaseOrdersTab({ canManage }: PurchaseOrdersTabProps) {
         />
       )}
 
-      <PurchaseOrderFormModal open={formOpen} onClose={() => setFormOpen(false)} draft={resumeDraft} />
+      <PurchaseOrderFormModal open={formOpen} onClose={() => setFormOpen(false)} draft={resumeDraft} order={editingOrder} />
       <PurchaseOrderDetailModal open={!!viewing} onClose={() => setViewing(null)} order={viewing} />
       <AuditLogModal
         open={!!auditPo}

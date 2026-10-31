@@ -126,7 +126,10 @@ export function useUploadWorkOrderPhotos() {
       });
       return WorkOrderSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(workOrderKeys.detail(saved.id), saved);
+      return queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
   });
 }
 
@@ -137,7 +140,10 @@ export function useDeleteWorkOrderPhoto() {
       const { data } = await clientApi.delete(ENDPOINTS.workOrders.deletePhoto(id, photoId));
       return WorkOrderSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(workOrderKeys.detail(saved.id), saved);
+      return queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
   });
 }
 

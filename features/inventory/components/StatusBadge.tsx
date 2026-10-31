@@ -1,6 +1,14 @@
 import { cn } from "@/lib/utils/cn";
 
 const STYLES: Record<string, string> = {
+  IN_REVIEW: "bg-amber-50 text-amber-700",
+  IN_PROGRESS: "bg-primary/10 text-ink",
+  PARTIALLY_FULFILLED: "bg-amber-50 text-amber-700",
+  PENDING_RECEIVED: "bg-amber-50 text-amber-700",
+  DELIVERED: "bg-success/10 text-success",
+  PARTIALLY_DELIVERED: "bg-amber-50 text-amber-700",
+  AWAITING_SUPPLIER_CONFIRMATION: "bg-amber-50 text-amber-700",
+  READY_FOR_PURCHASE: "bg-primary/10 text-ink",
   PENDING: "bg-[#ED5F25]/10 text-[#ED5F25]",
   APPROVED: "bg-primary/10 text-ink",
   REJECTED: "bg-error/10 text-error",
@@ -19,6 +27,9 @@ const STYLES: Record<string, string> = {
 };
 
 const LABELS: Record<string, string> = {
+  IN_REVIEW: "In review", IN_PROGRESS: "In progress", PARTIALLY_FULFILLED: "Partially fulfilled",
+  PENDING_RECEIVED: "Pending received", DELIVERED: "Delivered", PARTIALLY_DELIVERED: "Partially delivered",
+  AWAITING_SUPPLIER_CONFIRMATION: "Awaiting supplier confirmation", READY_FOR_PURCHASE: "Ready for purchase",
   PENDING: "Pending",
   APPROVED: "Approved",
   REJECTED: "Rejected",

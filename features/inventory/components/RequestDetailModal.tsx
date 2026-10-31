@@ -16,6 +16,8 @@ import {
 } from "@/features/inventory/hooks/useInventory";
 import { fmtQty, fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { InventoryRequest } from "@/features/inventory/schemas/inventory.schema";
+import { useProcurementCapabilities } from "../hooks/useInventoryWorkflow";
+import { InventoryRequestReviewModal } from "./InventoryRequestReviewModal";
 
 interface RequestDetailModalProps {
   open: boolean;
@@ -28,11 +30,19 @@ type EditLine = { key: string; itemId: string; itemName: string; unit: string; q
 
 /** Read-only request detail: requested items on top, current target inventory below, with review actions. */
 export function RequestDetailModal({ open, onClose, request, canManage }: RequestDetailModalProps) {
+  const capabilities = useProcurementCapabilities();
+  if (!open || !request) return null;
+  return request.workflowVersion === 2 || (capabilities.data?.enabled && request.status === "PENDING")
+    ? <InventoryRequestReviewModal key={request.id} open={open} onClose={onClose} request={request} canManage={canManage} />
+    : <LegacyRequestDetailModal open={open} onClose={onClose} request={request} canManage={canManage} />;
+}
+
+function LegacyRequestDetailModal({ open, onClose, request, canManage }: RequestDetailModalProps) {
   const action = useRequestAction();
   const { data: items } = useInventoryItems(true);
   const isCleaner = request?.requestType === "CLEANER";
 
-  const siteInv = useSiteInventory(!isCleaner ? request?.siteId : undefined);
+  const siteInv = useSiteInventory(!isCleaner ? request?.siteId ?? undefined : undefined);
   const cleanerInv = useCleanerInventory(isCleaner ? request?.targetCleanerId ?? undefined : undefined);
 
   const [editMode, setEditMode] = useState(false);

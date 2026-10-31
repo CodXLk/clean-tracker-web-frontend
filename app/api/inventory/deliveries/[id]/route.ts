@@ -6,3 +6,8 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/invento
   const { id } = await ctx.params;
   return proxyBackend(BACKEND.inventory.deliveryById(id), { method: "GET" });
 }
+
+export async function POST(request: NextRequest, ctx: RouteContext<"/api/inventory/deliveries/[id]">) {
+  const { id } = await ctx.params;
+  return proxyBackend(BACKEND.inventory.deliveryById(id), { method: "POST", body: await request.json() });
+}

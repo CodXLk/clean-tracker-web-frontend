@@ -28,7 +28,7 @@ export function DeliveryDetailModal({ open, onClose, delivery }: DeliveryDetailM
   if (!delivery) return null;
 
   const dest = delivery.siteName ?? (delivery.targetCleanerId ? "Cleaner inventory" : "—");
-  const showConfirmed = delivery.status === "RECEIVED" || delivery.status === "PENDING_APPROVAL";
+  const showConfirmed = ["RECEIVED", "PENDING_APPROVAL", "DELIVERED", "PARTIALLY_DELIVERED"].includes(delivery.status);
 
   return (
     <Modal open={open} onClose={onClose} title={`Delivery · ${dest}`}>
@@ -52,6 +52,13 @@ export function DeliveryDetailModal({ open, onClose, delivery }: DeliveryDetailM
           <Field label="Dispatched by" value={delivery.dispatchedByName ?? "—"} />
           <Field label="Dispatched at" value={delivery.dispatchedAt ? fmtDateTime(delivery.dispatchedAt) : "—"} />
           <Field label="Confirmed by" value={delivery.confirmedByName ?? "—"} />
+          {delivery.workflowVersion === 2 && <><Field label="Purchase order" value={delivery.poNumber ?? "-"} />
+            <Field label="Procurement method" value={delivery.procurementMethod === "HAND_CARRY" ? "Hand Carry" : delivery.procurementMethod === "SUPPLIER_DELIVERY" ? "Supplier Delivery" : delivery.source ?? "Warehouse transfer"} />
+            <Field label="Receiving person" value={delivery.assignedReceiverName ?? "-"} />
+            {delivery.handCarryPersonName && <Field label="Hand-carry person" value={delivery.handCarryPersonName} />}
+            <Field label="Destination address" value={delivery.destinationAddress ?? "-"} />
+            {delivery.handoverAt && <Field label="Items brought at" value={fmtDateTime(delivery.handoverAt)} />}
+            {delivery.overrideReason && <Field label="Management override" value={delivery.overrideReason} />}</>}
         </div>
 
         <div className="overflow-hidden rounded-xl border border-grey-200">

@@ -14,10 +14,13 @@ import { AuditLogModal } from "./AuditLogModal";
 import { StatusBadge } from "./StatusBadge";
 import { fmtDateTime } from "@/features/inventory/lib/inventory";
 import type { InventoryRequest, RequestStatus } from "@/features/inventory/schemas/inventory.schema";
+import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
+import { useClientInventoryRequests } from "../hooks/useInventory";
 
-const FILTERS = ["All", "Pending", "Approved", "Rejected", "Fulfilled"] as const;
+const FILTERS = ["All", "Pending", "In review", "In progress", "Partially fulfilled", "Approved", "Rejected", "Fulfilled"] as const;
 type Filter = (typeof FILTERS)[number];
 const STATUS_MAP: Record<Exclude<Filter, "All">, RequestStatus> = {
+  "In review": "IN_REVIEW", "In progress": "IN_PROGRESS", "Partially fulfilled": "PARTIALLY_FULFILLED",
   Pending: "PENDING", Approved: "APPROVED", Rejected: "REJECTED", Fulfilled: "FULFILLED",
 };
 
@@ -27,15 +30,20 @@ interface RequestsTabProps {
 
 export function RequestsTab({ canManage }: RequestsTabProps) {
   const [filter, setFilter] = useState<Filter>("All");
+  const [source, setSource] = useState<"Warehouse requests" | "Client requests">("Warehouse requests");
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState<InventoryRequest | null>(null);
   const [auditReq, setAuditReq] = useState<InventoryRequest | null>(null);
 
-  const query = useRequests(filter === "All" ? {} : { status: STATUS_MAP[filter] });
-  const requests = query.data ?? [];
+  const warehouseQuery = useRequests(filter === "All" ? { source: "WAREHOUSE" } : { source: "WAREHOUSE", status: STATUS_MAP[filter] });
+  const clientQuery = useClientInventoryRequests();
+  const query = source === "Client requests" ? clientQuery : warehouseQuery;
+  const requests = (query.data ?? []).filter(request => (source === "Client requests" ? request.source === "CLIENT" : request.source === "WAREHOUSE")
+    && (filter === "All" || request.status === STATUS_MAP[filter]));
 
   return (
     <div className="flex flex-col gap-4">
+      <SegmentedTabs options={["Warehouse requests", "Client requests"] as const} value={source} onChange={setSource} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <FilterSelect<Filter> options={[...FILTERS]} value={filter} onChange={setFilter} label="" />
         <button

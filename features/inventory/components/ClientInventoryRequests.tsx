@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { PackageCheck } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -8,10 +8,14 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import {
   useClientInventoryRequests,
   useClientDispatchRequest,
+  useDeliveries,
 } from "@/features/inventory/hooks/useInventory";
 import { StatusBadge } from "@/features/inventory/components/StatusBadge";
 import { fmtQty } from "@/features/inventory/lib/inventory";
 import type { InventoryRequest } from "@/features/inventory/schemas/inventory.schema";
+import type { InventoryDelivery } from "@/features/inventory/schemas/inventory.schema";
+import { RequestDetailModal } from "./RequestDetailModal";
+import { WorkflowDeliveryProgressModal } from "./WorkflowDeliveryControls";
 
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -22,10 +26,15 @@ function formatDate(iso?: string | null): string {
 export function ClientInventoryRequests() {
   const query = useClientInventoryRequests();
   const [active, setActive] = useState<InventoryRequest | null>(null);
+  const [viewing, setViewing] = useState<InventoryRequest | null>(null);
+  const [progressing, setProgressing] = useState<InventoryDelivery | null>(null);
+  const deliveryQuery = useDeliveries({});
 
   const requests = query.data ?? [];
-  const pending = useMemo(() => requests.filter((r) => r.status === "APPROVED"), [requests]);
-  const history = useMemo(() => requests.filter((r) => r.status === "FULFILLED"), [requests]);
+  const pending = requests.filter(r => r.workflowVersion !== 2 && r.status === "APPROVED");
+  const history = requests.filter(r => r.workflowVersion !== 2 && r.status === "FULFILLED");
+  const modern = requests.filter(request => request.workflowVersion === 2);
+  const pendingDeliveries = (deliveryQuery.data ?? []).filter(delivery => delivery.workflowVersion === 2 && delivery.source === "CLIENT" && delivery.status === "PENDING");
 
   if (query.isLoading) {
     return (
@@ -34,16 +43,18 @@ export function ClientInventoryRequests() {
       </div>
     );
   }
-  if (pending.length === 0 && history.length === 0) return null;
+  if (pending.length === 0 && history.length === 0 && modern.length === 0 && pendingDeliveries.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-6">
       <div>
         <h2 className="text-sm font-semibold text-on-surface">Item stock requests</h2>
-        <p className="text-xs text-grey-500">
-          Requests for stock you supply. Review the items, adjust quantities and dispatch to the site.
-        </p>
       </div>
+
+      {modern.map(request => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-200 pb-3"><div><p className="text-sm font-medium">{request.siteName}</p><StatusBadge status={request.status} /></div>
+        <button type="button" onClick={() => setViewing(request)} className="rounded-lg border px-4 py-2 text-sm">View request</button></div>)}
+      {pendingDeliveries.map(delivery => <div key={delivery.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-200 pb-3"><div className="text-sm"><p className="font-medium">{delivery.siteName}</p><p className="text-grey-500">{delivery.lines.length} items - Pending dispatch</p></div>
+        <button type="button" onClick={() => setProgressing(delivery)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">Dispatch approved items</button></div>)}
 
       {pending.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -65,6 +76,8 @@ export function ClientInventoryRequests() {
       )}
 
       <ClientRequestDispatchModal open={!!active} onClose={() => setActive(null)} request={active} />
+      <RequestDetailModal open={!!viewing} request={viewing} canManage={false} onClose={() => setViewing(null)} />
+      {progressing && <WorkflowDeliveryProgressModal delivery={progressing} onClose={() => setProgressing(null)} />}
     </section>
   );
 }
