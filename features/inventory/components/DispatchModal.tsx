@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
@@ -11,6 +11,7 @@ import { useSites } from "@/features/user-management/hooks/useSites";
 import { useInventoryItems, useDispatchDelivery } from "@/features/inventory/hooks/useInventory";
 import type { InventoryRequest } from "@/features/inventory/schemas/inventory.schema";
 import { fmtQty } from "@/features/inventory/lib/inventory";
+import { useInventoryPeople, useProcurementCapabilities } from "../hooks/useInventoryWorkflow";
 
 interface DispatchModalProps {
   open: boolean;
@@ -31,14 +32,20 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
   const dispatchMutation = useDispatchDelivery();
 
   const [siteId, setSiteId] = useState("");
+  const [receiver, setReceiver] = useState("");
+  const operation = useRef(crypto.randomUUID());
+  const capabilities = useProcurementCapabilities();
+  const people = useInventoryPeople("SITE", siteId || undefined, undefined, !!capabilities.data?.enabled);
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<Line[]>([{ itemId: "", expected: "", minStock: "" }]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    operation.current = crypto.randomUUID();
+    setReceiver("");
     if (request) {
-      setSiteId(request.siteId);
+      setSiteId(request.siteId ?? "");
       setLines(request.lines.map((l) => ({
         itemId: l.itemId,
         expected: String(l.requestedQuantity),
@@ -79,6 +86,8 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
     e.preventDefault();
     setError(null);
     if (!siteId) return setError("Select a site.");
+    const assignedReceiver = receiver || (people.data?.length === 1 ? people.data[0]!.id : undefined);
+    if (capabilities.data?.enabled && !assignedReceiver) return setError("Select the receiving person.");
     const cleaned = lines
       .filter((l) => l.itemId && parseFloat(l.expected) > 0)
       .map((l) => ({
@@ -95,7 +104,8 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
       }
     }
     dispatchMutation.mutate(
-      { siteId, requestId: request?.id, note: note.trim() || undefined, lines: cleaned },
+      { siteId, requestId: request?.id, note: note.trim() || undefined, lines: cleaned,
+        assignedReceiverId: assignedReceiver, operationKey: operation.current },
       { onSuccess: onClose },
     );
   }
@@ -104,8 +114,7 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Dispatch to site"
-      description="Send stock from the main warehouse. Set a minimum stock to enable low-stock alerts at the site."
+      title={capabilities.data?.enabled ? "Create warehouse transfer" : "Dispatch to site"}
     >
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <SearchableSelect
@@ -113,11 +122,14 @@ export function DispatchModal({ open, onClose, request }: DispatchModalProps) {
           required
           options={siteOptions}
           value={siteId || null}
-          onChange={setSiteId}
+          onChange={value => { setSiteId(value); setReceiver(""); }}
           disabled={!!request}
           loading={sitesQuery.isLoading}
           placeholder="Select a site"
         />
+        {capabilities.data?.enabled && <SearchableSelect label="Receiving person" required
+          value={receiver || (people.data?.length === 1 ? people.data[0]!.id : null)} loading={people.isLoading}
+          options={(people.data ?? []).map(person => ({ value: person.id, label: person.name }))} onChange={setReceiver} />}
 
         <div className="flex flex-col gap-2">
           <div className="grid grid-cols-[1fr_80px_80px_36px] items-center gap-2 text-xs font-medium text-grey-500">

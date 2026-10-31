@@ -10,6 +10,9 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
 import { useSuppliers } from "@/features/inventory/hooks/useSuppliers";
 import { useCreatePurchaseOrder, type CreatePurchaseOrderInput } from "@/features/inventory/hooks/usePurchaseOrders";
+import { useProcurementCapabilities } from "../hooks/useInventoryWorkflow";
+import { ProcurementOrderFormModal } from "./ProcurementOrderFormModal";
+import type { PurchaseOrder } from "../schemas/inventory.schema";
 import {
   useSavePurchaseOrderDraft,
   useDeletePurchaseOrderDraft,
@@ -20,6 +23,8 @@ interface PurchaseOrderFormModalProps {
   open: boolean;
   onClose: () => void;
   draft?: PurchaseOrderDraft | null;
+  order?: PurchaseOrder | null;
+  onSaved?: (order: PurchaseOrder) => void;
 }
 
 type LineDraft = { key: string; itemId: string; quantity: string };
@@ -36,7 +41,15 @@ type PoPayload = {
   lines?: { itemId: string; quantity: string }[];
 };
 
-export function PurchaseOrderFormModal({ open, onClose, draft }: PurchaseOrderFormModalProps) {
+export function PurchaseOrderFormModal(props: PurchaseOrderFormModalProps) {
+  const capabilities = useProcurementCapabilities();
+  if (!props.open || capabilities.isLoading) return null;
+  return capabilities.data?.enabled || props.order?.workflowVersion === 2
+    ? <ProcurementOrderFormModal key={props.order?.id ?? props.draft?.id ?? "new"} {...props} />
+    : <LegacyPurchaseOrderFormModal {...props} />;
+}
+
+function LegacyPurchaseOrderFormModal({ open, onClose, draft }: PurchaseOrderFormModalProps) {
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers(true);
   const { data: items, isLoading: itemsLoading } = useInventoryItems(true);
   const createMutation = useCreatePurchaseOrder();

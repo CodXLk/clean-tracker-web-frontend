@@ -55,6 +55,7 @@ function buildPayload(values: ItemFormInput) {
     costPrice: values.costPrice,
     minStock: values.minStock,
     supplierId: values.supplierId || undefined,
+    supplierIds: values.supplierIds,
   };
 }
 
@@ -105,6 +106,7 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
             costPrice: item.costPrice ?? undefined,
             minStock: item.minStock ?? undefined,
             supplierId: item.supplierId ?? "",
+            supplierIds: item.suppliers.map(supplier => supplier.id),
           }
         : EMPTY,
     );
@@ -275,7 +277,7 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
           name="supplierId"
           render={({ field }) => (
             <SearchableSelect
-              label="Supplier"
+              label="Preferred supplier"
               required
               options={(suppliers ?? []).map((s) => ({ value: s.id, label: s.name }))}
               value={field.value || null}
@@ -286,6 +288,14 @@ export function ItemFormModal({ open, onClose, item }: ItemFormModalProps) {
             />
           )}
         />
+
+        <Controller control={control} name="supplierIds" render={({ field }) => <fieldset className="flex flex-col gap-2 border-t border-grey-200 pt-3">
+          <legend className="text-sm font-medium">Additional suppliers</legend>
+          {(suppliers ?? []).filter(supplier => !supplier.clientSelfSupplying).map(supplier => <label key={supplier.id} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={(field.value ?? []).includes(supplier.id)} onChange={event => field.onChange(event.target.checked
+              ? [...(field.value ?? []), supplier.id] : (field.value ?? []).filter(id => id !== supplier.id))} />{supplier.name}
+          </label>)}
+        </fieldset>} />
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-on-surface">Item photo (optional)</label>

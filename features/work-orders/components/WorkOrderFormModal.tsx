@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, Upload, ShieldCheck, MapPin, ArrowRight, MoonStar } from "lucide-react";
+import { X, Upload, ShieldCheck, MapPin, ArrowRight, MoonStar, Replace } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
 import { TimeField } from "@/components/shared/TimeField";
@@ -29,6 +29,7 @@ import {
   useUpdateWorkOrder,
   useUploadWorkOrderPhotos,
   useDeleteWorkOrderPhoto,
+  useWorkOrder,
 } from "@/features/work-orders/hooks/useWorkOrders";
 import type { WorkOrder } from "@/features/work-orders/schemas/workOrder.schema";
 import {
@@ -72,6 +73,8 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const update = useUpdateWorkOrder();
   const uploadPhotos = useUploadWorkOrderPhotos();
   const deletePhoto = useDeleteWorkOrderPhoto();
+  const currentWorkOrder = useWorkOrder(open ? workOrder?.id : undefined);
+  const savedPhotos = currentWorkOrder.data?.photos ?? workOrder?.photos ?? [];
   const me = useMe();
   // Client pricing is company-admin/super-admin only.
   const canViewPricing = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
@@ -120,6 +123,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replacementPhotoId = useRef<string | null>(null);
+  const [replacingPhoto, setReplacingPhoto] = useState(false);
 
   // Outsource (create-time only): provisions an outsource project on the work order's site.
   const [outsourceEnabled, setOutsourceEnabled] = useState(false);
@@ -128,7 +134,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [outCompanyId, setOutCompanyId] = useState("");
   const [newCompanyName, setNewCompanyName] = useState("");
 
-  const pending = isEdit ? update.isPending : create.isPending;
+  const pending = (isEdit ? update.isPending : create.isPending) || deletePhoto.isPending || replacingPhoto;
   const mutationError = isEdit ? update.error : create.error;
   const isError = isEdit ? update.isError : create.isError;
 
@@ -227,7 +233,35 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
   function addFiles(files: FileList | null) {
     if (!files) return;
-    setPendingFiles((prev) => [...prev, ...Array.from(files)]);
+    const selectedFiles = Array.from(files);
+    setPendingFiles((prev) => [...prev, ...selectedFiles]);
+  }
+
+  function removePhoto(photoId: string) {
+    if (!workOrder || pending || uploadPhotos.isPending) return;
+    setFormError(null);
+    deletePhoto.mutate(
+      { id: workOrder.id, photoId },
+      { onError: (error) => setFormError(`Could not remove photo: ${getErrorMessage(error)}`) },
+    );
+  }
+
+  async function replacePhoto(file: File | undefined) {
+    const photoId = replacementPhotoId.current;
+    replacementPhotoId.current = null;
+    if (!file || !photoId || !workOrder || pending || uploadPhotos.isPending) return;
+    setFormError(null);
+    setReplacingPhoto(true);
+    let uploaded = false;
+    try {
+      await uploadPhotos.mutateAsync({ id: workOrder.id, files: [file] });
+      uploaded = true;
+      await deletePhoto.mutateAsync({ id: workOrder.id, photoId });
+    } catch (error) {
+      setFormError(`${uploaded ? "New photo uploaded, but the original could not be removed" : "Could not replace photo"}: ${getErrorMessage(error)}`);
+    } finally {
+      setReplacingPhoto(false);
+    }
   }
 
   function validate(): string | null {
@@ -253,6 +287,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   }
 
   function handleSubmit() {
+    if (pending || uploadPhotos.isPending) return;
     const error = validate();
     if (error) {
       setFormError(error);
@@ -295,11 +330,30 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
         {
           onSuccess: async () => {
             if (pendingFiles.length > 0) {
-              await uploadPhotos.mutateAsync({ id: workOrder.id, files: pendingFiles }).catch(() => {});
+              try {
+                await uploadPhotos.mutateAsync({ id: workOrder.id, files: pendingFiles });
+              } catch (error) {
+                setFormError(`Work order saved, but the photos could not be uploaded: ${getErrorMessage(error)}`);
+                return;
+              }
             }
             onUpdated?.(trimmedPo);
             handleClose();
           },
+        },
+      );
+      return;
+    }
+
+    if (create.data) {
+      uploadPhotos.mutate(
+        { id: create.data.id, files: pendingFiles },
+        {
+          onSuccess: (saved) => {
+            onCreated?.(saved);
+            handleClose();
+          },
+          onError: (error) => setFormError(`Work order saved, but the photos could not be uploaded: ${getErrorMessage(error)}`),
         },
       );
       return;
@@ -347,7 +401,15 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       {
         onSuccess: async (created) => {
           if (pendingFiles.length > 0) {
-            await uploadPhotos.mutateAsync({ id: created.id, files: pendingFiles }).catch(() => {});
+            try {
+              const saved = await uploadPhotos.mutateAsync({ id: created.id, files: pendingFiles });
+              onCreated?.(saved);
+              handleClose();
+              return;
+            } catch (error) {
+              setFormError(`Work order saved, but the photos could not be uploaded: ${getErrorMessage(error)}`);
+              return;
+            }
           }
           onCreated?.(created);
           handleClose();
@@ -844,17 +906,32 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           <span className="text-sm font-medium text-on-surface">Photos from the client</span>
           <div className="flex flex-wrap gap-2">
             {isEdit &&
-              (workOrder?.photos ?? []).map((p) => (
+              savedPhotos.map((p) => (
                 <div key={p.id} className="relative h-20 w-20 overflow-hidden rounded-lg border border-grey-200">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={photoUrl(p.id)} alt={p.originalFilename ?? "Work order photo"} className="h-full w-full object-cover" />
                   <button
                     type="button"
                     aria-label="Remove photo"
-                    onClick={() => workOrder && deletePhoto.mutate({ id: workOrder.id, photoId: p.id })}
+                    title="Remove photo"
+                    disabled={pending || uploadPhotos.isPending}
+                    onClick={() => removePhoto(p.id)}
                     className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
                   >
                     <X size={12} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Replace ${p.originalFilename ?? "photo"}`}
+                    title="Replace photo"
+                    disabled={pending || uploadPhotos.isPending}
+                    onClick={() => {
+                      replacementPhotoId.current = p.id;
+                      replaceInputRef.current?.click();
+                    }}
+                    className="absolute bottom-0.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                  >
+                    <Replace size={14} aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -865,6 +942,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
                 <button
                   type="button"
                   aria-label="Remove photo"
+                  disabled={pending || uploadPhotos.isPending}
                   onClick={() => setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))}
                   className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
                 >
@@ -874,6 +952,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             ))}
             <button
               type="button"
+              disabled={pending || uploadPhotos.isPending}
               onClick={() => fileInputRef.current?.click()}
               className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-grey-300 text-xs text-grey-500 transition-colors hover:border-primary hover:text-ink"
             >
@@ -883,12 +962,26 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             <input
               ref={fileInputRef}
               type="file"
+              disabled={pending || uploadPhotos.isPending}
               accept="image/*"
               multiple
               className="hidden"
               onChange={(e) => {
                 addFiles(e.target.files);
                 e.currentTarget.value = "";
+              }}
+            />
+            <input
+              ref={replaceInputRef}
+              type="file"
+              aria-label="Replacement photo"
+              accept="image/*"
+              disabled={pending || uploadPhotos.isPending}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                e.currentTarget.value = "";
+                void replacePhoto(file);
               }}
             />
           </div>
@@ -914,7 +1007,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             disabled={pending || uploadPhotos.isPending}
             className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            {pending || uploadPhotos.isPending ? "Saving…" : isEdit ? "Save changes" : "Create work order"}
+            {pending || uploadPhotos.isPending ? "Saving…" : isEdit ? "Save changes" : create.data ? "Retry photo upload" : "Create work order"}
           </button>
         </div>
       </div>

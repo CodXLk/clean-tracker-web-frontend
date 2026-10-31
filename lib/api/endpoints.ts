@@ -230,6 +230,11 @@ export const ENDPOINTS = {
   },
   purchaseOrders: {
     list:   "/purchase-orders",
+    capabilities: "/purchase-orders/capabilities",
+    eligiblePeople: "/purchase-orders/eligible-people",
+    startHandCarry: (id: string) => `/purchase-orders/${id}/start-hand-carry`,
+    supplierStatus: (id: string, supplierId: string) => `/purchase-orders/${id}/suppliers/${supplierId}/status`,
+    supplierResend: (id: string, supplierId: string) => `/purchase-orders/${id}/suppliers/${supplierId}/resend`,
     create: "/purchase-orders",
     clientRequests: "/purchase-orders/client-requests",
     clientDispatch: (id: string) => `/purchase-orders/${id}/client-dispatch`,
@@ -528,6 +533,11 @@ export const BACKEND = {
   },
   purchaseOrders: {
     list:   "/api/v1/purchase-orders",
+    capabilities: "/api/v1/purchase-orders/capabilities",
+    eligiblePeople: "/api/v1/purchase-orders/eligible-people",
+    startHandCarry: (id: string) => `/api/v1/purchase-orders/${id}/start-hand-carry`,
+    supplierStatus: (id: string, supplierId: string) => `/api/v1/purchase-orders/${id}/suppliers/${supplierId}/status`,
+    supplierResend: (id: string, supplierId: string) => `/api/v1/purchase-orders/${id}/suppliers/${supplierId}/resend`,
     create: "/api/v1/purchase-orders",
     clientRequests: "/api/v1/purchase-orders/client-requests",
     clientDispatch: (id: string) => `/api/v1/purchase-orders/${id}/client-dispatch`,

@@ -8,6 +8,7 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useConfirmDelivery, useApproveReceipt } from "@/features/inventory/hooks/useInventory";
 import { fmtQty } from "@/features/inventory/lib/inventory";
 import type { InventoryDelivery } from "@/features/inventory/schemas/inventory.schema";
+import { WorkflowConfirmDeliveryModal } from "./WorkflowConfirmDeliveryModal";
 
 interface ConfirmDeliveryModalProps {
   open: boolean;
@@ -23,6 +24,12 @@ interface LineState {
 }
 
 export function ConfirmDeliveryModal({ open, onClose, delivery, mode = "confirm" }: ConfirmDeliveryModalProps) {
+  if (!open || !delivery) return null;
+  return delivery.workflowVersion === 2 ? <WorkflowConfirmDeliveryModal key={delivery.id} delivery={delivery} onClose={onClose} />
+    : <LegacyConfirmDeliveryModal open={open} onClose={onClose} delivery={delivery} mode={mode} />;
+}
+
+function LegacyConfirmDeliveryModal({ open, onClose, delivery, mode = "confirm" }: ConfirmDeliveryModalProps) {
   const confirmMutation = useConfirmDelivery();
   const approveMutation = useApproveReceipt();
   const mutation = mode === "approve" ? approveMutation : confirmMutation;

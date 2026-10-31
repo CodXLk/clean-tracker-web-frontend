@@ -18,6 +18,10 @@ function label(type: string) {
   return INVENTORY_EVENT_TYPE_LABELS[type as InventoryEventType] ?? type;
 }
 
+function formatChanges(value: string) {
+  try { const parsed: unknown = JSON.parse(value); return JSON.stringify(parsed, null, 2); } catch { return value; }
+}
+
 export function AuditLogModal({ open, onClose, refType, refId, title }: AuditLogModalProps) {
   const { data: events = [], isLoading } = useInventoryEvents(
     open && refId ? { refType, refId } : {},
@@ -43,6 +47,7 @@ export function AuditLogModal({ open, onClose, refType, refId, title }: AuditLog
                   <span className="text-xs text-grey-500">{fmtDateTime(e.performedAt)}</span>
                 </div>
                 {e.message && <p className="text-sm text-on-surface-variant">{e.message}</p>}
+                {e.detailsJson && <details className="mt-2 text-xs"><summary className="cursor-pointer text-grey-600">Recorded changes</summary><pre className="mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-grey-50 p-3">{formatChanges(e.detailsJson)}</pre></details>}
                 <p className="text-xs text-grey-500">by {e.performedByName ?? "System"}</p>
               </div>
             </li>

@@ -7,6 +7,7 @@ import { Modal } from "@/components/shared/Modal";
 import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
+import { useWorkOrder } from "@/features/work-orders/hooks/useWorkOrders";
 import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRICE_TYPE_LABELS,
@@ -67,11 +68,12 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
   const [lightbox, setLightbox] = useState<number | null>(null);
   const certLabel = useCertificateLabels();
   const me = useMe();
+  const currentWorkOrder = useWorkOrder(open ? workOrder?.id : undefined);
   // Client pricing is company-admin/super-admin only.
   const canViewPricing = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
   if (!workOrder) return null;
 
-  const photos = workOrder.photos;
+  const photos = currentWorkOrder.data?.photos ?? workOrder.photos;
 
   return (
     <Modal
@@ -116,14 +118,18 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           </div>
         )}
 
-        {workOrder.description && (
-          <section>
-            <SectionTitle>Scope</SectionTitle>
-            <p className="rounded-xl bg-grey-50 px-3.5 py-3 text-sm leading-relaxed text-on-surface">
+        <section>
+          <SectionTitle>Notes — what needs to be done</SectionTitle>
+          {workOrder.description ? (
+            <p className="whitespace-pre-line rounded-xl bg-grey-50 px-3.5 py-3 text-sm leading-relaxed text-on-surface">
               {workOrder.description}
             </p>
-          </section>
-        )}
+          ) : (
+            <p className="rounded-xl border border-dashed border-grey-200 px-3.5 py-3 text-sm text-grey-500">
+              No notes added.
+            </p>
+          )}
+        </section>
 
         {(workOrder.requiredCertificatesAllWorkers.length > 0 ||
           workOrder.requiredCertificatesAnyWorker.length > 0) && (

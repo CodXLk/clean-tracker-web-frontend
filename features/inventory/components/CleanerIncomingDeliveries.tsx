@@ -6,6 +6,10 @@ import { PillButton } from "@/components/shared/PillButton";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { useDeliveries, useConfirmDelivery } from "@/features/inventory/hooks/useInventory";
 import { fmtQty } from "@/features/inventory/lib/inventory";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { WorkflowConfirmDeliveryModal } from "./WorkflowConfirmDeliveryModal";
+import { WorkflowDeliveryProgressModal } from "./WorkflowDeliveryControls";
+import type { InventoryDelivery } from "../schemas/inventory.schema";
 
 /** Cleaner/supervisor-facing list of warehouse deliveries awaiting a receipt confirmation.
  *  Received quantities are editable per line (enter 0 for items that did not arrive). */
@@ -14,10 +18,15 @@ export function CleanerIncomingDeliveries() {
   const confirm = useConfirmDelivery();
   // Per-delivery, per-line received quantity overrides (keyed by `${deliveryId}:${lineId}`).
   const [received, setReceived] = useState<Record<string, string>>({});
+  const me = useMe();
+  const [workflow, setWorkflow] = useState<InventoryDelivery | null>(null);
+  const workflowIncoming = deliveries.filter(delivery => delivery.workflowVersion === 2
+    && ((delivery.status === "PENDING_RECEIVED" && delivery.assignedReceiverId === me.data?.id)
+      || (delivery.status === "PENDING" && delivery.source === "HAND_CARRY" && delivery.handCarryPersonId === me.data?.id)));
 
   const incoming = deliveries.filter((d) => !!d.targetCleanerId && d.status === "DISPATCHED");
 
-  if (isLoading || incoming.length === 0) return null;
+  if (isLoading || (incoming.length === 0 && workflowIncoming.length === 0)) return null;
 
   function valueFor(deliveryId: string, lineId: string, fallback: number) {
     const key = `${deliveryId}:${lineId}`;
@@ -42,6 +51,8 @@ export function CleanerIncomingDeliveries() {
         <h2 className="text-sm font-semibold text-on-surface">Incoming stock — confirm receipt</h2>
       </div>
       <div className="flex flex-col gap-3">
+        {workflowIncoming.map(delivery => <div key={delivery.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-200 pb-3"><div className="text-sm"><p className="font-semibold">{delivery.poNumber ?? delivery.siteName ?? "Cleaner inventory"}</p><p className="text-xs text-grey-500">{delivery.procurementMethod === "HAND_CARRY" ? "Hand Carry" : "Incoming stock"}</p></div>
+          <button type="button" onClick={() => setWorkflow(delivery)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">{delivery.status === "PENDING" ? "Items brought / Ready for receipt" : "Confirm actual quantities"}</button></div>)}
         {incoming.map((d) => (
           <div key={d.id} className="rounded-xl border border-grey-200 bg-white p-3">
             <ul className="mb-3 flex flex-col gap-2">
@@ -77,6 +88,7 @@ export function CleanerIncomingDeliveries() {
           </div>
         ))}
       </div>
+      {workflow && (workflow.status === "PENDING" ? <WorkflowDeliveryProgressModal delivery={workflow} onClose={() => setWorkflow(null)} /> : <WorkflowConfirmDeliveryModal delivery={workflow} onClose={() => setWorkflow(null)} />)}
     </section>
   );
 }

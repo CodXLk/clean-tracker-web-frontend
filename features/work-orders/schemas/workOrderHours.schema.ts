@@ -23,6 +23,8 @@ export const WorkOrderHoursReviewSchema = z.object({
   rate: z.number().nullable().optional(),
   approved: z.boolean(),
   entries: z.array(WorkOrderHourEntrySchema).default([]),
+  allocatedAmount: z.number().nullable().optional(),
+  supervisorSubmitted: z.boolean().default(false),
 });
 export type WorkOrderHoursReview = z.infer<typeof WorkOrderHoursReviewSchema>;
 

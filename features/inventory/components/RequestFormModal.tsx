@@ -128,7 +128,7 @@ export function RequestFormModal({ open, onClose, fixedSiteId, canManage = true 
       {
         siteId,
         requestType,
-        source,
+        source: requestType === "CLEANER" ? "WAREHOUSE" : source,
         cleanerId: requestType === "CLEANER" ? cleanerId : undefined,
         note: note.trim() || undefined,
         confirmedStock,
@@ -195,15 +195,15 @@ export function RequestFormModal({ open, onClose, fixedSiteId, canManage = true 
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-on-surface">Request from</span>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(REQUEST_SOURCE_LABELS) as RequestSource[]).map((s) => (
+            {(Object.keys(REQUEST_SOURCE_LABELS) as RequestSource[]).filter(value => requestType !== "CLEANER" || value === "WAREHOUSE").map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setSource(s)}
-                aria-pressed={source === s}
+                aria-pressed={(requestType === "CLEANER" ? "WAREHOUSE" : source) === s}
                 className={
                   "h-11 rounded-xl border px-3 text-sm font-semibold transition-colors " +
-                  (source === s
+                  ((requestType === "CLEANER" ? "WAREHOUSE" : source) === s
                     ? "border-primary bg-primary/10 text-ink"
                     : "border-grey-300 text-grey-500 hover:border-primary/50")
                 }
@@ -219,7 +219,7 @@ export function RequestFormModal({ open, onClose, fixedSiteId, canManage = true 
             <span className="text-sm font-medium text-on-surface">
               Confirm current {requestType === "CLEANER" ? "cleaner" : "site"} inventory
             </span>
-            <p className="text-xs text-grey-500">Update these to match what's actually on hand before requesting.</p>
+            <p className="text-xs text-grey-500">Confirm the quantities currently on hand.</p>
             {(requestType === "CLEANER" ? cleanerInvQuery.isLoading : siteInvQuery.isLoading) ? (
               <p className="py-2 text-center text-xs text-grey-500">Loading current stock…</p>
             ) : currentRows.length === 0 ? (

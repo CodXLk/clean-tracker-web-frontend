@@ -238,7 +238,7 @@ export interface RequestLineInput {
   requestedQuantity: number;
 }
 
-export function useRequests(filters: { status?: RequestStatus; siteId?: string } = {}) {
+export function useRequests(filters: { status?: RequestStatus; siteId?: string; source?: RequestSource } = {}) {
   return useQuery({
     queryKey: inventoryKeys.requests(JSON.stringify(filters)),
     queryFn: async () => {
@@ -337,7 +337,7 @@ export function useDispatchDelivery() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      siteId: string; requestId?: string; note?: string; lines: DispatchLineInput[];
+      siteId: string; requestId?: string; note?: string; lines: DispatchLineInput[]; assignedReceiverId?: string; operationKey?: string;
     }) => {
       const { data } = await clientApi.post(ENDPOINTS.inventory.deliveries, input);
       return InventoryDeliverySchema.parse(data);

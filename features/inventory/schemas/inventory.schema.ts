@@ -28,6 +28,9 @@ export const TransactionTypeSchema = z.enum([
   "DELIVERY_IN",
   "TASK_CONSUMPTION",
   "SITE_ADJUST",
+  "GRN_IN",
+  "CLEANER_ISSUE",
+  "CLEANER_IN", "CLEANER_ADJUST",
 ]);
 export type TransactionType = z.infer<typeof TransactionTypeSchema>;
 
@@ -38,10 +41,16 @@ export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   DELIVERY_IN: "Received",
   TASK_CONSUMPTION: "Task used",
   SITE_ADJUST: "Site corrected",
+  GRN_IN: "Purchase received",
+  CLEANER_ISSUE: "Cleaner stock issued",
+  CLEANER_IN: "Cleaner stock received", CLEANER_ADJUST: "Cleaner stock corrected",
 };
 
 export const RequestStatusSchema = z.enum([
   "PENDING",
+  "IN_REVIEW",
+  "IN_PROGRESS",
+  "PARTIALLY_FULFILLED",
   "APPROVED",
   "REJECTED",
   "FULFILLED",
@@ -49,7 +58,7 @@ export const RequestStatusSchema = z.enum([
 ]);
 export type RequestStatus = z.infer<typeof RequestStatusSchema>;
 
-export const DeliveryStatusSchema = z.enum(["PENDING_DISPATCH", "DISPATCHED", "PENDING_APPROVAL", "RECEIVED", "CANCELLED"]);
+export const DeliveryStatusSchema = z.enum(["PENDING", "PENDING_RECEIVED", "DELIVERED", "PARTIALLY_DELIVERED", "PENDING_DISPATCH", "DISPATCHED", "PENDING_APPROVAL", "RECEIVED", "CANCELLED"]);
 export type DeliveryStatus = z.infer<typeof DeliveryStatusSchema>;
 
 export const RequestTypeSchema = z.enum(["SITE", "CLEANER"]);
@@ -83,6 +92,7 @@ export const InventoryItemSchema = z.object({
   lowStock: z.boolean().optional(),
   supplierId: z.string().uuid().nullable().optional(),
   supplierName: z.string().nullable().optional(),
+  suppliers: z.array(z.object({ id: z.string().uuid(), name: z.string(), active: z.boolean() })).default([]),
   mainStockQuantity: z.number(),
   stockValue: z.number(),
   active: z.boolean(),
@@ -123,6 +133,7 @@ export const ItemFormSchema = z.object({
   costPrice: z.number().min(0, "Cannot be negative").optional(),
   minStock: z.number().min(0, "Cannot be negative").optional(),
   supplierId: z.string().uuid("Supplier is required"),
+  supplierIds: z.array(z.string().uuid()).optional(),
   openingStock: z.number().min(0, "Cannot be negative").optional(),
 });
 export type ItemFormInput = z.infer<typeof ItemFormSchema>;
@@ -171,6 +182,7 @@ export type SiteInventory = z.infer<typeof SiteInventorySchema>;
 // ── Transactions (ledger) ───────────────────────────────────────────────────────
 
 export const TransactionSchema = z.object({
+  cleanerId: z.string().uuid().nullable().optional(),
   id: z.string().uuid(),
   itemId: z.string().uuid(),
   itemName: z.string(),
@@ -192,6 +204,9 @@ export type Transaction = z.infer<typeof TransactionSchema>;
 // ── Workflow event log ────────────────────────────────────────────────────────
 
 export const INVENTORY_EVENT_TYPE_VALUES = [
+  "REQUEST_ITEMS_EDITED", "REQUEST_STOCK_RESERVED", "REQUEST_SHORTAGE_CALCULATED", "REQUEST_PO_LINKED", "REQUEST_ALLOCATION_DECIDED", "REQUEST_RESERVATION_RELEASED",
+  "PO_UPDATED", "PO_METHOD_CHANGED", "PO_PERSON_ASSIGNED", "PO_HAND_CARRY_STARTED", "PO_ITEMS_BROUGHT",
+  "PO_EMAIL_QUEUED", "PO_EMAIL_FAILED", "PO_EMAIL_RESEND_REQUESTED", "PO_SUPPLIER_CONFIRMED", "PO_SUPPLIER_DISPATCHED",
   "REQUEST_CREATED",
   "STOCK_RECONCILED",
   "REQUEST_APPROVED",
@@ -214,6 +229,22 @@ export const InventoryEventTypeSchema = z.enum(INVENTORY_EVENT_TYPE_VALUES);
 export type InventoryEventType = z.infer<typeof InventoryEventTypeSchema>;
 
 export const INVENTORY_EVENT_TYPE_LABELS: Record<InventoryEventType, string> = {
+  REQUEST_ITEMS_EDITED: "Request items edited",
+  REQUEST_STOCK_RESERVED: "Stock reserved",
+  REQUEST_SHORTAGE_CALCULATED: "Shortage calculated",
+  REQUEST_PO_LINKED: "Added to purchase order",
+  REQUEST_ALLOCATION_DECIDED: "Quantity decision",
+  REQUEST_RESERVATION_RELEASED: "Reservations released",
+  PO_UPDATED: "PO updated",
+  PO_METHOD_CHANGED: "Procurement method changed",
+  PO_PERSON_ASSIGNED: "Person assigned",
+  PO_HAND_CARRY_STARTED: "Hand Carry started",
+  PO_ITEMS_BROUGHT: "Items brought",
+  PO_EMAIL_QUEUED: "Supplier email queued",
+  PO_EMAIL_FAILED: "Supplier email failed",
+  PO_EMAIL_RESEND_REQUESTED: "Supplier email resend requested",
+  PO_SUPPLIER_CONFIRMED: "Supplier confirmed",
+  PO_SUPPLIER_DISPATCHED: "Supplier dispatched",
   REQUEST_CREATED: "Request created",
   STOCK_RECONCILED: "Stock confirmed",
   REQUEST_APPROVED: "Request approved",
@@ -234,6 +265,7 @@ export const INVENTORY_EVENT_TYPE_LABELS: Record<InventoryEventType, string> = {
 };
 
 export const InventoryEventSchema = z.object({
+  detailsJson: z.string().nullable().optional(),
   id: z.string().uuid(),
   eventType: InventoryEventTypeSchema,
   refType: z.string().nullable().optional(),
@@ -250,6 +282,14 @@ export type InventoryEvent = z.infer<typeof InventoryEventSchema>;
 // ── Requests ────────────────────────────────────────────────────────────────────
 
 const RequestLineSchema = z.object({
+  id: z.string().uuid().nullable().optional(),
+  originalQuantity: z.number().nullable().optional(),
+  allocations: z.array(z.object({
+    id: z.string().uuid(), source: z.enum(["WAREHOUSE", "CLIENT", "PURCHASE_ORDER"]),
+    status: z.enum(["RESERVED", "APPROVED", "IN_DELIVERY", "RECEIVED", "PARTIALLY_RECEIVED", "REJECTED", "CANCELLED"]),
+    quantity: z.number(), receivedQuantity: z.number(), purchaseOrderId: z.string().uuid().nullable().optional(),
+    poNumber: z.string().nullable().optional(),
+  })).default([]),
   itemId: z.string().uuid(),
   itemName: z.string(),
   unit: z.string(),
@@ -258,8 +298,12 @@ const RequestLineSchema = z.object({
 
 export const InventoryRequestSchema = z.object({
   id: z.string().uuid(),
-  siteId: z.string().uuid(),
-  siteName: z.string(),
+  siteId: z.string().uuid().nullable().optional(),
+  siteName: z.string().nullable().optional(),
+  workflowVersion: z.number().nullable().optional(),
+  version: z.number().default(0),
+  reviewStep: z.number().nullable().optional(),
+  assignedReceiverId: z.string().uuid().nullable().optional(),
   requestType: RequestTypeSchema.default("SITE"),
   source: RequestSourceSchema.default("WAREHOUSE"),
   targetCleanerId: z.string().uuid().nullable().optional(),
@@ -282,6 +326,7 @@ export type InventoryRequest = z.infer<typeof InventoryRequestSchema>;
 // ── Deliveries ──────────────────────────────────────────────────────────────────
 
 const DeliveryLineSchema = z.object({
+  purchaseOrderLineId: z.string().uuid().nullable().optional(),
   id: z.string().uuid(),
   itemId: z.string().uuid(),
   itemName: z.string(),
@@ -292,15 +337,30 @@ const DeliveryLineSchema = z.object({
 });
 
 export const InventoryDeliverySchema = z.object({
+  workflowVersion: z.number().nullable().optional(),
+  version: z.number().default(0),
+  source: z.enum(["WAREHOUSE", "CLIENT", "SUPPLIER", "HAND_CARRY"]).nullable().optional(),
+  procurementMethod: z.enum(["SUPPLIER_DELIVERY", "HAND_CARRY"]).nullable().optional(),
+  orderType: z.enum(["WAREHOUSE", "SITE", "CLEANER"]).nullable().optional(),
+  purchaseOrderId: z.string().uuid().nullable().optional(),
+  poNumber: z.string().nullable().optional(),
+  destinationAddress: z.string().nullable().optional(),
+  assignedReceiverId: z.string().uuid().nullable().optional(),
+  assignedReceiverName: z.string().nullable().optional(),
+  handCarryPersonId: z.string().uuid().nullable().optional(),
+  handCarryPersonName: z.string().nullable().optional(),
+  handoverBy: z.string().uuid().nullable().optional(),
+  handoverAt: z.string().nullable().optional(),
+  overrideReason: z.string().nullable().optional(),
   id: z.string().uuid(),
   siteId: z.string().uuid().nullable().optional(),
   siteName: z.string().nullable().optional(),
   targetCleanerId: z.string().uuid().nullable().optional(),
   requestId: z.string().uuid().nullable().optional(),
   status: DeliveryStatusSchema,
-  dispatchedBy: z.string().uuid(),
+  dispatchedBy: z.string().uuid().nullable().optional(),
   dispatchedByName: z.string().nullable().optional(),
-  dispatchedAt: z.string(),
+  dispatchedAt: z.string().nullable().optional(),
   confirmedBy: z.string().uuid().nullable().optional(),
   confirmedByName: z.string().nullable().optional(),
   confirmedAt: z.string().nullable().optional(),
@@ -367,6 +427,7 @@ export type SupplierFormInput = z.infer<typeof SupplierFormSchema>;
 
 export const PurchaseOrderStatusSchema = z.enum([
   "DRAFT",
+  "AWAITING_SUPPLIER_CONFIRMATION", "CONFIRMED", "READY_FOR_PURCHASE", "PENDING_RECEIVED",
   "SENT",
   "AWAITING_CLIENT",
   "CLIENT_DISPATCHED",
@@ -377,6 +438,10 @@ export const PurchaseOrderStatusSchema = z.enum([
 export type PurchaseOrderStatus = z.infer<typeof PurchaseOrderStatusSchema>;
 
 export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  AWAITING_SUPPLIER_CONFIRMATION: "Awaiting supplier confirmation",
+  CONFIRMED: "Confirmed",
+  READY_FOR_PURCHASE: "Ready for purchase",
+  PENDING_RECEIVED: "Pending received",
   DRAFT: "Draft",
   SENT: "Sent",
   AWAITING_CLIENT: "Awaiting client",
@@ -387,6 +452,9 @@ export const PO_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
 };
 
 const PurchaseOrderLineSchema = z.object({
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
   id: z.string().uuid(),
   itemId: z.string().uuid(),
   itemName: z.string(),
@@ -400,8 +468,23 @@ export type PurchaseOrderLine = z.infer<typeof PurchaseOrderLineSchema>;
 export const PurchaseOrderSchema = z.object({
   id: z.string().uuid(),
   poNumber: z.string(),
-  supplierId: z.string().uuid(),
-  supplierName: z.string(),
+  supplierId: z.string().uuid().nullable().optional(),
+  supplierName: z.string().nullable().optional(),
+  workflowVersion: z.number().nullable().optional(),
+  version: z.number().default(0),
+  orderType: z.enum(["WAREHOUSE", "SITE", "CLEANER"]).optional(),
+  procurementMethod: z.enum(["SUPPLIER_DELIVERY", "HAND_CARRY"]).nullable().optional(),
+  cleanerId: z.string().uuid().nullable().optional(),
+  assignedReceiverId: z.string().uuid().nullable().optional(),
+  assignedReceiverName: z.string().nullable().optional(),
+  handCarryPersonId: z.string().uuid().nullable().optional(),
+  handCarryPersonName: z.string().nullable().optional(),
+  cleanerName: z.string().nullable().optional(),
+  suppliers: z.array(z.object({
+    supplierId: z.string().uuid(), supplierName: z.string(), status: PurchaseOrderStatusSchema,
+    recipientEmail: z.string().nullable().optional(), sendError: z.string().nullable().optional(),
+    sentAt: z.string().nullable().optional(), confirmedAt: z.string().nullable().optional(), dispatchedAt: z.string().nullable().optional(),
+  })).default([]),
   supplierEmail: z.string().nullable().optional(),
   clientSelfSupplying: z.boolean().default(false),
   siteId: z.string().uuid().nullable().optional(),
@@ -417,6 +500,23 @@ export const PurchaseOrderSchema = z.object({
 });
 export const PurchaseOrderListSchema = z.array(PurchaseOrderSchema);
 export type PurchaseOrder = z.infer<typeof PurchaseOrderSchema>;
+
+export const ProcurementCapabilitiesSchema = z.object({ enabled: z.boolean(), orderTypes: z.array(z.string()), procurementMethods: z.array(z.string()) });
+export const InventoryPersonListSchema = z.array(z.object({ id: z.string().uuid(), name: z.string(), role: z.string() }));
+export const InventoryReviewSchema = z.object({
+  request: InventoryRequestSchema,
+  stock: z.array(z.object({ lineId: z.string().uuid(), itemId: z.string().uuid(), currentStock: z.number(),
+    warehouseStock: z.number(), warehouseAvailable: z.number(), shortageQuantity: z.number() })),
+});
+export const GeneratedInventoryPurchaseSchema = z.object({ review: InventoryReviewSchema, purchaseOrder: PurchaseOrderSchema });
+export type InventoryReview = z.infer<typeof InventoryReviewSchema>;
+export type PurchaseOrderType = "WAREHOUSE" | "SITE" | "CLEANER";
+export type ProcurementMethod = "SUPPLIER_DELIVERY" | "HAND_CARRY";
+
+export const LegacyPurchaseDraftPayloadSchema = z.object({
+  supplierId: z.string().optional(), expectedDate: z.string().optional(), deliveryAddress: z.string().optional(), note: z.string().optional(),
+  lines: z.array(z.object({ itemId: z.string(), quantity: z.union([z.string(), z.number()]), supplierId: z.string().optional(), note: z.string().optional() })).optional(),
+});
 
 // ── Goods receipts ──────────────────────────────────────────────────────────────
 
@@ -437,7 +537,7 @@ export const GoodsReceiptSchema = z.object({
   grnNumber: z.string(),
   purchaseOrderId: z.string().uuid(),
   poNumber: z.string(),
-  supplierName: z.string(),
+  supplierName: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   receivedBy: z.string().uuid().nullable().optional(),
   receivedAt: z.string().nullable().optional(),
