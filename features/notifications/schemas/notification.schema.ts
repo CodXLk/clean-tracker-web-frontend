@@ -12,10 +12,30 @@ export const NotificationTypeSchema = z
     "REQUEST_REJECTED",
     "DELIVERY_DISPATCHED",
     "DELIVERY_CONFIRMED",
+    "DELIVERY_NEEDS_APPROVAL",
+    "INVENTORY_EXPIRY",
     // Attendance / tasks / complaints (cleaner + management facing)
     "CHECKOUT_WITH_PENDING_TASKS",
+    "FORCED_CHECKOUT",
+    "ATTENDANCE_PAUSED",
     "COMPLAINT_RAISED",
+    "COMPLAINT_COMPLETED",
+    "COMPLAINT_RESOLVED",
     "TASK_REDO_ASSIGNED",
+    "TASK_ASSIGNED",
+    // Work orders
+    "WORK_ORDER_TASKS_COMPLETED",
+    "WORK_ORDER_PENDING_REVIEW",
+    "WORK_ORDER_COMPLETED",
+    // Slot assignment acceptance
+    "ASSIGNMENT_APPROVAL_REQUESTED",
+    "ASSIGNMENT_APPROVAL_PENDING_ALERT",
+    // Leave
+    "LEAVE_REQUESTED",
+    "LEAVE_COVER_REQUESTED",
+    "LEAVE_COVER_ACCEPTED",
+    "LEAVE_APPROVED",
+    "LEAVE_REJECTED",
     // Compliance
     "DOCUMENT_UPLOADED",
     // Forward-compat fallback (never sent by the backend)

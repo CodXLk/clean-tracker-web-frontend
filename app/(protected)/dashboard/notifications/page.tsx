@@ -23,8 +23,10 @@ import {
   useMarkAllRead,
 } from "@/features/notifications/hooks/useNotifications";
 import type { Notification, NotificationType } from "@/features/notifications/schemas/notification.schema";
+import { notificationHref } from "@/features/notifications/lib/notificationLink";
+import { useMe } from "@/features/auth/hooks/useMe";
 
-const ICONS: Record<NotificationType, LucideIcon> = {
+const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   LOW_STOCK: AlertTriangle,
   REQUEST_SUBMITTED: PackagePlus,
   REQUEST_APPROVED: PackageCheck,
@@ -38,7 +40,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   OTHER: Bell,
 };
 
-const ICON_TONES: Record<NotificationType, string> = {
+const ICON_TONES: Partial<Record<NotificationType, string>> = {
   LOW_STOCK: "bg-[#ED5F25]/10 text-[#ED5F25]",
   REQUEST_SUBMITTED: "bg-primary/10 text-ink",
   REQUEST_APPROVED: "bg-success/10 text-success",
@@ -51,22 +53,6 @@ const ICON_TONES: Record<NotificationType, string> = {
   DOCUMENT_UPLOADED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
-
-/** Cleaner-app deep-link per notification type. */
-function linkFor(type: NotificationType): string | null {
-  switch (type) {
-    case "TASK_REDO_ASSIGNED":
-      return "/dashboard/tasks";
-    case "COMPLAINT_RAISED":
-      return "/admin/complaints";
-    case "DELIVERY_DISPATCHED":
-    case "DELIVERY_CONFIRMED":
-    case "LOW_STOCK":
-      return "/admin/inventory";
-    default:
-      return null;
-  }
-}
 
 function formatWhen(iso: string): string {
   const then = new Date(iso).getTime();
@@ -84,6 +70,7 @@ function formatWhen(iso: string): string {
 export default function CleanerNotificationsPage() {
   const useDrawerNav = useIsDrawerNav();
   const router = useRouter();
+  const role = useMe().data?.role;
   const { data, isLoading, isError } = useNotifications();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
@@ -93,7 +80,7 @@ export default function CleanerNotificationsPage() {
 
   function open(n: Notification) {
     if (!n.read) markRead.mutate(n.id);
-    const href = linkFor(n.type);
+    const href = notificationHref(n, role);
     if (href) router.push(href);
   }
 

@@ -232,7 +232,12 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
               profileIndexes: t.profileIndexes ?? [],
             })),
           }
-        : { ...EMPTY, workOrderSite, siteType: workOrderSite ? "BUILDING_CLEANING" : "GENERAL" },
+        : {
+            ...EMPTY,
+            workOrderSite,
+            siteType: workOrderSite ? "BUILDING_CLEANING" : "GENERAL",
+            numberOfCleaners: workOrderSite ? 1 : 2,
+          },
     );
     createMutation.reset();
     updateMutation.reset();

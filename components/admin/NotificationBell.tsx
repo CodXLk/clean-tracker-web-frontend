@@ -24,8 +24,10 @@ import {
   useMarkAllRead,
 } from "@/features/notifications/hooks/useNotifications";
 import type { NotificationType } from "@/features/notifications/schemas/notification.schema";
+import { notificationHref } from "@/features/notifications/lib/notificationLink";
+import { useMe } from "@/features/auth/hooks/useMe";
 
-const ICONS: Record<NotificationType, LucideIcon> = {
+const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   LOW_STOCK: AlertTriangle,
   REQUEST_SUBMITTED: PackagePlus,
   REQUEST_APPROVED: PackageCheck,
@@ -39,7 +41,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   OTHER: Bell,
 };
 
-const ICON_TONES: Record<NotificationType, string> = {
+const ICON_TONES: Partial<Record<NotificationType, string>> = {
   LOW_STOCK: "bg-[#ED5F25]/10 text-[#ED5F25]",
   REQUEST_SUBMITTED: "bg-primary/10 text-ink",
   REQUEST_APPROVED: "bg-success/10 text-success",
@@ -52,21 +54,6 @@ const ICON_TONES: Record<NotificationType, string> = {
   DOCUMENT_UPLOADED: "bg-primary/10 text-ink",
   OTHER: "bg-grey-100 text-grey-500",
 };
-
-/** Deep-link target per notification for the admin console. */
-function linkFor(n: { type: NotificationType; refId?: string | null }): string {
-  switch (n.type) {
-    case "COMPLAINT_RAISED":
-      return "/admin/complaints";
-    case "CHECKOUT_WITH_PENDING_TASKS":
-    case "TASK_REDO_ASSIGNED":
-      return "/admin/cleaner-logs";
-    case "DOCUMENT_UPLOADED":
-      return n.refId ? `/admin/workforce?docUser=${n.refId}` : "/admin/workforce";
-    default:
-      return "/admin/inventory";
-  }
-}
 
 function formatWhen(iso: string): string {
   const then = new Date(iso).getTime();
@@ -85,6 +72,7 @@ function formatWhen(iso: string): string {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const role = useMe().data?.role;
 
   const unread = useUnreadCount();
   const notifications = useNotifications();
@@ -172,33 +160,43 @@ export function NotificationBell() {
                 {recent.map((n) => {
                   const Icon = ICONS[n.type] ?? Bell;
                   const tone = ICON_TONES[n.type] ?? "bg-grey-100 text-grey-500";
+                  const href = notificationHref(n, role);
+                  const body = (
+                    <>
+                      <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", tone)}>
+                        <Icon size={16} aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-sm font-medium text-on-surface">{n.title}</p>
+                          <span className="shrink-0 text-[11px] text-grey-400">{formatWhen(n.createdAt)}</span>
+                        </div>
+                        {n.message && <p className="mt-0.5 line-clamp-2 text-xs text-grey-500">{n.message}</p>}
+                      </div>
+                      {!n.read && (
+                        <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                      )}
+                    </>
+                  );
+                  const rowClass = cn(
+                    "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-grey-50",
+                    !n.read && "bg-primary/[0.03]",
+                  );
+                  const onSelect = () => {
+                    if (!n.read) markRead.mutate(n.id);
+                    setOpen(false);
+                  };
                   return (
                     <li key={n.id}>
-                      <Link
-                        href={linkFor(n)}
-                        onClick={() => {
-                          if (!n.read) markRead.mutate(n.id);
-                          setOpen(false);
-                        }}
-                        className={cn(
-                          "flex items-start gap-3 px-4 py-3 transition-colors hover:bg-grey-50",
-                          !n.read && "bg-primary/[0.03]",
-                        )}
-                      >
-                        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", tone)}>
-                          <Icon size={16} aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="truncate text-sm font-medium text-on-surface">{n.title}</p>
-                            <span className="shrink-0 text-[11px] text-grey-400">{formatWhen(n.createdAt)}</span>
-                          </div>
-                          {n.message && <p className="mt-0.5 line-clamp-2 text-xs text-grey-500">{n.message}</p>}
-                        </div>
-                        {!n.read && (
-                          <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                        )}
-                      </Link>
+                      {href ? (
+                        <Link href={href} onClick={onSelect} className={rowClass}>
+                          {body}
+                        </Link>
+                      ) : (
+                        <button type="button" onClick={onSelect} className={rowClass}>
+                          {body}
+                        </button>
+                      )}
                     </li>
                   );
                 })}

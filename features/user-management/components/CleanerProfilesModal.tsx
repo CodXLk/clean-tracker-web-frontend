@@ -135,7 +135,7 @@ export function CleanerProfilesModal({
 
   const copySourceOptions: SelectOption[] = useMemo(
     () =>
-      profiles.map((p) => ({
+      profiles.filter((p) => p.cleanerId).map((p) => ({
         value: p.id,
         label: profileLabel(p),
         sublabel: `${taskCountOf(p)} task${taskCountOf(p) === 1 ? "" : "s"}${
@@ -200,9 +200,10 @@ export function CleanerProfilesModal({
 
   function handleAdd() {
     if (!site) return;
-    if (copyEnabled && !copySourceId) return;
+    const copy = copyEnabled && copySourceOptions.length > 0;
+    if (copy && !copySourceId) return;
     addProfile.mutate(
-      { siteId: site.id, copyFromProfileId: copyEnabled ? copySourceId : null },
+      { siteId: site.id, copyFromProfileId: copy ? copySourceId : null },
       {
         onSuccess: () => {
           setView("assign");
@@ -249,10 +250,12 @@ export function CleanerProfilesModal({
         // ── Add a cleaner slot (optionally copy an existing slot's scope) ──────────
         <div className="flex flex-col gap-4">
           <p className="rounded-xl bg-grey-50 px-3 py-2 text-xs text-grey-500">
-            A new cleaner slot will be created for this site. You can copy an existing cleaner&apos;s
-            task scope onto it, so the cleaner you place in the new slot shares those same tasks.
+            A new cleaner slot will be created for this site.
+            {copySourceOptions.length > 0 &&
+              " You can copy an existing cleaner's task scope onto it, so the cleaner you place in the new slot shares those same tasks."}
           </p>
 
+          {copySourceOptions.length > 0 && (
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-medium text-on-surface">
               Copy an existing cleaner&apos;s tasks to the new slot?
@@ -272,13 +275,13 @@ export function CleanerProfilesModal({
                 name="copy-choice"
                 checked={copyEnabled}
                 onChange={() => setCopyEnabled(true)}
-                disabled={profiles.length === 0}
               />
               Yes — copy the workforce scope from an existing cleaner
             </label>
           </fieldset>
+          )}
 
-          {copyEnabled && (
+          {copyEnabled && copySourceOptions.length > 0 && (
             <SearchableSelect
               label="Copy tasks from"
               options={copySourceOptions}

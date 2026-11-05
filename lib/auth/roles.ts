@@ -64,6 +64,7 @@ export function isAccessTokenExpired(token: string | undefined | null): boolean 
 export const SUPERVISOR_ALLOWED_HREFS = [
   "/dashboard",
   "/dashboard/inspections",
+  "/dashboard/leave",
   "/admin/complaints",
   "/admin/inventory",
   "/admin/cleaner-management",

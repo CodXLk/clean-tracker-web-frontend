@@ -281,8 +281,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       const allocated = Number(cleaningAllocatedAmount);
       if (Number.isNaN(allocated) || allocated < 0) return "Enter a valid cleaning allocated amount (0 or more).";
     }
-    if ((startTime && !endTime) || (!startTime && endTime))
-      return "Enter both a start and end time, or leave both empty.";
+    if (!startTime && endTime) return "Enter a start time when setting an end time.";
     return null;
   }
 
@@ -633,7 +632,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
               </div>
               <ArrowRight size={16} className="mb-3 shrink-0 text-grey-400" aria-hidden="true" />
               <div className="flex-1">
-                <TimeField label="End" value={endTime} onChange={setEndTime} />
+                <TimeField label="End (optional)" value={endTime} onChange={setEndTime} />
               </div>
             </div>
             {(() => {

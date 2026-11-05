@@ -27,8 +27,10 @@ import type {
   Notification,
   NotificationType,
 } from "@/features/notifications/schemas/notification.schema";
+import { notificationHref } from "@/features/notifications/lib/notificationLink";
+import { useMe } from "@/features/auth/hooks/useMe";
 
-const ICONS: Record<NotificationType, LucideIcon> = {
+const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   LOW_STOCK: AlertTriangle,
   REQUEST_SUBMITTED: PackagePlus,
   REQUEST_APPROVED: PackageCheck,
@@ -42,7 +44,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   OTHER: Bell,
 };
 
-const ICON_TONES: Record<NotificationType, string> = {
+const ICON_TONES: Partial<Record<NotificationType, string>> = {
   LOW_STOCK: "bg-[#ED5F25]/10 text-[#ED5F25]",
   REQUEST_SUBMITTED: "bg-primary/10 text-ink",
   REQUEST_APPROVED: "bg-success/10 text-success",
@@ -75,6 +77,7 @@ type Tab = (typeof TABS)[number];
 
 function NotificationRow({ n }: { n: Notification }) {
   const markRead = useMarkRead();
+  const href = notificationHref(n, useMe().data?.role);
   const Icon = ICONS[n.type] ?? Bell;
   const tone = ICON_TONES[n.type] ?? "bg-grey-100 text-grey-500";
 
@@ -96,39 +99,15 @@ function NotificationRow({ n }: { n: Notification }) {
         </div>
         {n.message && <p className="mt-0.5 text-sm text-grey-500">{n.message}</p>}
         <div className="mt-2 flex items-center gap-3">
-          {n.type === "LOW_STOCK" && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
-              View inventory
-            </Link>
-          )}
-          {(n.type === "REQUEST_SUBMITTED" ||
-            n.type === "REQUEST_APPROVED" ||
-            n.type === "REQUEST_REJECTED") && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
-              View requests
-            </Link>
-          )}
-          {(n.type === "DELIVERY_DISPATCHED" || n.type === "DELIVERY_CONFIRMED") && (
-            <Link href="/admin/inventory" className="text-xs font-medium text-ink hover:underline">
-              View deliveries
-            </Link>
-          )}
-          {n.type === "COMPLAINT_RAISED" && (
-            <Link href="/admin/complaints" className="text-xs font-medium text-ink hover:underline">
-              View complaint
-            </Link>
-          )}
-          {(n.type === "CHECKOUT_WITH_PENDING_TASKS" || n.type === "TASK_REDO_ASSIGNED") && (
-            <Link href="/admin/cleaner-logs" className="text-xs font-medium text-ink hover:underline">
-              View cleaner logs
-            </Link>
-          )}
-          {n.type === "DOCUMENT_UPLOADED" && (
+          {href && (
             <Link
-              href={n.refId ? `/admin/workforce?docUser=${n.refId}` : "/admin/workforce"}
+              href={href}
+              onClick={() => {
+                if (!n.read) markRead.mutate(n.id);
+              }}
               className="text-xs font-medium text-ink hover:underline"
             >
-              Review document
+              View
             </Link>
           )}
           {!n.read && (
