@@ -37,6 +37,43 @@ export const CleanerSiteSchema = z.object({
   lastPingDistanceMeters: z.number().nullable().optional(),
   shifts: z.array(ShiftWindowSchema).default([]),
   checkInAllowed: z.boolean().default(true),
+  timezone: z.string().nullable().optional(),
+  workOrderSite: z.boolean().optional().default(false),
+  minimumWorkMinutes: z.number().nullable().optional(),
+  enforceShiftWindow: z.boolean().optional().default(false),
+  shift: z
+    .object({
+      date: z.string(),
+      startTime: z.string(),
+      endTime: z.string(),
+      originalStart: z.string().nullable().optional(),
+      moveMinutes: z.number().default(0),
+      startAt: z.string(),
+      endAt: z.string(),
+      checkInOpensAt: z.string(),
+      checkInClosesAt: z.string(),
+      inProgress: z.boolean(),
+    })
+    .nullable()
+    .optional(),
+  generalCheckInAllowed: z.boolean().optional().default(true),
+  workOrders: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        poId: z.string(),
+        description: z.string().nullable().optional(),
+        windowStart: z.string().nullable().optional(),
+        windowEnd: z.string().nullable().optional(),
+        checkInOpensAt: z.string().nullable().optional(),
+        checkInAllowed: z.boolean(),
+      }),
+    )
+    .default([]),
+  sessionType: z.enum(["GENERAL", "WORK_ORDER"]).nullable().optional(),
+  workOrderId: z.string().uuid().nullable().optional(),
+  poId: z.string().nullable().optional(),
+  pausedMinutes: z.number().optional().default(0),
 });
 export const CleanerSiteListSchema = z.array(CleanerSiteSchema);
 export type CleanerSite = z.infer<typeof CleanerSiteSchema>;
@@ -70,6 +107,19 @@ export const AttendanceLogSchema = z.object({
   lastPingLatitude: z.number().nullable().optional(),
   lastPingLongitude: z.number().nullable().optional(),
   lastPingDistanceMeters: z.number().nullable().optional(),
+  sessionType: z.enum(["GENERAL", "WORK_ORDER"]).nullable().optional(),
+  workOrderId: z.string().uuid().nullable().optional(),
+  poId: z.string().nullable().optional(),
+  timezone: z.string().nullable().optional(),
+  scheduledStartAt: z.string().nullable().optional(),
+  scheduledEndAt: z.string().nullable().optional(),
+  lateMinutes: z.number().nullable().optional(),
+  pausedMinutes: z.number().optional().default(0),
+  grossMinutes: z.number().nullable().optional(),
+  workedMinutes: z.number().nullable().optional(),
+  closeReason: z.string().nullable().optional(),
+  leaveCoverId: z.string().uuid().nullable().optional(),
+  coveredCleanerId: z.string().uuid().nullable().optional(),
 });
 export const AttendanceLogListSchema = z.array(AttendanceLogSchema);
 export type AttendanceLog = z.infer<typeof AttendanceLogSchema>;
@@ -85,6 +135,8 @@ export interface CheckInPayload {
   acknowledgeIncomplete?: boolean;
   /** Cleaner confirms a forced check-out (incomplete tasks and/or before the shift ends). */
   force?: boolean;
+  /** Work order (PO) being checked in for; omitted for general cleaning. */
+  workOrderId?: string;
 }
 
 /** Periodic location heartbeat sent while checked in. When the location can't be obtained,

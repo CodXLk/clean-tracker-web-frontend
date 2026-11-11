@@ -36,6 +36,18 @@ export const NotificationTypeSchema = z
     "LEAVE_COVER_ACCEPTED",
     "LEAVE_APPROVED",
     "LEAVE_REJECTED",
+    // Cleaner site shifts
+    "SHIFT_PLAN_SUBMITTED",
+    "SHIFT_PLAN_APPROVED",
+    "SHIFT_PLAN_REJECTED",
+    "SHIFT_ADJUSTED",
+    "SHIFT_ADJUSTMENT_REQUESTED",
+    "SHIFT_ADJUSTMENT_APPROVED",
+    "SHIFT_ADJUSTMENT_REJECTED",
+    "SHIFT_REMINDER",
+    "HOURS_REVIEW_PENDING",
+    "HOURS_APPROVAL_PENDING",
+    "HOURS_REOPENED",
     // Compliance
     "DOCUMENT_UPLOADED",
     // Forward-compat fallback (never sent by the backend)

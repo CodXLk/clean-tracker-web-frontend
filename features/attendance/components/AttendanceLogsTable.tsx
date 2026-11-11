@@ -8,6 +8,7 @@ import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import { useAttendanceLogs, type AttendanceLogFilters } from "@/features/attendance/hooks/useAttendance";
 import { AttendanceMapModal } from "./AttendanceMapModal";
 import type { AttendanceLog } from "@/features/attendance/schemas/attendance.schema";
+import { CLOSE_REASON_LABELS, formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 
 function fmtDate(value?: string | null): string {
   if (!value) return "—";
@@ -130,14 +131,17 @@ export function AttendanceLogsTable() {
           <div className="py-12 text-center text-sm text-grey-500">No attendance records match these filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className="border-b border-grey-200 bg-grey-50 text-xs uppercase tracking-wide text-grey-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Cleaner</th>
                   <th className="px-4 py-3 font-medium">Site</th>
                   <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Check-in</th>
                   <th className="px-4 py-3 font-medium">Check-out</th>
+                  <th className="px-4 py-3 font-medium">Worked</th>
+                  <th className="px-4 py-3 font-medium">Paused</th>
                   <th className="px-4 py-3 font-medium">Method</th>
                   <th className="px-4 py-3 font-medium">Distance</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -154,8 +158,27 @@ export function AttendanceLogsTable() {
                       <td className="px-4 py-3 font-medium text-on-surface">{log.cleanerName ?? "—"}</td>
                       <td className="px-4 py-3 text-grey-700">{log.siteName}</td>
                       <td className="px-4 py-3 text-grey-700">{fmtDate(log.occurrenceDate)}</td>
-                      <td className="px-4 py-3 text-grey-700">{fmtTime(log.checkInAt)}</td>
-                      <td className="px-4 py-3 text-grey-700">{fmtTime(log.checkOutAt)}</td>
+                      <td className="px-4 py-3 text-grey-700">
+                        {log.sessionType === "WORK_ORDER" ? `PO ${log.poId ?? ""}` : log.sessionType ? "General" : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-grey-700">
+                        {fmtTime(log.checkInAt)}
+                        {log.lateMinutes ? <span className="ml-1 text-[11px] text-error">+{log.lateMinutes}m late</span> : null}
+                      </td>
+                      <td className="px-4 py-3 text-grey-700">
+                        {fmtTime(log.checkOutAt)}
+                        {log.closeReason && log.closeReason !== "CHECKED_OUT" ? (
+                          <span className="block text-[11px] text-grey-500">
+                            {CLOSE_REASON_LABELS[log.closeReason] ?? log.closeReason}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-on-surface">
+                        {log.workedMinutes != null ? formatMinutes(log.workedMinutes) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-grey-700">
+                        {log.pausedMinutes ? formatMinutes(log.pausedMinutes) : "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <MethodBadge method={log.checkInMethod} />
                       </td>

@@ -18,6 +18,7 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
   const addCover = useAddLeaveCover();
   const removeCover = useRemoveLeaveCover();
   const [selections, setSelections] = useState<Record<string, string>>({});
+  const [ranges, setRanges] = useState<Record<string, { from: string; to: string }>>({});
   const [error, setError] = useState<string | null>(null);
 
   const cleanerOptions = useMemo(
@@ -29,17 +30,26 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
     [supervisors],
   );
 
-  // One cover per (site, role).
-  const coverByKey = useMemo(() => {
-    const map = new Map<string, (typeof leave.covers)[number]>();
-    for (const c of leave.covers) map.set(roleKey(c.siteId, c.coverRole), c);
+  // Covers per (site, role) — a long leave may be split across several people by date.
+  const coversByKey = useMemo(() => {
+    const map = new Map<string, (typeof leave.covers)[number][]>();
+    for (const c of leave.covers) {
+      const k = roleKey(c.siteId, c.coverRole);
+      map.set(k, [...(map.get(k) ?? []), c]);
+    }
+    for (const list of map.values()) list.sort((a, b) => (a.coverFrom ?? "").localeCompare(b.coverFrom ?? ""));
     return map;
   }, [leave.covers]);
+
+  function rangeOf(key: string) {
+    return ranges[key] ?? { from: leave.startDate, to: leave.endDate };
+  }
 
   function nominate(siteId: string, role: CoverRole) {
     const key = roleKey(siteId, role);
     const chosen = selections[key];
     if (!chosen) return;
+    const { from, to } = rangeOf(key);
     setError(null);
     addCover.mutate(
       {
@@ -48,6 +58,8 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
         coverRole: role,
         coveringUserId: role === "SUPERVISING" ? chosen : undefined,
         coveringCleanerId: role === "CLEANING" ? chosen : undefined,
+        coverFrom: from,
+        coverTo: to,
       },
       {
         onSuccess: () => setSelections((p) => ({ ...p, [key]: "" })),
@@ -81,9 +93,10 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
               {leave.affectedSites.map((s) => {
                 const role = s.coverRole as CoverRole;
                 const key = roleKey(s.siteId, role);
-                const cover = coverByKey.get(key);
+                const covers = coversByKey.get(key) ?? [];
                 const isSupervising = role === "SUPERVISING";
                 const options = isSupervising ? supervisorOptions : cleanerOptions;
+                const range = rangeOf(key);
                 return (
                   <li key={key} className="rounded-xl border border-grey-200 p-3">
                     <div className="mb-2 flex items-center gap-2">
@@ -97,10 +110,13 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
                         {isSupervising ? "Supervising" : "Cleaning"}
                       </span>
                     </div>
-                    {cover ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-2 text-sm text-on-surface">
+                    {covers.map((cover) => (
+                      <div key={cover.id} className="mb-2 flex items-center justify-between gap-2">
+                        <span className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
                           {cover.coveringName}
+                          <span className="text-xs text-grey-500">
+                            {cover.coverFrom ?? leave.startDate} → {cover.coverTo ?? leave.endDate}
+                          </span>
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cover.approvalStatus === "APPROVED" ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"}`}>
                             {cover.approvalStatus === "APPROVED" ? (
                               <span className="inline-flex items-center gap-1"><Check size={10} /> Accepted</span>
@@ -118,7 +134,8 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
                           <Trash2 size={14} />
                         </button>
                       </div>
-                    ) : (
+                    ))}
+                    <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <select
                           value={selections[key] ?? ""}
@@ -141,7 +158,31 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
                           <Plus size={13} /> Add
                         </button>
                       </div>
-                    )}
+                      <div className="flex items-center gap-2 text-xs text-grey-600">
+                        <label className="flex items-center gap-1">
+                          From
+                          <input
+                            type="date"
+                            value={range.from}
+                            min={leave.startDate}
+                            max={leave.endDate}
+                            onChange={(e) => setRanges((p) => ({ ...p, [key]: { ...range, from: e.target.value } }))}
+                            className="h-8 rounded-lg border border-grey-300 px-2 text-xs"
+                          />
+                        </label>
+                        <label className="flex items-center gap-1">
+                          To
+                          <input
+                            type="date"
+                            value={range.to}
+                            min={leave.startDate}
+                            max={leave.endDate}
+                            onChange={(e) => setRanges((p) => ({ ...p, [key]: { ...range, to: e.target.value } }))}
+                            className="h-8 rounded-lg border border-grey-300 px-2 text-xs"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </li>
                 );
               })}

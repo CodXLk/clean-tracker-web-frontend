@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Clock, CalendarClock, Eye, ArrowUpRight } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarClock, Eye, ArrowUpRight } from "lucide-react";
 import { SearchInput } from "@/components/shared/SearchInput";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
@@ -11,7 +11,6 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { SiteFormModal } from "./SiteFormModal";
 import { SiteDetailView } from "./SiteDetailView";
 import { WorkingDaysSelector } from "./WorkingDaysSelector";
-import { ShiftsModal } from "./ShiftsModal";
 import { SupervisorScheduleModal } from "./SupervisorScheduleModal";
 import { useSites, useDeleteSite } from "@/features/user-management/hooks/useSites";
 import { useSupervisorSiteFilter } from "@/features/user-management/hooks/useSupervisorSites";
@@ -22,7 +21,6 @@ type SiteDetail =
   | { kind: "create" }
   | { kind: "view"; site: Site }
   | { kind: "edit"; site: Site }
-  | { kind: "shifts"; site: Site }
   | { kind: "schedule"; site: Site };
 
 interface SiteManagementProps {
@@ -159,11 +157,6 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal, onOpen
                   icon: Eye,
                   onClick: () => setDetail({ kind: "view", site: s }),
                 },
-                {
-                  label: "Shifts",
-                  icon: Clock,
-                  onClick: () => setDetail({ kind: "shifts", site: s }),
-                },
                 ...(workOrderSite
                   ? []
                   : [
@@ -218,8 +211,6 @@ export function SiteManagement({ workOrderSite = false, openCreateSignal, onOpen
           />
         ) : detail.kind === "view" ? (
           <SiteDetailView open onClose={() => setDetail(null)} site={detail.site} />
-        ) : detail.kind === "shifts" ? (
-          <ShiftsModal embedded open onClose={() => setDetail(null)} site={detail.site} />
         ) : (
           <SupervisorScheduleModal embedded open onClose={() => setDetail(null)} site={detail.site} />
         )

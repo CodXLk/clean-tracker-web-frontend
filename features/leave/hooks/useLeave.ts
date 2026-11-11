@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
+import type { ShiftPlanInput } from "@/features/shifts/schemas/shiftPlan.schema";
 import {
   LeaveRequestListSchema,
   MyLeaveCoverListSchema,
@@ -81,12 +82,16 @@ export function useAddLeaveCover() {
       coverRole: "CLEANING" | "SUPERVISING";
       coveringUserId?: string;
       coveringCleanerId?: string;
+      coverFrom?: string;
+      coverTo?: string;
     }) => {
       await clientApi.post(ENDPOINTS.leave.addCover(input.leaveId), {
         siteId: input.siteId,
         coverRole: input.coverRole,
         coveringUserId: input.coveringUserId ?? null,
         coveringCleanerId: input.coveringCleanerId ?? null,
+        coverFrom: input.coverFrom || null,
+        coverTo: input.coverTo || null,
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
@@ -126,11 +131,13 @@ export function useRejectLeave() {
 export function useAcceptCover() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (coverId: string) => {
-      await clientApi.post(ENDPOINTS.leave.acceptCover(coverId));
+    mutationFn: async (input: string | { coverId: string; shiftPlan?: ShiftPlanInput }) => {
+      const { coverId, shiftPlan } = typeof input === "string" ? { coverId: input, shiftPlan: undefined } : input;
+      await clientApi.post(ENDPOINTS.leave.acceptCover(coverId), shiftPlan);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.myCovers() });
+      qc.invalidateQueries({ queryKey: ["shift-plans"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
   });

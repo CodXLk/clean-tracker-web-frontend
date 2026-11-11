@@ -15,6 +15,7 @@ import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { ScheduleCellDetailModal } from "./ScheduleCellDetailModal";
 import type { TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek, AssignedShift } from "@/features/user-management/schemas/site.schema";
+import { useCleanerShiftPlans } from "@/features/shifts/hooks/useShiftPlans";
 import { todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
@@ -349,16 +350,26 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
     return map;
   }, [personOccurrences]);
 
-  // siteId -> the selected cleaner's assigned shifts at that site (their check-in/out windows).
+  // siteId -> the selected cleaner's approved shifts at that site (their check-in/out windows).
+  const cleanerPlansQuery = useCleanerShiftPlans(isCleaner ? effectivePersonId : null);
   const cleanerShiftsBySite = useMemo(() => {
     const map = new Map<string, AssignedShift[]>();
     if (!isCleaner || !effectivePersonId) return map;
-    for (const s of sitesQuery.data ?? []) {
-      const profile = s.cleanerProfiles.find((p) => p.cleanerId === effectivePersonId);
-      if (profile && profile.shifts.length > 0) map.set(s.id, profile.shifts);
+    for (const plan of cleanerPlansQuery.data ?? []) {
+      map.set(
+        plan.siteId,
+        plan.days.map((d, i) => ({
+          id: `${plan.id}-${i}`,
+          name: "Shift",
+          dayOfWeek: d.dayOfWeek ?? null,
+          startTime: d.startTime,
+          endTime: d.endTime,
+          crossesMidnight: d.crossesMidnight ?? d.endTime <= d.startTime,
+        })),
+      );
     }
     return map;
-  }, [isCleaner, effectivePersonId, sitesQuery.data]);
+  }, [isCleaner, effectivePersonId, cleanerPlansQuery.data]);
 
   const personOptions = useMemo(
     () => people.map((p) => ({ id: p.id, name: personName(p.firstName, p.lastName) })),

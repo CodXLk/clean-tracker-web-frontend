@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Package,
   PackageCheck,
+  Receipt,
   Repeat,
   User,
   Users,
@@ -68,6 +69,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Workforce", href: "/admin/workforce", icon: UsersRound },
   { label: "Outsource Projects", href: "/admin/outsource", icon: Handshake },
   { label: "Cleaner Logs", href: "/admin/cleaner-logs", icon: Footprints },
+  { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Clients", href: "/admin/clients", icon: ContactRound },
   { label: "Profile", href: "/dashboard/profile", icon: User },
@@ -98,6 +100,7 @@ const ADMIN_ORDERED_HREFS = [
   "/admin/clients",
   "/admin/complaints",
   "/admin/cleaner-logs",
+  "/admin/invoices",
   "/dashboard/profile",
 ];
 const ADMIN_NAV_ITEMS: NavItemConfig[] = ADMIN_ORDERED_HREFS
@@ -151,6 +154,8 @@ function useVisibleNavItems(): NavItemConfig[] {
   if (me?.role === "SUPERVISOR") return SUPERVISOR_NAV_ITEMS;
   // Until the role is known, show nothing rather than flashing a wrong list (e.g. "Home").
   if (!me) return [];
+  // Invoices are for management only (Client service manager here; admins use ADMIN_NAV_ITEMS).
+  if (me.role !== "CLIENT_SERVICE_MANAGER") return NON_CLIENT_NAV_ITEMS.filter((i) => i.href !== "/admin/invoices");
   return NON_CLIENT_NAV_ITEMS;
 }
 
@@ -179,6 +184,7 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/item-requests", "Client Inventory"],
   ["/admin/client-site-management", "Client Site Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
+  ["/admin/invoices", "Invoices"],
   ["/admin/notifications", "Notifications"],
   ["/dashboard/tasks", "Tasks"],
   ["/dashboard/inspections", "Inspections"],

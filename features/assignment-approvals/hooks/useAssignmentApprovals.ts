@@ -7,6 +7,7 @@ import {
   ManagementAssignmentAlertListSchema,
   PendingAssignmentListSchema,
 } from "@/features/assignment-approvals/schemas/assignmentApproval.schema";
+import type { ShiftPlanInput } from "@/features/shifts/schemas/shiftPlan.schema";
 
 const keys = {
   all: ["assignment-approvals"] as const,
@@ -31,11 +32,12 @@ export function useMyPendingAssignments(enabled = true) {
 export function useApproveAssignment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { type: string; profileId: string }) => {
+    mutationFn: async (input: { type: string; profileId: string; shiftPlan?: ShiftPlanInput }) => {
       await clientApi.post(ENDPOINTS.assignmentApprovals.approve, input);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.mine() });
+      qc.invalidateQueries({ queryKey: ["shift-plans"] });
       qc.invalidateQueries({ queryKey: ["site-cleaner-profiles"] });
       qc.invalidateQueries({ queryKey: ["site-supervisor-profiles"] });
       qc.invalidateQueries({ queryKey: ["work-orders"] });

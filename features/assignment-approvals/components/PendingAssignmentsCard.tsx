@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { Check, MapPin, Loader2 } from "lucide-react";
 import {
   useApproveAssignment,
   useMyPendingAssignments,
 } from "@/features/assignment-approvals/hooks/useAssignmentApprovals";
+import type { PendingAssignment } from "@/features/assignment-approvals/schemas/assignmentApproval.schema";
+import { ShiftPlanDialog } from "@/features/shifts/components/ShiftPlanDialog";
 
 /** Cleaner/supervisor card: slots they've been assigned to that await their acceptance. */
 export function PendingAssignmentsCard() {
   const { data: pending = [], isLoading } = useMyPendingAssignments();
   const approve = useApproveAssignment();
+  const [shiftsFor, setShiftsFor] = useState<PendingAssignment | null>(null);
 
   if (isLoading || pending.length === 0) return null;
 
@@ -36,7 +40,9 @@ export function PendingAssignmentsCard() {
             <button
               type="button"
               disabled={approve.isPending}
-              onClick={() => approve.mutate({ type: p.type, profileId: p.profileId })}
+              onClick={() =>
+                p.requiresShifts ? setShiftsFor(p) : approve.mutate({ type: p.type, profileId: p.profileId })
+              }
               className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               {approve.isPending ? (
@@ -50,6 +56,19 @@ export function PendingAssignmentsCard() {
           </li>
         ))}
       </ul>
+      {shiftsFor && (
+        <ShiftPlanDialog
+          open
+          onClose={() => setShiftsFor(null)}
+          siteId={shiftsFor.siteId ?? null}
+          title={`Accept ${shiftsFor.locationName}`}
+          description="Add the shifts you'll work at this site. They're sent for approval when you accept."
+          submitLabel="Accept & send shifts"
+          onSubmit={(plan) =>
+            approve.mutateAsync({ type: shiftsFor.type, profileId: shiftsFor.profileId, shiftPlan: plan })
+          }
+        />
+      )}
     </div>
   );
 }

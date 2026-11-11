@@ -117,6 +117,19 @@ export const SiteCleaningTemplateSchema = z.object({
 export type SiteCleaningTemplate = z.infer<typeof SiteCleaningTemplateSchema>;
 
 // Mirrors backend SiteResponse.
+export const DEFAULT_SITE_TIMEZONE = "Australia/Melbourne";
+
+// Australian IANA zones offered for sites (backend accepts any valid zone id).
+export const SITE_TIMEZONES = [
+  { value: "Australia/Melbourne", label: "Melbourne (VIC)" },
+  { value: "Australia/Sydney", label: "Sydney (NSW)" },
+  { value: "Australia/Brisbane", label: "Brisbane (QLD)" },
+  { value: "Australia/Adelaide", label: "Adelaide (SA)" },
+  { value: "Australia/Perth", label: "Perth (WA)" },
+  { value: "Australia/Hobart", label: "Hobart (TAS)" },
+  { value: "Australia/Darwin", label: "Darwin (NT)" },
+] as const;
+
 export const SiteSchema = z.object({
   id: z.string().uuid(),
   clientCompanyId: z.string().uuid(),
@@ -145,6 +158,8 @@ export const SiteSchema = z.object({
   requiredCertificates: z.array(z.string()).default([]),
   clientSiteManagementEnabled: z.boolean().optional().default(false),
   worksOnPublicHolidays: z.boolean().optional().default(false),
+  timezone: z.string().nullable().optional().default(DEFAULT_SITE_TIMEZONE),
+  minimumWorkMinutes: z.number().nullable().optional(),
   workOrderSite: z.boolean().optional().default(false),
   oneTimeSite: z.boolean().optional().default(false),
   oneTimeSiteCompleted: z.boolean().optional().default(false),
@@ -206,6 +221,14 @@ export const SiteFormSchema = z
     requiredCertificates: z.array(z.string()),
     clientSiteManagementEnabled: z.boolean().optional(),
     worksOnPublicHolidays: z.boolean().optional(),
+    timezone: z.string().min(1, "Select a time zone"),
+    minimumWorkMinutes: z
+      .number()
+      .int()
+      .min(0, "Cannot be negative")
+      .max(1440, "That is too long")
+      .nullable()
+      .optional(),
     workOrderSite: z.boolean().optional(),
     cleaningTemplates: z.array(
       z.object({

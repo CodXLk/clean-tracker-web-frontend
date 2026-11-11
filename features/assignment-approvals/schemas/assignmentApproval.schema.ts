@@ -8,6 +8,7 @@ export const PendingAssignmentSchema = z.object({
   locationName: z.string(),
   siteId: z.string().uuid().nullable().optional(),
   assignedAt: z.string().nullable().optional(),
+  requiresShifts: z.boolean().optional().default(false),
 });
 export type PendingAssignment = z.infer<typeof PendingAssignmentSchema>;
 export const PendingAssignmentListSchema = z.array(PendingAssignmentSchema);
