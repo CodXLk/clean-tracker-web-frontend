@@ -9,6 +9,8 @@ import {
   useMyCovers,
   useMyLeave,
 } from "@/features/leave/hooks/useLeave";
+import type { MyLeaveCover } from "@/features/leave/schemas/leave.schema";
+import { ShiftPlanDialog } from "@/features/shifts/components/ShiftPlanDialog";
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
@@ -28,6 +30,7 @@ export function LeaveStaffSection() {
   const { data: covers = [] } = useMyCovers();
   const cancel = useCancelLeave();
   const accept = useAcceptCover();
+  const [shiftsFor, setShiftsFor] = useState<MyLeaveCover | null>(null);
 
   return (
     <section className="rounded-2xl bg-surface p-5 shadow-sm">
@@ -69,7 +72,7 @@ export function LeaveStaffSection() {
                 <button
                   type="button"
                   disabled={accept.isPending}
-                  onClick={() => accept.mutate(c.coverId)}
+                  onClick={() => (c.requiresShifts ? setShiftsFor(c) : accept.mutate(c.coverId))}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {accept.isPending ? <Loader2 size={14} className="animate-spin" /> : <><Check size={14} /> Accept</>}
@@ -116,6 +119,17 @@ export function LeaveStaffSection() {
       )}
 
       <LeaveRequestModal open={open} onClose={() => setOpen(false)} />
+      {shiftsFor && (
+        <ShiftPlanDialog
+          open
+          onClose={() => setShiftsFor(null)}
+          siteId={shiftsFor.siteId}
+          title={`Cover ${shiftsFor.siteName ?? "site"}`}
+          description="Add the shifts you'll work while covering. Previously approved shifts here are reused."
+          submitLabel="Accept cover"
+          onSubmit={(plan) => accept.mutateAsync({ coverId: shiftsFor.coverId, shiftPlan: plan })}
+        />
+      )}
     </section>
   );
 }

@@ -19,9 +19,24 @@ import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CleanerSite } from "@/features/attendance/schemas/attendance.schema";
 
-function formatTime(iso?: string | null): string {
+function formatTime(iso?: string | null, timeZone?: string | null): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+/** "h:mm a" in the site's time zone. */
+function formatSiteTime(iso: string | null | undefined, timeZone?: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  });
 }
 
 // Backend shift times arrive as "HH:mm:ss" — trim to "HH:mm" for display.
@@ -34,8 +49,12 @@ function shiftTimeToMinutes(t: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
-/** Is the current time inside any of the site's shift windows (i.e. the shift hasn't ended)? */
+/** Is the cleaner still inside their shift (i.e. checking out now is early)? */
 function isWithinAnyShift(site: CleanerSite): boolean {
+  if (site.shift) {
+    const now = Date.now();
+    return site.shift.inProgress && now >= Date.parse(site.shift.startAt) && now < Date.parse(site.shift.endAt);
+  }
   const shifts = site.shifts ?? [];
   if (shifts.length === 0) return false;
   const now = new Date();
@@ -52,9 +71,17 @@ function isWithinAnyShift(site: CleanerSite): boolean {
  *  shift starts or shortly after an overnight shift ends is treated as on-time — cleaners often
  *  still have tasks to finish right after the shift window. */
 function checkInShiftTiming(site: CleanerSite): "BEFORE" | "AFTER" | null {
+  // When shift windows are enforced the server blocks and explains; no soft acknowledgement.
+  if (site.enforceShiftWindow) return null;
+  if (site.shift) {
+    const now = Date.now();
+    if (now < Date.parse(site.shift.checkInOpensAt)) return "BEFORE";
+    if (now >= Date.parse(site.shift.checkInClosesAt)) return "AFTER";
+    return null;
+  }
   const shifts = site.shifts ?? [];
   if (shifts.length === 0) return null;
-  const GRACE_MIN = 5 * 60;
+  const GRACE_MIN = 60;
   const now = new Date();
   const nowM = now.getHours() * 60 + now.getMinutes();
   let nearestBefore = Infinity; // minutes until the next shift start
@@ -106,8 +133,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
   // Pending-task / early check-out warning shown before checking out.
   const [pendingPrompt, setPendingPrompt] = useState<
-    { site: CleanerSite; tasks: TaskOccurrence[]; early: boolean } | null
+    { site: CleanerSite; tasks: TaskOccurrence[]; early: boolean; serverMessage?: string } | null
   >(null);
+  // Chosen check-in context per site: "GENERAL" or a work order id.
+  const [contextBySite, setContextBySite] = useState<Record<string, string>>({});
   // Before/after-shift acknowledgement shown before a check-in outside shift hours.
   const [shiftAckPrompt, setShiftAckPrompt] = useState<
     { site: CleanerSite; timing: "BEFORE" | "AFTER" } | null
@@ -223,7 +252,18 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   async function doCheckIn(site: CleanerSite) {
     setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
     const payload = await acquirePayload(site);
-    await checkIn.mutateAsync(payload);
+    const ctx = contextFor(site);
+    await checkIn.mutateAsync(ctx === "GENERAL" ? payload : { ...payload, workOrderId: ctx });
+  }
+
+  /** The selected context, defaulting to whichever is open now (general first). */
+  function contextFor(site: CleanerSite): string {
+    const chosen = contextBySite[site.siteId];
+    if (chosen && (chosen === "GENERAL" || site.workOrders.some((w) => w.id === chosen))) return chosen;
+    if (!site.workOrderSite && site.generalCheckInAllowed) return "GENERAL";
+    const openWo = site.workOrders.find((w) => w.checkInAllowed) ?? site.workOrders[0];
+    if (openWo) return openWo.id;
+    return "GENERAL";
   }
 
   // HIGH-priority tasks assigned to this cleaner at the site that still need doing.
@@ -263,7 +303,15 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     try {
       await executeCheckout(site, false);
     } catch (err) {
-      setErrors((prev) => ({ ...prev, [site.siteId]: getMessage(err, "Check-out failed.") }));
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const message = getMessage(err, "Check-out failed.");
+      // The server can still require consent (e.g. below the site's minimum working period).
+      if (status === 409 || /minimum|minutes of work|before the shift ends|still to complete/i.test(message)) {
+        setPendingPrompt({ site, tasks: [], early: false, serverMessage: message });
+        bumpReset(site.siteId);
+        return;
+      }
+      setErrors((prev) => ({ ...prev, [site.siteId]: message }));
       bumpReset(site.siteId);
     }
   }
@@ -542,7 +590,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 </p>
               </div>
             )}
-            {site.shifts.length > 0 && (
+            {site.shifts.length > 0 && !site.shift && (
               <div className="flex flex-wrap gap-1.5">
                 {site.shifts.map((sh) => (
                   <span
@@ -554,6 +602,52 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                   </span>
                 ))}
               </div>
+            )}
+            {site.shift && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-grey-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-grey-100 px-2 py-0.5 font-medium">
+                  <Clock size={12} aria-hidden="true" />
+                  {site.shift.inProgress ? "Your shift" : "Next shift"} ·{" "}
+                  {new Date(`${site.shift.date}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}{" "}
+                  {formatSiteTime(site.shift.startAt, site.timezone)}–{formatSiteTime(site.shift.endAt, site.timezone)}
+                  {site.shift.moveMinutes !== 0 ? ` (moved ${site.shift.moveMinutes > 0 ? "+" : ""}${site.shift.moveMinutes}m)` : ""}
+                </span>
+                <span className="text-grey-500">
+                  Check-in {formatSiteTime(site.shift.checkInOpensAt, site.timezone)}–
+                  {formatSiteTime(site.shift.checkInClosesAt, site.timezone)}
+                </span>
+                {!paused && (
+                  <a href="/dashboard/shifts" className="font-semibold text-ink underline">
+                    Move today&apos;s shift
+                  </a>
+                )}
+              </div>
+            )}
+            {!paused && site.workOrders.length > 0 && (
+              <label className="flex flex-col gap-1 text-xs text-grey-600">
+                Checking in for
+                <select
+                  value={contextFor(site)}
+                  onChange={(e) => setContextBySite((prev) => ({ ...prev, [site.siteId]: e.target.value }))}
+                  className="rounded-xl border border-grey-300 bg-white px-3 py-2 text-sm text-on-surface"
+                >
+                  {!site.workOrderSite && (
+                    <option value="GENERAL">
+                      General cleaning{site.generalCheckInAllowed ? "" : " (not open now)"}
+                    </option>
+                  )}
+                  {site.workOrders.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      Work order PO {w.poId}
+                      {w.checkInAllowed
+                        ? ""
+                        : w.checkInOpensAt
+                          ? ` (opens ${formatSiteTime(w.checkInOpensAt, site.timezone)})`
+                          : " (not open now)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
             <SlideButton
               key={`in-${resetKey}`}
@@ -579,8 +673,8 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         {(checkedIn || sessionEnded) && (
           <p className="flex items-center justify-center gap-1 text-center text-xs text-grey-500">
             <LocateFixed size={12} />
-            Checked in at {formatTime(site.checkInAt)}
-            {site.checkOutAt ? ` · Checked out at ${formatTime(site.checkOutAt)}` : ""}
+            {site.poId ? `PO ${site.poId} · ` : ""}Checked in at {formatTime(site.checkInAt, site.timezone)}
+            {site.checkOutAt ? ` · Checked out at ${formatTime(site.checkOutAt, site.timezone)}` : ""}
           </p>
         )}
 
@@ -628,7 +722,12 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
             <div className="px-5 pt-3">
               <p className="text-sm text-grey-700">
-                {pendingPrompt.tasks.length > 0 ? (
+                {pendingPrompt.serverMessage ? (
+                  <>
+                    {pendingPrompt.serverMessage} Checking out now is recorded as a forced check-out and your
+                    supervisor is notified.
+                  </>
+                ) : pendingPrompt.tasks.length > 0 ? (
                   <>
                     This is a forced check-out — you still have {pendingPrompt.tasks.length} unfinished task
                     {pendingPrompt.tasks.length === 1 ? "" : "s"} at{" "}

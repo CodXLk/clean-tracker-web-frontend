@@ -47,6 +47,7 @@ import { TypeDetailsModal } from "@/components/admin/TypeDetailsModal";
 import { SetHighPriorityModal } from "@/features/workforce/components/SetHighPriorityModal";
 import { EditTaskModal } from "@/features/workforce/components/EditTaskModal";
 import { usePublicHolidays } from "@/features/workforce/hooks/usePublicHolidays";
+import { defaultGeneralStartTime } from "@/features/workforce/lib/generalStartTime";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { ConfirmDialog } from "@/features/user-management/components/ConfirmDialog";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
@@ -2485,7 +2486,10 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     const weekday = DAY_OF_WEEK_VALUES[(dateObj.getDay() + 6) % 7];
     onNewAssignment?.({
       date: dateObj,
-      time: "09:00",
+      time: defaultGeneralStartTime(selectedSite, target.date, [
+        ...(serverOccurrences ?? []),
+        ...(dayOccurrencesQuery.data ?? []),
+      ]),
       siteId: siteFilter,
       floorId: target.floorId,
       areaId: target.areaId,
@@ -2824,7 +2828,9 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           today={today}
           workingDays={workingDays}
           holidays={holidays}
-          onDayClick={(date, x, y) => handleSlotClick(date, "09:00", x, y)}
+          onDayClick={(date, x, y) =>
+            handleSlotClick(date, defaultGeneralStartTime(selectedSite, date, serverOccurrences ?? []), x, y)
+          }
           onTypeClick={(group, date) =>
             setTypeDetail({
               type: group.type,

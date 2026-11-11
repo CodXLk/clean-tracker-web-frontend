@@ -33,6 +33,8 @@ import {
   SiteFormSchema,
   SITE_TYPE_LABELS,
   SITE_TYPE_VALUES,
+  SITE_TIMEZONES,
+  DEFAULT_SITE_TIMEZONE,
   DAY_OF_WEEK_VALUES,
   type Site,
   type SiteFormInput,
@@ -138,6 +140,8 @@ const EMPTY: SiteFormInput = {
   requiredCertificates: [...MANDATORY_CERTIFICATE_KEYS],
   clientSiteManagementEnabled: false,
   worksOnPublicHolidays: false,
+  timezone: DEFAULT_SITE_TIMEZONE,
+  minimumWorkMinutes: null,
   workOrderSite: false,
   cleaningTemplates: [],
 };
@@ -191,6 +195,10 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
     () => SITE_TYPE_VALUES.filter((v) => v !== "WORK_ORDER").map((v) => ({ value: v, label: SITE_TYPE_LABELS[v] })),
     [],
   );
+  const timezoneOptions: SelectOption[] = useMemo(
+    () => SITE_TIMEZONES.map((z) => ({ value: z.value, label: z.label, sublabel: z.value })),
+    [],
+  );
 
   // Reset the form each time the modal opens (create vs edit); clear when it closes.
   useEffect(() => {
@@ -226,6 +234,8 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
             ),
             clientSiteManagementEnabled: site.clientSiteManagementEnabled ?? false,
             worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
+            timezone: site.timezone || DEFAULT_SITE_TIMEZONE,
+            minimumWorkMinutes: site.minimumWorkMinutes ?? null,
             workOrderSite: site.workOrderSite ?? false,
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
@@ -453,6 +463,25 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
         </div>
 
         <TextField label="Street address" error={errors.streetAddress?.message} {...register("streetAddress")} />
+
+        <Controller
+          control={control}
+          name="timezone"
+          render={({ field }) => (
+            <SearchableSelect
+              label="Time zone"
+              required
+              options={timezoneOptions}
+              value={field.value || DEFAULT_SITE_TIMEZONE}
+              onChange={field.onChange}
+              placeholder="Select a time zone"
+              searchPlaceholder="Search time zones…"
+              emptyMessage="No time zones"
+              hint="Shift times, service windows and check-in times for this site use this time zone."
+              error={errors.timezone?.message}
+            />
+          )}
+        />
 
         <TextField
           label="Check-in radius (meters)"
@@ -792,6 +821,21 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
               })()}
             </div>
           )}
+
+          <TextField
+            label="Minimum working period (minutes, optional)"
+            type="number"
+            min={0}
+            step={15}
+            inputMode="numeric"
+            placeholder="e.g. 120"
+            hint="When set, cleaners must stay checked in at least this long (excluding paused time) before checking out, and check-in closes this long before the shift ends."
+            error={errors.minimumWorkMinutes?.message}
+            {...register("minimumWorkMinutes", {
+              setValueAs: (v: unknown) =>
+                v === "" || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v),
+            })}
+          />
         </div>
         </FormSection>
 

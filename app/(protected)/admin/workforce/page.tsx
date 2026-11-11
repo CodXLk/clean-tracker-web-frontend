@@ -18,6 +18,7 @@ import { isSelectableInOperations } from "@/features/user-management/schemas/sit
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
 import { StaffManagement } from "@/features/users/components/StaffManagement";
 import { LeaveManagementTab } from "@/features/leave/components/LeaveManagementTab";
+import { ShiftRequestsTab } from "@/features/shifts/components/ShiftRequestsTab";
 import { DocumentReviewModal } from "@/features/users/components/DocumentReviewModal";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useSites } from "@/features/user-management/hooks/useSites";
@@ -29,7 +30,7 @@ import { cn } from "@/lib/utils/cn";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-const MANAGER_TABS = ["Operations", "Work Orders", "Sites", "Cleaners", "Supervisors", "Leave", "Task Templates"] as const;
+const MANAGER_TABS = ["Operations", "Work Orders", "Sites", "Cleaners", "Supervisors", "Leave", "Shift Requests", "Task Templates"] as const;
 type Tab = (typeof MANAGER_TABS)[number];
 
 /** URL-friendly slug per tab, so the selection survives refreshes and can be linked. */
@@ -40,6 +41,7 @@ const TAB_SLUG: Record<Tab, string> = {
   Cleaners: "cleaners",
   Supervisors: "supervisors",
   Leave: "leave",
+  "Shift Requests": "shift-requests",
   "Task Templates": "templates",
 };
 const SLUG_TAB: Record<string, Tab> = {
@@ -49,6 +51,7 @@ const SLUG_TAB: Record<string, Tab> = {
   cleaners: "Cleaners",
   supervisors: "Supervisors",
   leave: "Leave",
+  "shift-requests": "Shift Requests",
   templates: "Task Templates",
 };
 
@@ -194,7 +197,8 @@ function WorkforceContent() {
           ? start
           : new Date();
     // Seed the modal with the site currently selected in Operations.
-    setPrefill({ date, time: "09:00", siteId: operationsSiteId || undefined });
+    // Empty time lets the modal default to the site's General start for that day.
+    setPrefill({ date, time: "", siteId: operationsSiteId || undefined });
     setAssignmentModalKey((k) => k + 1);
     setNewAssignmentOpen(true);
   }
@@ -301,6 +305,7 @@ function WorkforceContent() {
           {tab === "Cleaners" && <CleanerManagement />}
           {tab === "Supervisors" && <StaffManagement role="SUPERVISOR" noun="supervisor" />}
           {tab === "Leave" && <LeaveManagementTab />}
+          {tab === "Shift Requests" && <ShiftRequestsTab />}
           {tab === "Task Templates" && <TaskTemplatesTab />}
         </div>
 

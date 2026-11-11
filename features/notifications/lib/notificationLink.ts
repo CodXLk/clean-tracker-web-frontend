@@ -53,6 +53,25 @@ export function notificationHref(
     case "LEAVE_APPROVED":
     case "LEAVE_REJECTED":
       return "/dashboard/leave";
+    case "SHIFT_PLAN_SUBMITTED":
+    case "SHIFT_ADJUSTMENT_REQUESTED":
+      return "/admin/workforce?tab=shift-requests";
+    case "SHIFT_ADJUSTED":
+      return admin || isSupervisor(role) ? "/admin/cleaner-logs" : "/dashboard/shifts";
+    case "SHIFT_PLAN_APPROVED":
+    case "SHIFT_PLAN_REJECTED":
+    case "SHIFT_ADJUSTMENT_APPROVED":
+    case "SHIFT_ADJUSTMENT_REJECTED":
+      return "/dashboard/shifts";
+    case "SHIFT_REMINDER": {
+      // refId = siteId|date|offset|start
+      const [siteId, date] = (n.refId ?? "").split("|");
+      return siteId && date ? `/dashboard/shifts?siteId=${siteId}&date=${date}` : "/dashboard/shifts";
+    }
+    case "HOURS_REVIEW_PENDING":
+    case "HOURS_APPROVAL_PENDING":
+    case "HOURS_REOPENED":
+      return "/admin/cleaner-logs?tab=hours";
     default:
       return null;
   }

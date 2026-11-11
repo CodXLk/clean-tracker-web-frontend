@@ -22,8 +22,8 @@ import { useAreaGroups } from "@/features/user-management/hooks/useAreaGroups";
 import { NameFormModal } from "@/components/admin/NameFormModal";
 import { useSiteCleaners, useSiteSupervisors, useSiteCleanerProfiles } from "@/features/user-management/hooks/useSiteAssignments";
 import { useSiteOutsourceProject } from "@/features/outsource/hooks/useOutsourceProjects";
-import { useSiteShifts } from "@/features/user-management/hooks/useSiteShifts";
-import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions, uploadTaskReferencePhotos } from "@/features/workforce/hooks/useAssignments";
+import { useCreateAssignment, useUpdateAssignment, useAssignment, useTaskNameSuggestions, uploadTaskReferencePhotos, useOccurrences } from "@/features/workforce/hooks/useAssignments";
+import { computeTaskSlots, defaultGeneralStartTime, generalWindowFor } from "@/features/workforce/lib/generalStartTime";
 import { useSaveDraft, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { useTaskTemplates, useSaveTaskTemplate } from "@/features/workforce/hooks/useTaskTemplates";
 import { useInventoryItems } from "@/features/inventory/hooks/useInventory";
@@ -36,7 +36,7 @@ import {
   WORK_TYPE_LABELS,
   RECURRENCE_TYPE_LABELS,
   WEEK_OF_MONTH_OPTIONS,
-  computeExpectedEndTime,
+  DEFAULT_TASK_DURATION_MINUTES,
   allTasksOf,
   taskToCreateFormInput,
   type AssignmentFormInput,
@@ -1613,6 +1613,7 @@ export function NewAssignmentModal({
   const workType = watch("workType");
   const siteId = watch("siteId");
   const startTime = watch("startTime");
+  const formDate = watch("date");
   const groups = watch("groups");
   const selectedCleanerIds = watch("cleanerIds");
   const selectedProfileIds = watch("profileIds");
@@ -1667,19 +1668,6 @@ export function NewAssignmentModal({
   const outsourceQuery = useSiteOutsourceProject(siteId || undefined);
   const outsourceProject = outsourceQuery.project;
   const hasOutsource = !!outsourceProject;
-  // Optional work shifts for the selected site.
-  const shiftsQuery = useSiteShifts(siteId || undefined);
-  const shiftOptions: SelectOption[] = useMemo(
-    () => [
-      { value: "", label: "Full day (no shift)" },
-      ...(shiftsQuery.data ?? []).map((s) => ({
-        value: s.id,
-        label: s.name,
-        sublabel: `${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}${s.crossesMidnight ? " (next day)" : ""}${s.isDefault ? " · default" : ""}`,
-      })),
-    ],
-    [shiftsQuery.data],
-  );
 
   const selectedSite = useMemo(
     () => (sitesQuery.data ?? []).find((s) => s.id === siteId),
@@ -1708,10 +1696,25 @@ export function NewAssignmentModal({
 
   const allTasks = useMemo(() => allTasksOf({ groups: groups ?? [] }), [groups]);
   const totalTasks = allTasks.length;
-  const expectedEndTime = useMemo(
-    () => computeExpectedEndTime(startTime, allTasks),
-    [startTime, allTasks],
+  // Each task is created once per selected area, back to back (matches the backend slotting).
+  const taskDurations = useMemo(
+    () =>
+      (groups ?? []).flatMap((g) =>
+        g.tasks.flatMap((t) =>
+          (g.areaIds?.length ? g.areaIds : [null]).map(() => t.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES),
+        ),
+      ),
+    [groups],
   );
+  const generalWindow = useMemo(
+    () => (workType === "GENERAL_TASK" && formDate ? generalWindowFor(selectedSite, formDate) : null),
+    [workType, formDate, selectedSite],
+  );
+  const taskSlots = useMemo(
+    () => computeTaskSlots(startTime, taskDurations, generalWindow),
+    [startTime, taskDurations, generalWindow],
+  );
+  const expectedEndTime = taskSlots.slots.length > 0 ? taskSlots.slots[taskSlots.slots.length - 1].end : null;
 
   // Cleaner slots (profiles) are the preferred selection unit. Each slot is
   // adapted into a Cleaner-shaped option so it reuses the existing selection UI.
@@ -1812,20 +1815,26 @@ export function NewAssignmentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId, supervisorsQuery.isLoading, supervisorsQuery.data, outsourceQuery.isLoading]);
 
-  // Pre-fill the start time from the site's configured general-task start time.
+  // Pre-fill the General start time for the chosen day: after that day's last General task,
+  // else the day's General window start, else 07:00.
   const lastAutoStartTime = useRef<string | null>(null);
+  const dayOccurrencesQuery = useOccurrences(
+    workType === "GENERAL_TASK" && siteId && formDate && !editData
+      ? { from: formDate, to: formDate, siteId }
+      : undefined,
+  );
   useEffect(() => {
-    if (workType !== "GENERAL_TASK") return;
-    const configured = (selectedSite?.generalTaskStartTime ?? "").slice(0, 5);
-    if (!configured) return;
+    if (workType !== "GENERAL_TASK" || !selectedSite || !formDate) return;
+    if (editData || sourceTask || loadedDraft) return;
+    const computed = defaultGeneralStartTime(selectedSite, formDate, dayOccurrencesQuery.data ?? []);
     const current = getValues("startTime") ?? "";
-    // Only apply when the user hasn't set their own time (empty or a prior auto value).
+    // Only replace a value the user hasn't chosen themselves (empty or a prior auto value).
     if (current === "" || current === lastAutoStartTime.current) {
-      lastAutoStartTime.current = configured;
-      setValue("startTime", configured, { shouldValidate: true });
+      lastAutoStartTime.current = computed;
+      setValue("startTime", computed, { shouldValidate: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workType, selectedSite?.id, selectedSite?.generalTaskStartTime]);
+  }, [workType, selectedSite, formDate, dayOccurrencesQuery.data]);
 
   useEffect(() => {
     if (open) {
@@ -2218,25 +2227,6 @@ export function NewAssignmentModal({
                   {sourceLoading
                     ? "Loading the selected task…"
                     : "Loaded from the selected task — added on this day, keeping the original task's recurrence. Adjust below if needed."}
-                </div>
-              )}
-
-              {/* Optional shift — only when the selected site defines shifts. */}
-              {siteId && (shiftsQuery.data?.length ?? 0) > 0 && (
-                <div className="grid grid-cols-1 gap-4">
-                  <Controller
-                    name="shiftId"
-                    control={control}
-                    render={({ field }) => (
-                      <SearchableSelect
-                        label="Shift"
-                        options={shiftOptions}
-                        value={field.value ?? ""}
-                        onChange={(v) => field.onChange(v ?? "")}
-                        placeholder="Full day (no shift)"
-                      />
-                    )}
-                  />
                 </div>
               )}
 
@@ -2662,6 +2652,14 @@ export function NewAssignmentModal({
                   </span>
                   <span className="ml-auto text-xs text-grey-500">start + total task durations</span>
                 </div>
+              )}
+              {generalWindow && (taskSlots.overrunsWindow || taskSlots.startsOutsideWindow) && (
+                <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                  {taskSlots.startsOutsideWindow
+                    ? `Starts outside this day's General window (${generalWindow.start}–${generalWindow.end}).`
+                    : `Tasks run past this day's General window end (${generalWindow.end}).`}{" "}
+                  You can still save; on other days tasks start relative to that day&apos;s window.
+                </p>
               )}
 
               {/* Cleaner assignment — after the task list */}

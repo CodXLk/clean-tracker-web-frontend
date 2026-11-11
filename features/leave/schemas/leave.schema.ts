@@ -15,6 +15,8 @@ export const LeaveCoverSchema = z.object({
   coveringName: z.string().nullable().optional(),
   approvalStatus: z.enum(["PENDING", "APPROVED"]),
   approvedAt: z.string().nullable().optional(),
+  coverFrom: z.string().nullable().optional(),
+  coverTo: z.string().nullable().optional(),
 });
 export type LeaveCover = z.infer<typeof LeaveCoverSchema>;
 
@@ -51,6 +53,9 @@ export const MyLeaveCoverSchema = z.object({
   requesterName: z.string().nullable().optional(),
   startDate: z.string(),
   endDate: z.string(),
+  requiresShifts: z.boolean().optional().default(false),
+  coverFrom: z.string().nullable().optional(),
+  coverTo: z.string().nullable().optional(),
 });
 export type MyLeaveCover = z.infer<typeof MyLeaveCoverSchema>;
 export const MyLeaveCoverListSchema = z.array(MyLeaveCoverSchema);
