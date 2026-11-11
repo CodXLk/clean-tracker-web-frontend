@@ -15,9 +15,14 @@ function fmtDate(value?: string | null): string {
   return new Date(value).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
 }
 
-function fmtTime(iso?: string | null): string {
+function fmtTime(iso?: string | null, timeZone?: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...(timeZone ? { timeZone } : {}),
+  });
 }
 
 function fmtDistance(meters?: number | null): string {
@@ -62,6 +67,18 @@ export function AttendanceLogsTable() {
   const cleanersQuery = useCleaners();
 
   const logs = logsQuery.data ?? [];
+  const cleanerOptions = useMemo(() => {
+    if (siteId) {
+      const site = (sitesQuery.data ?? []).find((s) => s.id === siteId);
+      const byId = new Map<string, string>();
+      for (const p of site?.cleanerProfiles ?? []) if (p.cleanerId) byId.set(p.cleanerId, p.cleanerName || p.label);
+      return [...byId.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return (cleanersQuery.data ?? []).map((c) => ({
+      id: c.id,
+      name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Cleaner",
+    }));
+  }, [siteId, sitesQuery.data, cleanersQuery.data]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,9 +92,9 @@ export function AttendanceLogsTable() {
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
           >
             <option value="">All cleaners</option>
-            {(cleanersQuery.data ?? []).map((c) => (
+            {cleanerOptions.map((c) => (
               <option key={c.id} value={c.id}>
-                {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.email}
+                {c.name}
               </option>
             ))}
           </select>
@@ -86,7 +103,10 @@ export function AttendanceLogsTable() {
           Site
           <select
             value={siteId}
-            onChange={(e) => setSiteId(e.target.value)}
+            onChange={(e) => {
+              setSiteId(e.target.value);
+              setCleanerId("");
+            }}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
           >
             <option value="">All sites</option>
@@ -162,11 +182,11 @@ export function AttendanceLogsTable() {
                         {log.sessionType === "WORK_ORDER" ? `PO ${log.poId ?? ""}` : log.sessionType ? "General" : "—"}
                       </td>
                       <td className="px-4 py-3 text-grey-700">
-                        {fmtTime(log.checkInAt)}
+                        {fmtTime(log.checkInAt, log.timezone)}
                         {log.lateMinutes ? <span className="ml-1 text-[11px] text-error">+{log.lateMinutes}m late</span> : null}
                       </td>
                       <td className="px-4 py-3 text-grey-700">
-                        {fmtTime(log.checkOutAt)}
+                        {fmtTime(log.checkOutAt, log.timezone)}
                         {log.closeReason && log.closeReason !== "CHECKED_OUT" ? (
                           <span className="block text-[11px] text-grey-500">
                             {CLOSE_REASON_LABELS[log.closeReason] ?? log.closeReason}
@@ -221,7 +241,7 @@ export function AttendanceLogsTable() {
         )}
       </div>
 
-      <AttendanceMapModal open={!!mapLog} onClose={() => setMapLog(null)} log={mapLog} />
+      <AttendanceMapModal key={mapLog?.id ?? "none"} open={!!mapLog} onClose={() => setMapLog(null)} log={mapLog} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Download } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { useSites } from "@/features/user-management/hooks/useSites";
+import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import {
   CLOSE_REASON_LABELS,
   TIME_TYPE_LABELS,
@@ -55,31 +56,47 @@ export function TimeSummaryTable() {
   const [siteId, setSiteId] = useState("");
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(() => toLocalDateString(new Date()));
-  const filters = useMemo(() => ({ siteId, from, to }), [siteId, from, to]);
+  // personId is "c:<cleanerId>" for cleaners and "u:<userId>" for supervisors.
+  const filters = useMemo(
+    () => ({
+      siteId,
+      from,
+      to,
+      cleanerId: personId.startsWith("c:") ? personId.slice(2) : undefined,
+      userId: personId.startsWith("u:") ? personId.slice(2) : undefined,
+    }),
+    [siteId, from, to, personId],
+  );
   const summary = useTimeSummary(filters);
   const sitesQuery = useSites();
-  const allRows = useMemo(() => summary.data?.rows ?? [], [summary.data]);
+  const cleanersQuery = useCleaners();
+  const rows = useMemo(() => summary.data?.rows ?? [], [summary.data]);
   const people = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const r of allRows) byId.set(r.personId, r.personName);
-    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [allRows]);
-  const rows = useMemo(
-    () => (personId ? allRows.filter((r) => r.personId === personId) : allRows),
-    [allRows, personId],
-  );
-  const totals = useMemo(() => {
-    if (!summary.data) return null;
-    const sum = (pick: (r: TimeRow) => number) => rows.reduce((acc, r) => acc + pick(r), 0);
-    return {
-      workedMinutes: sum((r) => r.workedMinutes),
-      generalMinutes: sum((r) => r.generalMinutes),
-      periodicalMinutes: sum((r) => r.periodicalMinutes),
-      workOrderMinutes: sum((r) => (r.type === "WORK_ORDER" ? r.workedMinutes : 0)),
-      supervisionMinutes: sum((r) => (r.type === "SUPERVISION" ? r.workedMinutes : 0)),
-      pausedMinutes: sum((r) => r.pausedMinutes),
-    };
-  }, [rows, summary.data]);
+    const byKey = new Map<string, string>();
+    const sites = (sitesQuery.data ?? []).filter((s) => !siteId || s.id === siteId);
+    if (siteId) {
+      for (const s of sites) {
+        for (const p of s.cleanerProfiles) if (p.cleanerId) byKey.set(`c:${p.cleanerId}`, p.cleanerName || p.label);
+      }
+    } else {
+      for (const c of cleanersQuery.data ?? []) {
+        byKey.set(`c:${c.id}`, [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Cleaner");
+      }
+    }
+    for (const s of sites) {
+      for (const p of s.supervisorProfiles) {
+        if (p.supervisorId) byKey.set(`u:${p.supervisorId}`, `${p.supervisorName || p.label} (supervisor)`);
+      }
+    }
+    // Anyone who worked here without a slot (covers, extra work).
+    for (const r of rows) {
+      const key = r.cleanerId ? `c:${r.cleanerId}` : `u:${r.personId}`;
+      if (!byKey.has(key)) byKey.set(key, r.personRole === "SUPERVISOR" ? `${r.personName} (supervisor)` : r.personName);
+    }
+    if (personId && !byKey.has(personId)) byKey.set(personId, "Selected person");
+    return [...byKey.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [sitesQuery.data, cleanersQuery.data, rows, siteId, personId]);
+  const totals = summary.data?.totals ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -103,7 +120,10 @@ export function TimeSummaryTable() {
           Site
           <select
             value={siteId}
-            onChange={(e) => setSiteId(e.target.value)}
+            onChange={(e) => {
+              setSiteId(e.target.value);
+              setPersonId("");
+            }}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
           >
             <option value="">All sites</option>

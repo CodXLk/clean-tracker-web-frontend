@@ -8,6 +8,7 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 // Mirrors backend AttendanceTimeService.Row / Summary.
 export const TimeRowSchema = z.object({
   personId: z.string().uuid(),
+  cleanerId: z.string().uuid().nullable().optional(),
   personName: z.string(),
   personRole: z.enum(["CLEANER", "SUPERVISOR"]),
   siteId: z.string().uuid(),
@@ -49,6 +50,7 @@ export type TimeSummary = z.infer<typeof TimeSummarySchema>;
 
 export interface TimeSummaryFilters {
   userId?: string;
+  cleanerId?: string;
   siteId?: string;
   from?: string;
   to?: string;

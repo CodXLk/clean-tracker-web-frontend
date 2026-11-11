@@ -21,25 +21,17 @@ export function AttendanceMapModal({ open, onClose, log }: AttendanceMapModalPro
   const checkInLng = log?.checkInLongitude ?? null;
   const siteLat = log?.siteLatitude ?? null;
   const siteLng = log?.siteLongitude ?? null;
+  const hasCenter = (checkInLat != null && checkInLng != null) || (siteLat != null && siteLng != null);
 
   useEffect(() => {
-    if (!open || !log) return;
+    if (!open || !log || !hasCenter) return;
     let cancelled = false;
-    setReady(false);
-    setError(false);
 
     // Prefer the check-in point; fall back to the site center.
     const center =
       checkInLat != null && checkInLng != null
         ? { lat: checkInLat, lng: checkInLng }
-        : siteLat != null && siteLng != null
-          ? { lat: siteLat, lng: siteLng }
-          : null;
-
-    if (!center) {
-      setError(true);
-      return;
-    }
+        : { lat: siteLat!, lng: siteLng! };
 
     loadGoogleMaps()
       .then((maps) => {
@@ -105,12 +97,12 @@ export function AttendanceMapModal({ open, onClose, log }: AttendanceMapModalPro
       description="Blue dot is the site location; the pin is where the cleaner checked in."
     >
       <div className="relative h-80 w-full overflow-hidden rounded-xl border border-grey-200 bg-grey-50">
-        {!ready && !error && (
+        {!ready && !error && hasCenter && (
           <div className="absolute inset-0 flex items-center justify-center">
             <LoadingSpinner />
           </div>
         )}
-        {error && (
+        {(error || !hasCenter) && (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-grey-500">
             No location coordinates were recorded for this check-in.
           </div>
