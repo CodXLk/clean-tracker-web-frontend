@@ -253,6 +253,13 @@ export const ENDPOINTS = {
     read:        (id: string) => `/notifications/${id}/read`,
     readAll:     "/notifications/read-all",
   },
+  announcements: {
+    list:    "/announcements",
+    create:  "/announcements",
+    preview: "/announcements/preview",
+    mine:    "/announcements/mine",
+    byId:    (id: string) => `/announcements/${id}`,
+  },
   assignmentApprovals: {
     mine:    "/assignment-approvals/mine",
     approve: "/assignment-approvals/approve",
@@ -585,6 +592,13 @@ export const BACKEND = {
     unreadCount: "/api/v1/notifications/unread-count",
     read:        (id: string) => `/api/v1/notifications/${id}/read`,
     readAll:     "/api/v1/notifications/read-all",
+  },
+  announcements: {
+    list:    "/api/v1/announcements",
+    create:  "/api/v1/announcements",
+    preview: "/api/v1/announcements/preview",
+    mine:    "/api/v1/announcements/mine",
+    byId:    (id: string) => `/api/v1/announcements/${id}`,
   },
   assignmentApprovals: {
     mine:    "/api/v1/assignment-approvals/mine",

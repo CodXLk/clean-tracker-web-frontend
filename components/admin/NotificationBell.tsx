@@ -14,6 +14,7 @@ import {
   MessageSquareWarning,
   RefreshCw,
   FileText,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -38,6 +39,8 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   COMPLAINT_RAISED: MessageSquareWarning,
   TASK_REDO_ASSIGNED: RefreshCw,
   DOCUMENT_UPLOADED: FileText,
+  ANNOUNCEMENT: Megaphone,
+  ANNOUNCEMENT_URGENT: Megaphone,
   OTHER: Bell,
 };
 
@@ -52,6 +55,8 @@ const ICON_TONES: Partial<Record<NotificationType, string>> = {
   COMPLAINT_RAISED: "bg-error/10 text-error",
   TASK_REDO_ASSIGNED: "bg-primary/10 text-ink",
   DOCUMENT_UPLOADED: "bg-primary/10 text-ink",
+  ANNOUNCEMENT: "bg-primary/10 text-ink",
+  ANNOUNCEMENT_URGENT: "bg-error/10 text-error",
   OTHER: "bg-grey-100 text-grey-500",
 };
 

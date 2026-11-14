@@ -72,6 +72,9 @@ export function notificationHref(
     case "HOURS_APPROVAL_PENDING":
     case "HOURS_REOPENED":
       return "/admin/cleaner-logs?tab=hours";
+    case "ANNOUNCEMENT":
+    case "ANNOUNCEMENT_URGENT":
+      return admin ? "/admin/announcements" : "/dashboard/announcements";
     default:
       return null;
   }

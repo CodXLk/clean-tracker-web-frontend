@@ -50,6 +50,9 @@ export const NotificationTypeSchema = z
     "HOURS_REOPENED",
     // Compliance
     "DOCUMENT_UPLOADED",
+    // Announcements from management
+    "ANNOUNCEMENT",
+    "ANNOUNCEMENT_URGENT",
     // Forward-compat fallback (never sent by the backend)
     "OTHER",
   ])

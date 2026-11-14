@@ -65,6 +65,7 @@ export const SUPERVISOR_ALLOWED_HREFS = [
   "/dashboard",
   "/dashboard/inspections",
   "/dashboard/leave",
+  "/dashboard/announcements",
   "/admin/complaints",
   "/admin/inventory",
   "/admin/cleaner-management",
