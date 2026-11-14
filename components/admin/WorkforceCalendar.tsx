@@ -26,6 +26,7 @@ import {
 import { useSites } from "@/features/user-management/hooks/useSites";
 import { useWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
 import { isWorkOrderActiveInOperations } from "@/features/work-orders/schemas/workOrder.schema";
+import type { RosterTaskScope } from "@/features/user-management/components/SiteRoster";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
   useFloors,
@@ -101,6 +102,8 @@ export interface AssignmentPrefill {
   time?: string;
   siteId?: string;
   floorId?: string;
+  /** Opened from a floor in the scope view: the floor can't be changed. */
+  lockFloor?: boolean;
   areaId?: string;
   /** When adding to an area group: the group id + all its member area ids (task fans out to all). */
   areaGroupId?: string;
@@ -120,6 +123,8 @@ interface WorkforceCalendarProps {
   /** Controlled site selection — the Operations tab lifts this to the page header. */
   siteId?: string;
   onSiteChange?: (id: string) => void;
+  /** Scope-view task filter from the roster's expanded sections (null shows every task). */
+  taskScope?: RosterTaskScope | null;
 }
 
 interface QuickAddState {
@@ -1303,9 +1308,9 @@ function MonthView({
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col overflow-x-auto overscroll-x-contain">
       {/* Day-of-week header */}
-      <div className="grid grid-cols-7 border-b border-grey-200">
+      <div className="grid min-w-[640px] grid-cols-7 border-b border-grey-200">
         {DAY_LABELS.map((d) => (
           <div key={d} className="py-2 text-center text-xs font-medium text-grey-500">
             {d}
@@ -1315,7 +1320,7 @@ function MonthView({
 
       {/* Weeks */}
       {weeks.map((week, wi) => (
-        <div key={wi} className="grid grid-cols-7 border-b border-grey-200 last:border-b-0">
+        <div key={wi} className="grid min-w-[640px] grid-cols-7 border-b border-grey-200 last:border-b-0">
           {week.map((dateStr) => {
             const dt = new Date(dateStr + "T00:00:00");
             const isCurrentMonth = dt.getMonth() === month;
@@ -1596,9 +1601,9 @@ function WeekTypeView({
   }
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className="flex min-w-0 flex-col overflow-x-auto overscroll-x-contain">
       {/* Day header row (with public-holiday marking) */}
-      <div className="flex border-b border-grey-200 bg-surface">
+      <div className="flex min-w-[720px] border-b border-grey-200 bg-surface">
         <div className="w-16 shrink-0 border-r border-grey-200" />
         {weekDates.map((dateStr) => {
           const { day, date } = formatDisplayDate(dateStr);
@@ -1639,7 +1644,7 @@ function WeekTypeView({
       </div>
 
       {/* Time grid */}
-      <div className="overflow-y-auto" style={{ maxHeight: "560px" }}>
+      <div className="min-w-[720px] overflow-y-auto" style={{ maxHeight: "560px" }}>
         <div className="relative flex">
           {/* Hour labels */}
           <div className="w-16 shrink-0 border-r border-grey-200">
@@ -1839,7 +1844,7 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
 
 // ── Main WorkforceCalendar Component ──────────────────────────────────────────
 
-export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: WorkforceCalendarProps) {
+export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange, taskScope }: WorkforceCalendarProps) {
   const today = formatDate(new Date());
   const siteControlled = siteId !== undefined && onSiteChange !== undefined;
   // Main toggle: the table-like weekly scope view (default) vs the time-grid calendar.
@@ -1939,6 +1944,16 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
     (o: TaskOccurrence) =>
       !(o.assignmentType === "WORK_ORDER" && o.poId != null && inactiveWorkOrderPoIds.has(o.poId)),
     [inactiveWorkOrderPoIds],
+  );
+  // Scope view only: general section open → the site's own tasks (general/periodical/other);
+  // work order section open → the selected work order's tasks. Both collapsed shows everything.
+  const inTaskScope = useCallback(
+    (assignmentType: string, poId: string | null | undefined) => {
+      if (!taskScope || (!taskScope.general && !taskScope.workOrderPoId)) return true;
+      if (assignmentType === "WORK_ORDER") return poId != null && poId === taskScope.workOrderPoId;
+      return taskScope.general;
+    },
+    [taskScope],
   );
   const minAddDate = useMemo(() => {
     if (!selectedSite?.oneTimeSite) return undefined;
@@ -2492,6 +2507,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       ]),
       siteId: siteFilter,
       floorId: target.floorId,
+      lockFloor: !!target.floorId,
       areaId: target.areaId,
       areaGroupId: target.areaGroupId,
       areaIds: target.areaIds,
@@ -2567,7 +2583,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       {/* Calendar toolbar */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-grey-200 px-4 py-3">
         {/* Month label — or the week's start–end dates in weekly views */}
-        <h3 className="text-base font-bold text-on-surface min-w-[140px]">
+        <h3 className="w-full text-base font-bold text-on-surface sm:w-auto sm:min-w-[140px]">
           {viewMode === "month" ? monthLabel : formatWeekRangeLabel(weekDates[0]!, weekDates[6]!)}
         </h3>
 
@@ -2628,7 +2644,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
         )}
 
         {/* View toggles: Week/Month sub-toggle (calendar only) + Calendar/Scope */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:justify-end">
           {mainView === "scope" && (
             <select
               value={taskStatusFilter}
@@ -2735,7 +2751,9 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
       {viewMode === "schedule" ? (
         <WeekScheduleGrid
           weekDates={weekDates}
-          occurrences={(dayScope ? dayOccurrencesQuery.data ?? [] : serverOccurrences ?? []).filter(isOccurrenceVisible)}
+          occurrences={(dayScope ? dayOccurrencesQuery.data ?? [] : serverOccurrences ?? []).filter(
+            (o) => isOccurrenceVisible(o) && inTaskScope(o.assignmentType, o.poId),
+          )}
           today={today}
           workingDays={workingDays}
           dayView={scopeView === "day"}
@@ -2748,7 +2766,11 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange }: Wor
           minAddDate={minAddDate}
           siteId={managing ? siteFilter : undefined}
           floors={managing ? floors : undefined}
-          siteTasks={managing ? siteTasksQuery.data ?? [] : undefined}
+          siteTasks={
+            managing
+              ? (siteTasksQuery.data ?? []).filter((t) => inTaskScope(t.assignmentType, t.poId))
+              : undefined
+          }
           areasByFloor={managing ? areasByFloor : undefined}
           mondayDate={mondayDate}
           structureLoading={managing && (floorsQuery.isLoading || allAreasQuery.isLoading)}

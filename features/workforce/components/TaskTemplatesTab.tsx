@@ -102,7 +102,50 @@ export function TaskTemplatesTab() {
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+        <>
+        <ul className="flex flex-col gap-3 md:hidden">
+          {templates.map((template) => {
+            const mins = totalDuration(template);
+            return (
+              <li key={template.id} className="rounded-2xl bg-surface p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <button type="button" onClick={() => setViewing(template)} className="min-w-0 text-left">
+                    <p className="truncate font-medium text-on-surface">{template.name}</p>
+                    <p className="text-xs text-grey-500">
+                      {template.tasks.length} {template.tasks.length === 1 ? "task" : "tasks"}
+                      {mins > 0 ? ` · ${mins} min` : ""}
+                      {template.updatedByName ? ` · ${template.updatedByName}` : ""}
+                    </p>
+                  </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      aria-label="Edit template"
+                      onClick={() => openEdit(template)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-grey-500 hover:bg-primary/10 hover:text-ink"
+                    >
+                      <Pencil size={15} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Delete template"
+                      onClick={() => setPendingDelete(template)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-grey-500 hover:bg-red-50 hover:text-danger"
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                {template.tasks.length > 0 && (
+                  <p className="mt-2 line-clamp-2 text-xs text-grey-500">
+                    {template.tasks.map((t) => t.name).join(", ")}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-hidden rounded-2xl bg-surface shadow-sm md:block">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
@@ -179,6 +222,7 @@ export function TaskTemplatesTab() {
             </table>
           </div>
         </div>
+        </>
       )}
       </>
       )}

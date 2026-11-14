@@ -173,6 +173,7 @@ export const SiteTaskSummarySchema = z.object({
   recurrenceDays: z.array(DayOfWeekSchema).default([]),
   criticalLevel: CriticalLevelSchema.nullish(),
   status: AssignmentTaskStatusSchema.default("ACTIVE"),
+  poId: z.string().nullish(),
 });
 export const SiteTaskSummaryListSchema = z.array(SiteTaskSummarySchema);
 export type SiteTaskSummary = z.infer<typeof SiteTaskSummarySchema>;

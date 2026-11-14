@@ -67,6 +67,46 @@ export function LeaveManagementTab() {
     return null;
   };
 
+  const renderActions = (l: LeaveRequest) => (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => setViewing(l)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
+      >
+        <Eye size={14} /> View
+      </button>
+      {l.status === "PENDING" && (
+        <>
+          <button
+            type="button"
+            onClick={() => setManaging(l)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
+          >
+            <Users size={14} /> Arrange cover
+          </button>
+          <button
+            type="button"
+            disabled={approve.isPending || coverBlockReason(l) !== null}
+            title={coverBlockReason(l) ?? undefined}
+            onClick={() => approve.mutate(l.id, { onError: (e) => setError(getErrorMessage(e)) })}
+            className="rounded-full bg-success px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={reject.isPending}
+            onClick={() => reject.mutate(l.id, { onError: (e) => setError(getErrorMessage(e)) })}
+            className="rounded-full border border-error/40 px-3 py-1.5 text-xs font-semibold text-error hover:bg-error/5 disabled:opacity-50"
+          >
+            Reject
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -82,7 +122,39 @@ export function LeaveManagementTab() {
           No leave requests.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
+        <>
+        <ul className="flex flex-col gap-3 md:hidden">
+          {requests.map((l) => (
+            <li key={l.id} className="rounded-2xl bg-surface p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-on-surface">{l.requesterName}</p>
+                  <p className="text-xs text-grey-500">{l.requesterRole === "SUPERVISOR" ? "Supervisor" : "Cleaner"}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[l.status] ?? "bg-grey-100 text-grey-600"}`}>
+                  {l.status}
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div className="col-span-2">
+                  <dt className="text-grey-500">Dates</dt>
+                  <dd className="text-sm text-grey-700">{l.startDate} → {l.endDate}</dd>
+                </div>
+                <div>
+                  <dt className="text-grey-500">Scope</dt>
+                  <dd className="text-grey-700">{l.type === "SITE_SPECIFIC" ? "Specific sites" : "All sites"}</dd>
+                </div>
+                <div>
+                  <dt className="text-grey-500">Covers</dt>
+                  <dd className="text-grey-700">{coverSummary(l)}</dd>
+                </div>
+              </dl>
+              {l.reason && <p className="mt-2 text-xs text-grey-500">“{l.reason}”</p>}
+              <div className="mt-3">{renderActions(l)}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-hidden rounded-2xl bg-surface shadow-sm md:block">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead>
@@ -116,59 +188,14 @@ export function LeaveManagementTab() {
                         {l.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5">
-                      {l.status === "PENDING" ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setViewing(l)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
-                          >
-                            <Eye size={14} /> View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setManaging(l)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
-                          >
-                            <Users size={14} /> Arrange cover
-                          </button>
-                          <button
-                            type="button"
-                            disabled={approve.isPending || coverBlockReason(l) !== null}
-                            title={coverBlockReason(l) ?? undefined}
-                            onClick={() => approve.mutate(l.id, { onError: (e) => setError(getErrorMessage(e)) })}
-                            className="rounded-full bg-success px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            disabled={reject.isPending}
-                            onClick={() => reject.mutate(l.id, { onError: (e) => setError(getErrorMessage(e)) })}
-                            className="rounded-full border border-error/40 px-3 py-1.5 text-xs font-semibold text-error hover:bg-error/5 disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setViewing(l)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface hover:bg-grey-50"
-                          >
-                            <Eye size={14} /> View
-                          </button>
-                        </div>
-                      )}
-                    </td>
+                    <td className="px-5 py-3.5">{renderActions(l)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+        </>
       )}
 
       {managing && (

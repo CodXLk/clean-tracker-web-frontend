@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, UserCog, Users, X, ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
@@ -39,6 +39,14 @@ interface SiteRosterProps {
   /** Supervisors may reassign cleaners but not change slots or the supervisor roster. */
   canManageSupervisors?: boolean;
   restrictCleanerSlots?: boolean;
+  /** Reports which task sets the expanded sections select (null when the site has no work orders). */
+  onTaskScopeChange?: (scope: RosterTaskScope | null) => void;
+}
+
+/** Which tasks the scope view shows: the site's own (general/periodical/other) and/or one work order's. */
+export interface RosterTaskScope {
+  general: boolean;
+  workOrderPoId: string | null;
 }
 
 /** Assigned cleaners (by profile) and supervisors for the selected site, shown as
@@ -47,6 +55,7 @@ export function SiteRoster({
   site,
   canManageSupervisors = true,
   restrictCleanerSlots = false,
+  onTaskScopeChange,
 }: SiteRosterProps) {
   const siteId = site?.id;
   // One-time work-order sites lead with their work order roster; the site's own cleaner/supervisor
@@ -116,6 +125,12 @@ export function SiteRoster({
     () => siteWorkOrders.find((w) => w.id === selectedWorkOrderId) ?? siteWorkOrders[0] ?? null,
     [siteWorkOrders, selectedWorkOrderId],
   );
+  const hasWorkOrders = siteWorkOrders.length > 0 && !!workOrder;
+  const scopeGeneral = generalOpen;
+  const scopePoId = hasWorkOrders && workOrderOpen ? (workOrder?.poId ?? null) : null;
+  useEffect(() => {
+    onTaskScopeChange?.(hasWorkOrders ? { general: scopeGeneral, workOrderPoId: scopePoId } : null);
+  }, [onTaskScopeChange, hasWorkOrders, scopeGeneral, scopePoId]);
   const outsourceCleaners = useMemo(
     () => [...(outsourceProject?.cleanerProfiles ?? [])].sort((a, b) => a.profileIndex - b.profileIndex),
     [outsourceProject],
@@ -197,12 +212,14 @@ export function SiteRoster({
       )}
       <div className="flex flex-col">
       <div className={isOneTimeWorkOrder ? "order-3 mt-5 border-t border-line pt-5" : "order-1"}>
-      {isOneTimeWorkOrder && (
+      {(isOneTimeWorkOrder || hasWorkOrders) && (
         <div
           className="mb-3 flex w-full cursor-pointer items-center justify-between gap-2"
           onClick={() => setGeneralOpen((v) => !v)}
         >
-          <span className="text-xs font-semibold uppercase tracking-wide text-body-2">Site cleaners &amp; supervisors</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-body-2">
+            {isOneTimeWorkOrder ? "Site cleaners & supervisors" : "General cleaners & supervisors"}
+          </span>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setGeneralOpen((v) => !v); }}

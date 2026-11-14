@@ -197,7 +197,59 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
         ) : workOrdersQuery.isError ? (
           <div className="p-6 text-sm font-medium text-error">{getErrorMessage(workOrdersQuery.error)}</div>
         ) : workOrders.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+          {isSupervisor && (
+            <ul className="divide-y divide-grey-100 md:hidden">
+              {workOrders.map((w) => {
+                const isCompleted =
+                  WORK_ORDER_STATUS_VALUES.indexOf(w.status) >= WORK_ORDER_STATUS_VALUES.indexOf("TASKS_COMPLETED");
+                return (
+                  <li key={w.id} className="flex flex-col gap-3 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <button type="button" onClick={() => setDetail(w)} className="min-w-0 text-left">
+                        <p className="font-semibold text-on-surface">{w.poId}</p>
+                        <p className="truncate text-xs text-grey-500">{w.siteName ?? "—"}</p>
+                        <p className="text-xs text-grey-500">{formatDates(w.taskDates)}</p>
+                      </button>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[w.status]}`}>
+                        {WORK_ORDER_STATUS_LABELS[w.status]}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetail(w)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface"
+                      >
+                        <Eye size={14} aria-hidden="true" /> Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShares({ workOrder: w, complete: false })}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-medium text-on-surface"
+                      >
+                        <Wallet size={14} aria-hidden="true" /> Cleaners share
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isCompleted || updateStatus.isPending}
+                        onClick={() => {
+                          setBanner(null);
+                          setShares({ workOrder: w, complete: true });
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                          isCompleted ? "bg-teal-100 text-teal-700" : "bg-primary text-white"
+                        }`}
+                      >
+                        {isCompleted ? "Tasks completed" : "Mark completed"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <div className={isSupervisor ? "hidden overflow-x-auto md:block" : "overflow-x-auto"}>
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead>
                 <tr className="border-b border-grey-300 text-xs uppercase tracking-wide text-grey-500">
@@ -351,6 +403,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <EmptyState
             title="No work orders yet"
