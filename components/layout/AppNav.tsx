@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Megaphone,
   MessageSquare,
   MoreVertical,
   Package,
@@ -72,6 +73,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Invoices", href: "/admin/invoices", icon: Receipt },
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Clients", href: "/admin/clients", icon: ContactRound },
+  { label: "Announcements", href: "/admin/announcements", icon: Megaphone },
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
@@ -101,6 +103,7 @@ const ADMIN_ORDERED_HREFS = [
   "/admin/complaints",
   "/admin/cleaner-logs",
   "/admin/invoices",
+  "/admin/announcements",
   "/dashboard/profile",
 ];
 const ADMIN_NAV_ITEMS: NavItemConfig[] = ADMIN_ORDERED_HREFS
@@ -155,7 +158,10 @@ function useVisibleNavItems(): NavItemConfig[] {
   // Until the role is known, show nothing rather than flashing a wrong list (e.g. "Home").
   if (!me) return [];
   // Invoices are for management only (Client service manager here; admins use ADMIN_NAV_ITEMS).
-  if (me.role !== "CLIENT_SERVICE_MANAGER") return NON_CLIENT_NAV_ITEMS.filter((i) => i.href !== "/admin/invoices");
+  // Announcements are management-only too.
+  if (me.role !== "CLIENT_SERVICE_MANAGER") {
+    return NON_CLIENT_NAV_ITEMS.filter((i) => i.href !== "/admin/invoices" && i.href !== "/admin/announcements");
+  }
   return NON_CLIENT_NAV_ITEMS;
 }
 
@@ -186,6 +192,8 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/invoices", "Invoices"],
   ["/admin/notifications", "Notifications"],
+  ["/admin/announcements", "Announcements"],
+  ["/dashboard/announcements", "Announcements"],
   ["/dashboard/tasks", "Tasks"],
   ["/dashboard/inspections", "Inspections"],
   ["/dashboard/profile", "Profile"],

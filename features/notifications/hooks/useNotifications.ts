@@ -62,7 +62,10 @@ export function useMarkRead() {
     mutationFn: async (id: string) => {
       await clientApi.post(ENDPOINTS.notifications.read(id));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationKeys.all });
+      qc.invalidateQueries({ queryKey: ["announcements"] });
+    },
   });
 }
 
@@ -72,6 +75,9 @@ export function useMarkAllRead() {
     mutationFn: async () => {
       await clientApi.post(ENDPOINTS.notifications.readAll);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: notificationKeys.all });
+      qc.invalidateQueries({ queryKey: ["announcements"] });
+    },
   });
 }
