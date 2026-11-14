@@ -13,6 +13,7 @@ import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { useMyTasks, useCompleteTasks, useReviewComplete } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
+import { inSessionContext, sessionContextOf } from "@/features/attendance/lib/checkInEntries";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { toLocalDateString, assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
@@ -127,13 +128,14 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   // All occurrences in this area (or, for a cleaner's area group, across all its member areas).
   const areaGroupId = searchParams.get("areaGroupId");
   const isGroupMode = !!areaGroupId;
-  const areaTasks = useMemo(
-    () =>
-      occurrences.filter((o) =>
-        isGroupMode ? o.areaGroupId === areaGroupId : areaId ? o.areaId === areaId : true,
-      ),
-    [occurrences, areaId, areaGroupId, isGroupMode],
-  );
+  const areaTasks = useMemo(() => {
+    const ctx = sessionContextOf(sites);
+    return occurrences.filter(
+      (o) =>
+        (isGroupMode ? o.areaGroupId === areaGroupId : areaId ? o.areaId === areaId : true) &&
+        inSessionContext(o, ctx),
+    );
+  }, [occurrences, areaId, areaGroupId, isGroupMode, sites]);
 
   // For a group, collapse the identical per-area copies (same groupTaskKey) into one display row;
   // its status is COMPLETED only when every member area's copy is done.

@@ -21,6 +21,7 @@ import {
   useNotifications,
   useMarkRead,
   useMarkAllRead,
+  useUnreadCount,
 } from "@/features/notifications/hooks/useNotifications";
 import type { Notification, NotificationType } from "@/features/notifications/schemas/notification.schema";
 import { notificationHref } from "@/features/notifications/lib/notificationLink";
@@ -71,12 +72,13 @@ export default function CleanerNotificationsPage() {
   const useDrawerNav = useIsDrawerNav();
   const router = useRouter();
   const role = useMe().data?.role;
-  const { data, isLoading, isError } = useNotifications();
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useNotifications();
+  const { data: unreadCount } = useUnreadCount();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
 
-  const notifications = data ?? [];
-  const unread = notifications.filter((n) => !n.read).length;
+  const notifications = data?.pages.flat() ?? [];
+  const unread = unreadCount ?? notifications.filter((n) => !n.read).length;
 
   function open(n: Notification) {
     if (!n.read) markRead.mutate(n.id);
@@ -164,6 +166,18 @@ export default function CleanerNotificationsPage() {
               );
             })}
           </ul>
+        )}
+        {hasNextPage && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="rounded-full border border-grey-200 bg-white px-4 py-2 text-sm font-medium text-on-surface hover:bg-grey-50 disabled:opacity-50"
+            >
+              {isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          </div>
         )}
       </main>
     </div>

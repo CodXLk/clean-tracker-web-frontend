@@ -57,6 +57,7 @@ export const TaskOccurrenceSchema = z.object({
   areaGroupName: z.string().nullable().optional(),
   groupTaskKey: z.string().uuid().nullable().optional(),
   assignmentType: AssignmentTypeSchema.nullable().optional(),
+  poId: z.string().nullable().optional(),
   shiftId: z.string().uuid().nullable().optional(),
   shiftName: z.string().nullable().optional(),
   shiftStartTime: z.string().nullable().optional(),

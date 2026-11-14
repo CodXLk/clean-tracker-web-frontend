@@ -13,7 +13,7 @@ import { SegmentedTabs } from "@/components/shared/SegmentedTabs";
 import { TaskTemplatesTab } from "@/features/workforce/components/TaskTemplatesTab";
 import { WorkOrdersSection } from "@/features/work-orders/components/WorkOrdersSection";
 import { SiteManagement } from "@/features/user-management/components/SiteManagement";
-import { SiteRoster } from "@/features/user-management/components/SiteRoster";
+import { SiteRoster, type RosterTaskScope } from "@/features/user-management/components/SiteRoster";
 import { isSelectableInOperations } from "@/features/user-management/schemas/site.schema";
 import { CleanerManagement } from "@/features/cleaners/components/CleanerManagement";
 import { StaffManagement } from "@/features/users/components/StaffManagement";
@@ -68,9 +68,9 @@ function WorkforceContent() {
   // template management stay with management roles.
   const isManager = me.data ? me.data.role !== "CLIENT" && me.data.role !== "CLEANER" : false;
   const isSupervisor = me.data?.role === "SUPERVISOR";
-  // Supervisors manage day-to-day work but not the Sites or Cleaners rosters.
+  // Supervisors manage day-to-day work at their own sites but not the Sites, Cleaners or Supervisors rosters.
   const tabs: Tab[] = isManager
-    ? MANAGER_TABS.filter((t) => !isSupervisor || (t !== "Sites" && t !== "Cleaners"))
+    ? MANAGER_TABS.filter((t) => !isSupervisor || (t !== "Sites" && t !== "Cleaners" && t !== "Supervisors"))
     : ["Operations"];
 
   // URL is the source of truth; fall back to Operations for unknown/forbidden tabs.
@@ -91,6 +91,8 @@ function WorkforceContent() {
     [sitesQuery.data],
   );
   const [operationsSiteId, setOperationsSiteId] = useState("");
+  // Which tasks the scope view shows, driven by the roster's expanded sections.
+  const [taskScope, setTaskScope] = useState<RosterTaskScope | null>(null);
   // Preselect a site when arriving with ?site=<id> (e.g. from the schedule "Open in Operations" eye,
   // or right after creating a work order). Apply an incoming param once — even if a site is already
   // selected (this page stays mounted across tabs) — without overriding later manual changes.
@@ -282,6 +284,7 @@ function WorkforceContent() {
                   site={selectedSite}
                   canManageSupervisors={!isSupervisor}
                   restrictCleanerSlots={isSupervisor}
+                  onTaskScopeChange={setTaskScope}
                 />
               )}
 
@@ -289,6 +292,7 @@ function WorkforceContent() {
                 onNewAssignment={handlePrefill}
                 siteId={operationsSiteId}
                 onSiteChange={setOperationsSiteId}
+                taskScope={isManager ? taskScope : null}
               />
             </>
           )}
@@ -318,6 +322,7 @@ function WorkforceContent() {
           defaultTime={prefill.time}
           defaultSiteId={prefill.siteId}
           defaultFloorId={prefill.floorId}
+          lockFloor={prefill.lockFloor}
           defaultAreaId={prefill.areaId}
           defaultAreaIds={prefill.areaIds}
           defaultAreaGroupId={prefill.areaGroupId}

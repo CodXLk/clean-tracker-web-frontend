@@ -22,6 +22,7 @@ import {
   useNotifications,
   useMarkRead,
   useMarkAllRead,
+  useUnreadCount,
 } from "@/features/notifications/hooks/useNotifications";
 import type {
   Notification,
@@ -129,12 +130,13 @@ function NotificationRow({ n }: { n: Notification }) {
 }
 
 export default function NotificationsPage() {
-  const { data, isLoading, isError } = useNotifications();
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useNotifications();
+  const { data: serverUnread } = useUnreadCount();
   const markAllRead = useMarkAllRead();
   const [tab, setTab] = useState<Tab>("All");
 
-  const notifications = useMemo(() => data ?? [], [data]);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const notifications = useMemo(() => data?.pages.flat() ?? [], [data]);
+  const unreadCount = serverUnread ?? notifications.filter((n) => !n.read).length;
   const visible = tab === "Unread" ? notifications.filter((n) => !n.read) : notifications;
 
   return (
@@ -179,6 +181,18 @@ export default function NotificationsPage() {
               <NotificationRow key={n.id} n={n} />
             ))}
           </ul>
+        )}
+        {!isLoading && !isError && hasNextPage && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="rounded-xl border border-grey-200 px-4 py-2 text-sm font-medium text-on-surface hover:bg-grey-50 disabled:opacity-50"
+            >
+              {isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          </div>
         )}
       </div>
     </div>

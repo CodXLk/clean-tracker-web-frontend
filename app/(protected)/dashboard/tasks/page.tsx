@@ -19,6 +19,7 @@ import { useTaskViewStore } from "@/features/tasks/store/taskView.store";
 import { TaskViewToggle } from "@/features/tasks/components/TaskViewToggle";
 import { TaskListView } from "@/features/tasks/components/TaskListView";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
+import { inSessionContext, sessionContextOf } from "@/features/attendance/lib/checkInEntries";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
   toLocalDateString,
@@ -52,8 +53,11 @@ export default function TasksPage() {
   const pausedSite = pausedSiteId ? sites.find((s) => s.siteId === pausedSiteId) ?? null : null;
   const occurrences = useMemo(() => {
     if (mustCheckIn) return [];
-    return gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences;
-  }, [allOccurrences, gatedSiteId, mustCheckIn]);
+    const ctx = isAdmin ? null : sessionContextOf(sites);
+    return (gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences).filter((o) =>
+      inSessionContext(o, ctx),
+    );
+  }, [allOccurrences, gatedSiteId, mustCheckIn, isAdmin, sites]);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const setHeaderAction = useUIStore((s) => s.setHeaderAction);

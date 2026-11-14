@@ -212,6 +212,8 @@ interface NewAssignmentModalProps {
   /** Prefill the site + first group's floor/area (used by the scope view "+" cells). */
   defaultSiteId?: string;
   defaultFloorId?: string;
+  /** Keep every location on {@link defaultFloorId} (scope view opened from a floor). */
+  lockFloor?: boolean;
   defaultAreaId?: string;
   /** When adding to an area group: the group id + all member area ids (task fans out to all). */
   defaultAreaIds?: string[];
@@ -642,57 +644,52 @@ function TaskNameCombobox({
   );
 }
 
-// ── Location group card: floor + area, then quick-add many tasks ──────────────
-interface LocationGroupCardProps {
-  groupIndex: number;
+// ── Task composer: pick a floor & area, then quick-add tasks to that location ────────
+type TaskLocation = { floorId: string; areaIds: string[]; areaGroupId?: string };
+type NewTaskInput = AssignmentFormInput["groups"][number]["tasks"][number];
+
+interface TaskComposerProps {
   siteId: string;
   floorOptions: SelectOption[];
   floorsLoading: boolean;
-  canRemove: boolean;
-  onRemove: () => void;
-  assignPerTask: boolean;
-  cleaners: Cleaner[];
+  initialLocation: TaskLocation;
+  /** The floor can't be changed (scope view opened from a floor). */
+  lockFloor?: boolean;
+  /** Floor and area can't be changed (editing one area's tasks). */
+  lockLocation?: boolean;
   usingProfiles: boolean;
-  lockTasks?: boolean;
-  /** Lifted to the parent so it survives this card re-mounting during form updates. */
-  areaMultiMode: boolean;
-  setAreaMultiMode: (value: boolean) => void;
-  /** Expanded task-detail rows (by task field id), lifted so a re-mount doesn't collapse them. */
-  expandedTasks: Set<string>;
-  setExpandedTasks: React.Dispatch<React.SetStateAction<Set<string>>>;
+  cleaners: Cleaner[];
+  hasTasks: boolean;
+  onAddTasks: (location: TaskLocation, tasks: NewTaskInput[]) => void;
+  /** Every task in the form, for "Save as list". */
+  getAllTasks: () => NewTaskInput[];
 }
 
-function LocationGroupCard({
-  groupIndex,
+function TaskComposer({
   siteId,
   floorOptions,
   floorsLoading,
-  canRemove,
-  onRemove,
-  assignPerTask,
-  cleaners,
+  initialLocation,
+  lockFloor,
+  lockLocation,
   usingProfiles,
-  lockTasks,
-  areaMultiMode,
-  setAreaMultiMode,
-  expandedTasks,
-  setExpandedTasks,
-}: LocationGroupCardProps) {
-  const {
-    control,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useFormContext<AssignmentFormInput>();
-
-  const floorId = watch(`groups.${groupIndex}.floorId`);
+  cleaners,
+  hasTasks,
+  onAddTasks,
+  getAllTasks,
+}: TaskComposerProps) {
+  const { setValue } = useFormContext<AssignmentFormInput>();
+  const [loc, setLoc] = useState<TaskLocation>(initialLocation);
+  const [areaMultiMode, setAreaMultiMode] = useState(
+    initialLocation.areaIds.length > 1 || !!initialLocation.areaGroupId,
+  );
+  const [locError, setLocError] = useState<string | null>(null);
+  const floorId = loc.floorId;
+  const currentAreaIds = loc.areaIds;
+  const currentAreaGroupId = loc.areaGroupId;
   const areasQuery = useAreas(floorId || undefined);
   const areaGroupsQuery = useAreaGroups(floorId || undefined);
   const taskNameSuggestions = useTaskNameSuggestions();
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: `groups.${groupIndex}.tasks`,
-  });
 
   const [floorPromptOpen, setFloorPromptOpen] = useState(false);
   const [areaPromptOpen, setAreaPromptOpen] = useState(false);
@@ -705,13 +702,9 @@ function LocationGroupCard({
   const [qError, setQError] = useState(false);
   // Quick-add time/description panel is collapsed by default (revealed via the chevron).
   const [quickExpanded, setQuickExpanded] = useState(false);
-  // Bumps a task's items editor open (row "Add items" button); the counter lets repeat clicks re-open.
-  const [openItemsSignal, setOpenItemsSignal] = useState<{ id: string; n: number }>({ id: "", n: 0 });
-  // Which task's recurrence popup is open (edited in a draft, committed on OK).
-  const [recurEditIndex, setRecurEditIndex] = useState<number | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  // Saved task-list templates (save the current group's tasks / load a set in).
+  // Saved task-list templates (save the current tasks / load a set in).
   const templatesQuery = useTaskTemplates();
   const saveTemplateMutation = useSaveTaskTemplate();
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
@@ -723,7 +716,10 @@ function LocationGroupCard({
     [areasQuery.data],
   );
 
-  const groupErrors = errors.groups?.[groupIndex];
+  function setAreas(areaIds: string[], areaGroupId?: string) {
+    setLoc((l) => ({ ...l, areaIds, areaGroupId }));
+    if (areaIds.length > 0) setLocError(null);
+  }
 
   // Area dropdown: a sentinel first option switches to multi-area badge selection.
   const AREA_MULTI = "__MULTI__";
@@ -740,76 +736,52 @@ function LocationGroupCard({
         : [{ value: AREA_MULTI, label: "Multiple areas" }, ...areaOptions],
     [areaMultiMode, areaOptions],
   );
-  const currentAreaIds: string[] = watch(`groups.${groupIndex}.areaIds`) ?? [];
-  const currentAreaGroupId = watch(`groups.${groupIndex}.areaGroupId`);
   const areaSelectValue = areaMultiMode ? AREA_MULTI : (currentAreaIds[0] ?? null);
-  // Group location labels shown in each expanded task row.
-  const floorLabel = floorOptions.find((o) => o.value === floorId)?.label;
-  const selectedAreaLabels = currentAreaIds
-    .map((id) => areaOptions.find((o) => o.value === id)?.label)
-    .filter((l): l is string => !!l);
 
   function onAreaSelect(value: string | null) {
     if (value === AREA_MULTI) {
       // Start multi selection fresh — don't carry over a previously chosen single area.
       setAreaMultiMode(true);
-      setValue(`groups.${groupIndex}.areaIds`, [], { shouldValidate: false });
-      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+      setAreas([]);
       return;
     }
     if (value === AREA_SINGLE) {
-      // Switch back to single-area mode with a clean slate.
       setAreaMultiMode(false);
-      setValue(`groups.${groupIndex}.areaIds`, [], { shouldValidate: false });
-      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+      setAreas([]);
       return;
     }
     setAreaMultiMode(false);
-    setValue(`groups.${groupIndex}.areaIds`, value ? [value] : [], { shouldValidate: true });
-    setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+    setAreas(value ? [value] : []);
   }
 
   function toggleAreaBadge(areaId: string) {
-    const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
-    const next = current.includes(areaId)
-      ? current.filter((id) => id !== areaId)
-      : [...current, areaId];
-    setValue(`groups.${groupIndex}.areaIds`, next, { shouldValidate: true });
-    if (watch(`groups.${groupIndex}.areaGroupId`)) {
-      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-    }
+    const next = currentAreaIds.includes(areaId)
+      ? currentAreaIds.filter((id) => id !== areaId)
+      : [...currentAreaIds, areaId];
+    setAreas(next);
   }
 
   function toggleAreaGroup(group: { id: string; areas: Array<{ id: string }> }) {
-    const on = watch(`groups.${groupIndex}.areaGroupId`) === group.id;
-    if (on) {
+    if (currentAreaGroupId === group.id) {
       const memberIds = new Set(group.areas.map((a) => a.id));
-      const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
-      setValue(`groups.${groupIndex}.areaIds`, current.filter((id) => !memberIds.has(id)), {
-        shouldValidate: true,
-      });
-      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
+      setAreas(currentAreaIds.filter((id) => !memberIds.has(id)));
     } else {
-      setValue(`groups.${groupIndex}.areaIds`, group.areas.map((a) => a.id), { shouldValidate: true });
-      setValue(`groups.${groupIndex}.areaGroupId`, group.id, { shouldValidate: true });
+      setAreas(group.areas.map((a) => a.id), group.id);
     }
   }
 
-  function toggleTaskExpanded(fieldId: string) {
-    setExpandedTasks((prev) => {
-      const next = new Set(prev);
-      if (next.has(fieldId)) next.delete(fieldId);
-      else next.add(fieldId);
-      return next;
-    });
-  }
-
-  // Seeded (edit/draft/template) selections spanning several areas or an area group open in multi mode.
-  useEffect(() => {
-    if ((currentAreaIds.length > 1 || currentAreaGroupId) && !areaMultiMode) {
-      setAreaMultiMode(true);
+  /** New tasks need a floor and at least one area. */
+  function requireLocation(): boolean {
+    if (!loc.floorId) {
+      setLocError("Select a floor first.");
+      return false;
     }
-  }, [currentAreaIds.length, currentAreaGroupId, areaMultiMode]);
+    if (loc.areaIds.length === 0) {
+      setLocError("Select an area (or several) for this task.");
+      return false;
+    }
+    return true;
+  }
 
   function addTask() {
     const name = qName.trim();
@@ -818,18 +790,21 @@ function LocationGroupCard({
       nameRef.current?.focus();
       return;
     }
+    if (!requireLocation()) return;
     const duration = qDuration ? parseInt(qDuration, 10) : undefined;
-    append({
-      name,
-      durationMinutes: duration && duration > 0 ? duration : undefined,
-      description: qDesc.trim(),
-      criticalLevel: "LOW",
-      cleanerIds: [],
-      profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
-      items: [],
-      daysOfWeek: [],
-      monthlyMode: "DAY_OF_MONTH",
-    });
+    onAddTasks(loc, [
+      {
+        name,
+        durationMinutes: duration && duration > 0 ? duration : undefined,
+        description: qDesc.trim(),
+        criticalLevel: "LOW",
+        cleanerIds: [],
+        profileIds: usingProfiles ? cleaners.map((c) => c.id) : [],
+        items: [],
+        daysOfWeek: [],
+        monthlyMode: "DAY_OF_MONTH",
+      },
+    ]);
     setQName("");
     setQDuration("");
     setQDesc("");
@@ -844,14 +819,15 @@ function LocationGroupCard({
     }
   }
 
-  /** Append every task from a saved template into this floor/area group. */
+  /** Add every task from a saved template to the selected floor/area. */
   function loadTemplate(templateId: string) {
     const template = (templatesQuery.data ?? []).find((t) => t.id === templateId);
-    if (!template) return;
+    if (!template || !requireLocation()) return;
     // Remember the template so the calendar can label this assignment by its name.
     setValue("templateName", template.name, { shouldValidate: false });
-    for (const t of template.tasks) {
-      append({
+    onAddTasks(
+      loc,
+      template.tasks.map((t) => ({
         name: t.name,
         durationMinutes: t.durationMinutes && t.durationMinutes > 0 ? t.durationMinutes : undefined,
         description: t.description ?? "",
@@ -866,18 +842,18 @@ function LocationGroupCard({
         dayOfMonth: t.dayOfMonth ?? undefined,
         weekOfMonth: t.weekOfMonth ?? undefined,
         monthlyWeekday: t.monthlyWeekday ?? undefined,
-      });
-    }
+      })),
+    );
   }
 
-  /** Save this group's current tasks (with their items) as a reusable named template. */
+  /** Save every task in the form (with their items) as a reusable named template. */
   function saveAsTemplate() {
     const name = templateName.trim();
     if (name.length < 2) {
       setTemplateError("Enter a name (at least 2 characters)");
       return;
     }
-    const groupTasks = watch(`groups.${groupIndex}.tasks`) ?? [];
+    const groupTasks = getAllTasks();
     if (groupTasks.length === 0) {
       setTemplateError("Add at least one task before saving");
       return;
@@ -916,73 +892,33 @@ function LocationGroupCard({
     );
   }
 
-  function toggleTaskCleaner(taskIndex: number, cleanerId: string) {
-    const field = usingProfiles
-      ? (`groups.${groupIndex}.tasks.${taskIndex}.profileIds` as const)
-      : (`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds` as const);
-    const current = watch(field) ?? [];
-    const next = current.includes(cleanerId)
-      ? current.filter((c) => c !== cleanerId)
-      : [...current, cleanerId];
-    setValue(field, next, { shouldValidate: true });
-  }
-
   return (
-    <div className="rounded-2xl border border-grey-200 bg-white/70 p-4">
-      {/* Header */}
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-ink">
-          <MapPin size={13} aria-hidden="true" />
-        </span>
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink">
-          {fields.length} task{fields.length === 1 ? "" : "s"}
-        </span>
-        {canRemove && (
-          <button
-            type="button"
-            aria-label={`Remove location ${groupIndex + 1}`}
-            onClick={onRemove}
-            className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-red-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <Trash2 size={14} aria-hidden="true" />
-          </button>
-        )}
-      </div>
-
+    <div>
       {/* Floor + Area side by side, each with an add (+) button */}
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Floor */}
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
-              <Controller
-                name={`groups.${groupIndex}.floorId`}
-                control={control}
-                render={({ field }) => (
-                  <SearchableSelect
-                    label="Floor"
-                    options={floorOptions}
-                    value={field.value || null}
-                    onChange={(v) => {
-                      field.onChange(v);
-                      setAreaMultiMode(false);
-                      setValue(`groups.${groupIndex}.areaIds`, []);
-                      setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-                    }}
-                    disabled={!siteId}
-                    loading={floorsLoading && !!siteId}
-                    error={groupErrors?.floorId?.message}
-                    placeholder={siteId ? "Select floor" : "Select a site first"}
-                    emptyMessage="No floors for this site"
-                  />
-                )}
+              <SearchableSelect
+                label="Floor"
+                options={floorOptions}
+                value={floorId || null}
+                onChange={(v) => {
+                  setLoc({ floorId: v ?? "", areaIds: [], areaGroupId: undefined });
+                  setAreaMultiMode(false);
+                }}
+                disabled={!siteId || lockFloor || lockLocation}
+                loading={floorsLoading && !!siteId}
+                placeholder={siteId ? "Select floor" : "Select a site first"}
+                emptyMessage="No floors for this site"
               />
             </div>
             <button
               type="button"
               aria-label="Add a new floor"
               title="Add a new floor"
-              disabled={!siteId}
+              disabled={!siteId || lockFloor || lockLocation}
               onClick={() => setFloorPromptOpen(true)}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -998,7 +934,7 @@ function LocationGroupCard({
                 options={areaSelectOptions}
                 value={areaSelectValue}
                 onChange={onAreaSelect}
-                disabled={!floorId}
+                disabled={!floorId || lockLocation}
                 loading={areasQuery.isLoading && !!floorId}
                 placeholder={floorId ? "Select area" : "Select a floor first"}
                 emptyMessage="No areas yet — add one with +"
@@ -1008,7 +944,7 @@ function LocationGroupCard({
               type="button"
               aria-label="Add a new area"
               title="Add a new area"
-              disabled={!floorId}
+              disabled={!floorId || lockLocation}
               onClick={() => setAreaPromptOpen(true)}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-primary text-ink transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -1018,7 +954,7 @@ function LocationGroupCard({
         </div>
 
         {/* Multiple-areas picker — shown only when "Multiple areas" is chosen */}
-        {areaMultiMode && floorId && (
+        {areaMultiMode && floorId && !lockLocation && (
           <div className="rounded-xl border border-grey-200 bg-grey-50/60 p-3">
             <p className="mb-2 text-xs font-medium text-grey-500">
               Pick the areas for this task (a task is created in each).
@@ -1078,8 +1014,12 @@ function LocationGroupCard({
             )}
           </div>
         )}
-        {groupErrors?.areaIds?.message && (
-          <p className="text-xs text-danger">{groupErrors.areaIds.message as string}</p>
+        {locError ? (
+          <p className="text-xs text-danger">{locError}</p>
+        ) : (
+          <p className="text-[11px] text-grey-500">
+            Each task is added to the floor and area selected here — change them any time to add tasks elsewhere.
+          </p>
         )}
       </div>
 
@@ -1098,9 +1038,8 @@ function LocationGroupCard({
             { siteId, input: { name } },
             {
               onSuccess: (floor) => {
-                setValue(`groups.${groupIndex}.floorId`, floor.id, { shouldValidate: true });
+                setLoc({ floorId: floor.id, areaIds: [], areaGroupId: undefined });
                 setAreaMultiMode(false);
-                setValue(`groups.${groupIndex}.areaIds`, []);
                 setFloorPromptOpen(false);
                 createFloor.reset();
               },
@@ -1126,16 +1065,8 @@ function LocationGroupCard({
             { floorId, input: { name } },
             {
               onSuccess: (area) => {
-                // Single mode: the new area becomes the sole selection; multi mode: append it.
-                if (areaMultiMode) {
-                  const current = watch(`groups.${groupIndex}.areaIds`) ?? [];
-                  setValue(`groups.${groupIndex}.areaIds`, [...current, area.id], {
-                    shouldValidate: true,
-                  });
-                } else {
-                  setValue(`groups.${groupIndex}.areaIds`, [area.id], { shouldValidate: true });
-                  setValue(`groups.${groupIndex}.areaGroupId`, undefined);
-                }
+                // Single mode: the new area becomes the sole selection; multi mode: add it.
+                setAreas(areaMultiMode ? [...currentAreaIds, area.id] : [area.id]);
                 setAreaPromptOpen(false);
                 createArea.reset();
               },
@@ -1149,7 +1080,6 @@ function LocationGroupCard({
       />
 
       {/* Quick add — sits directly under floor/area so it never moves out of reach */}
-      {!lockTasks && (
       <div className="mt-4 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
@@ -1217,7 +1147,6 @@ function LocationGroupCard({
           <kbd className="rounded bg-white px-1">Enter</kbd> to add and keep going.
         </p>
       </div>
-      )}
 
       {/* Saved task lists — load a set in, or save the current one */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1251,7 +1180,7 @@ function LocationGroupCard({
               setShowSaveTemplate(true);
               setTemplateError(null);
             }}
-            disabled={fields.length === 0}
+            disabled={!hasTasks}
             className="flex items-center gap-1.5 rounded-lg border border-primary/40 px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <BookmarkPlus size={14} aria-hidden="true" />
@@ -1293,10 +1222,84 @@ function LocationGroupCard({
         )}
       </div>
       {templateError && <p className="mt-1 text-[11px] text-danger">{templateError}</p>}
+    </div>
+  );
+}
 
-      {/* Added tasks */}
+// ── Task rows of one location (floor + areas); every row shows its own location ─────────
+interface GroupTaskRowsProps {
+  groupIndex: number;
+  /** Tasks listed before this location, so numbering runs across the whole list. */
+  numberOffset: number;
+  floorOptions: SelectOption[];
+  assignPerTask: boolean;
+  cleaners: Cleaner[];
+  usingProfiles: boolean;
+  lockTasks?: boolean;
+  /** Expanded task-detail rows (by task field id), lifted so a re-mount doesn't collapse them. */
+  expandedTasks: Set<string>;
+  setExpandedTasks: React.Dispatch<React.SetStateAction<Set<string>>>;
+}
+
+function GroupTaskRows({
+  groupIndex,
+  numberOffset,
+  floorOptions,
+  assignPerTask,
+  cleaners,
+  usingProfiles,
+  lockTasks,
+  expandedTasks,
+  setExpandedTasks,
+}: GroupTaskRowsProps) {
+  const {
+    control,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useFormContext<AssignmentFormInput>();
+  const floorId = watch(`groups.${groupIndex}.floorId`);
+  const areasQuery = useAreas(floorId || undefined);
+  const { fields, remove } = useFieldArray({
+    control,
+    name: `groups.${groupIndex}.tasks`,
+  });
+  // Bumps a task's items editor open (row "Add items" button); the counter lets repeat clicks re-open.
+  const [openItemsSignal, setOpenItemsSignal] = useState<{ id: string; n: number }>({ id: "", n: 0 });
+  // Which task's recurrence popup is open (edited in a draft, committed on OK).
+  const [recurEditIndex, setRecurEditIndex] = useState<number | null>(null);
+
+  const groupErrors = errors.groups?.[groupIndex];
+  const currentAreaIds: string[] = watch(`groups.${groupIndex}.areaIds`) ?? [];
+  const floorLabel = floorOptions.find((o) => o.value === floorId)?.label;
+  const selectedAreaLabels = currentAreaIds
+    .map((id) => (areasQuery.data ?? []).find((a) => a.id === id)?.name)
+    .filter((l): l is string => !!l);
+
+  function toggleTaskExpanded(fieldId: string) {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldId)) next.delete(fieldId);
+      else next.add(fieldId);
+      return next;
+    });
+  }
+
+  function toggleTaskCleaner(taskIndex: number, cleanerId: string) {
+    const field = usingProfiles
+      ? (`groups.${groupIndex}.tasks.${taskIndex}.profileIds` as const)
+      : (`groups.${groupIndex}.tasks.${taskIndex}.cleanerIds` as const);
+    const current = watch(field) ?? [];
+    const next = current.includes(cleanerId)
+      ? current.filter((c) => c !== cleanerId)
+      : [...current, cleanerId];
+    setValue(field, next, { shouldValidate: true });
+  }
+
+  return (
+    <>
       {fields.length > 0 ? (
-        <ul className="mt-3 flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-1.5">
           {fields.map((field, taskIndex) => {
             const task = watch(`groups.${groupIndex}.tasks.${taskIndex}`);
             const selected = (usingProfiles ? task?.profileIds : task?.cleanerIds) ?? [];
@@ -1319,7 +1322,7 @@ function LocationGroupCard({
               >
                 <div className="flex items-center gap-2">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-ink">
-                    {taskIndex + 1}
+                    {numberOffset + taskIndex + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={task?.name}>
                     {task?.name}
@@ -1394,28 +1397,28 @@ function LocationGroupCard({
                   </button>
                 </div>
 
+                {/* The task's location: floor name + area badges. */}
+                {(floorLabel || selectedAreaLabels.length > 0) && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-7">
+                    {floorLabel && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink">
+                        <MapPin size={11} aria-hidden="true" />
+                        {floorLabel}
+                      </span>
+                    )}
+                    {selectedAreaLabels.map((label) => (
+                      <span
+                        key={label}
+                        className="rounded-full border border-grey-300 px-2 py-0.5 text-[11px] font-medium text-on-surface"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {expandedTasks.has(field.id) && (
                   <>
-                    {/* Group location: floor name + selected area badges. */}
-                    {(floorLabel || selectedAreaLabels.length > 0) && (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-7">
-                        {floorLabel && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-ink">
-                            <MapPin size={11} aria-hidden="true" />
-                            {floorLabel}
-                          </span>
-                        )}
-                        {selectedAreaLabels.map((label) => (
-                          <span
-                            key={label}
-                            className="rounded-full border border-grey-300 px-2 py-0.5 text-[11px] font-medium text-on-surface"
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
                     <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-7 text-xs text-grey-500">
                       <span className="inline-flex items-center gap-1 rounded-md bg-grey-100 px-1.5 py-0.5 font-medium">
                         <Clock size={11} aria-hidden="true" />
@@ -1472,11 +1475,7 @@ function LocationGroupCard({
             );
           })}
         </ul>
-      ) : (
-        <p className="mt-3 text-xs text-grey-500">
-          No tasks yet — add one above. Great for many tasks on the same floor &amp; area.
-        </p>
-      )}
+      ) : null}
       {groupErrors?.tasks?.message && (
         <p className="mt-2 text-xs text-danger">{groupErrors.tasks.message}</p>
       )}
@@ -1511,7 +1510,7 @@ function LocationGroupCard({
           />
         );
       })()}
-    </div>
+    </>
   );
 }
 
@@ -1525,6 +1524,7 @@ export function NewAssignmentModal({
   defaultTime = "",
   defaultSiteId,
   defaultFloorId,
+  lockFloor,
   defaultAreaId,
   defaultAreaIds,
   defaultAreaGroupId,
@@ -1584,18 +1584,10 @@ export function NewAssignmentModal({
     formState: { errors, isDirty },
   } = methods;
 
-  const { fields: groupFields, remove: removeGroup } = useFieldArray({
+  const { fields: groupFields, append: appendGroup, remove: removeGroup } = useFieldArray({
     control,
     name: "groups",
   });
-
-  // Per-group "Multiple areas" mode, held here so it survives a LocationGroupCard re-mount.
-  const [areaMultiByGroup, setAreaMultiByGroup] = useState<Record<number, boolean>>({});
-  const setAreaMultiMode = useCallback(
-    (index: number, value: boolean) =>
-      setAreaMultiByGroup((prev) => (prev[index] === value ? prev : { ...prev, [index]: value })),
-    [],
-  );
   // Expanded task-detail rows (by task field id), held here so form updates don't collapse them.
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
 
@@ -1682,6 +1674,52 @@ export function NewAssignmentModal({
     () => (floorsQuery.data ?? []).map((f) => ({ value: f.id, label: f.name })),
     [floorsQuery.data],
   );
+
+  // The composer starts on the location the modal was opened for (scope cell, edited area, draft/edit).
+  const composerInitialLocation = useMemo(() => {
+    const seededGroups = (editData?.groups ??
+      (loadedDraft?.payload as Partial<AssignmentFormInput> | undefined)?.groups) as
+      | AssignmentFormInput["groups"]
+      | undefined;
+    const g = seededGroups?.[singleGroupIndex >= 0 ? singleGroupIndex : 0];
+    if (g) return { floorId: g.floorId ?? "", areaIds: g.areaIds ?? [], areaGroupId: g.areaGroupId };
+    return {
+      floorId: defaultFloorId ?? "",
+      areaIds: defaultAreaIds && defaultAreaIds.length > 0 ? defaultAreaIds : defaultAreaId ? [defaultAreaId] : [],
+      areaGroupId: defaultAreaGroupId,
+    };
+  }, [editData, loadedDraft, singleGroupIndex, defaultFloorId, defaultAreaIds, defaultAreaId, defaultAreaGroupId]);
+  const composerKey = `${open}|${siteId}|${editAssignmentId ?? ""}|${loadedDraft?.id ?? ""}|${!!editData}`;
+
+  /** Adds tasks under a floor/area: into the location that already has those areas, else a new one. */
+  const addTasksAt = useCallback(
+    (loc: { floorId: string; areaIds: string[]; areaGroupId?: string }, tasks: AssignmentFormInput["groups"][number]["tasks"]) => {
+      const all = getValues("groups") ?? [];
+      const sameAreas = (a: string[]) => a.length === loc.areaIds.length && a.every((id) => loc.areaIds.includes(id));
+      let i = all.findIndex(
+        (g) => g.floorId === loc.floorId && sameAreas(g.areaIds ?? []) && (g.areaGroupId ?? undefined) === loc.areaGroupId,
+      );
+      if (i < 0) i = all.findIndex((g) => (g.tasks?.length ?? 0) === 0);
+      if (i < 0) {
+        appendGroup({ ...emptyGroup(loc.floorId, "", "", loc.areaIds, loc.areaGroupId), tasks }, { shouldFocus: false });
+        return;
+      }
+      setValue(`groups.${i}.floorId`, loc.floorId);
+      setValue(`groups.${i}.areaIds`, loc.areaIds);
+      setValue(`groups.${i}.areaGroupId`, loc.areaGroupId);
+      setValue(`groups.${i}.tasks`, [...(all[i].tasks ?? []), ...tasks], { shouldDirty: true });
+    },
+    [getValues, setValue, appendGroup],
+  );
+
+  // A location whose last task was deleted is dropped (one empty location is kept as the base).
+  useEffect(() => {
+    if (restrictGroups) return;
+    const list = groups ?? [];
+    const empty = list.flatMap((g, i) => ((g.tasks?.length ?? 0) === 0 ? [i] : []));
+    if (empty.length > 0 && list.length > empty.length) removeGroup(empty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(groups ?? []), restrictGroups, removeGroup]);
   const workTypeOptions: SelectOption[] = useMemo(
     () =>
       (Object.keys(WORK_TYPE_LABELS) as WorkType[])
@@ -1694,7 +1732,10 @@ export function NewAssignmentModal({
     [],
   );
 
-  const allTasks = useMemo(() => allTasksOf({ groups: groups ?? [] }), [groups]);
+  // Tasks are written into a location in place, so the watched array can keep its reference.
+  const groupsSignature = JSON.stringify(groups ?? []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allTasks = useMemo(() => allTasksOf({ groups: groups ?? [] }), [groupsSignature]);
   const totalTasks = allTasks.length;
   // Each task is created once per selected area, back to back (matches the backend slotting).
   const taskDurations = useMemo(
@@ -1704,7 +1745,8 @@ export function NewAssignmentModal({
           (g.areaIds?.length ? g.areaIds : [null]).map(() => t.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES),
         ),
       ),
-    [groups],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groupsSignature],
   );
   const generalWindow = useMemo(
     () => (workType === "GENERAL_TASK" && formDate ? generalWindowFor(selectedSite, formDate) : null),
@@ -2609,32 +2651,51 @@ export function NewAssignmentModal({
                     )}
                   </div>
                 ) : (
-                  <>
-                    <div className="flex flex-col gap-3">
-                      {groupFields.map((field, index) => {
-                        if (restrictGroups && singleGroupIndex >= 0 && index !== singleGroupIndex) return null;
-                        return (
-                          <LocationGroupCard
-                            key={field.id}
-                            groupIndex={index}
-                            siteId={siteId}
-                            floorOptions={floorOptions}
-                            floorsLoading={floorsQuery.isLoading}
-                            canRemove={!restrictGroups && groupFields.length > 1}
-                            onRemove={() => removeGroup(index)}
-                            assignPerTask={assignPerTask}
-                            cleaners={cleaners}
-                            usingProfiles={usingProfiles}
-                            lockTasks={!!editTaskId}
-                            areaMultiMode={!!areaMultiByGroup[index]}
-                            setAreaMultiMode={(v) => setAreaMultiMode(index, v)}
-                            expandedTasks={expandedTaskIds}
-                            setExpandedTasks={setExpandedTaskIds}
-                          />
-                        );
-                      })}
-                    </div>
-                  </>
+                  <div className="rounded-2xl border border-grey-200 bg-white/70 p-4">
+                    {!editTaskId && (
+                      <TaskComposer
+                        key={composerKey}
+                        siteId={siteId}
+                        floorOptions={floorOptions}
+                        floorsLoading={floorsQuery.isLoading}
+                        initialLocation={composerInitialLocation}
+                        lockFloor={lockFloor && !!defaultFloorId}
+                        lockLocation={!!editAreaId}
+                        usingProfiles={usingProfiles}
+                        cleaners={cleaners}
+                        hasTasks={totalTasks > 0}
+                        onAddTasks={addTasksAt}
+                        getAllTasks={() => (getValues("groups") ?? []).flatMap((g) => g.tasks ?? [])}
+                      />
+                    )}
+                    {totalTasks > 0 ? (
+                      <div className={cn("flex flex-col gap-1.5", !editTaskId && "mt-4")}>
+                        {groupFields.map((field, index) => {
+                          if (restrictGroups && singleGroupIndex >= 0 && index !== singleGroupIndex) return null;
+                          return (
+                            <GroupTaskRows
+                              key={field.id}
+                              groupIndex={index}
+                              numberOffset={(groups ?? [])
+                                .slice(0, index)
+                                .reduce((n, g) => n + (g.tasks?.length ?? 0), 0)}
+                              floorOptions={floorOptions}
+                              assignPerTask={assignPerTask}
+                              cleaners={cleaners}
+                              usingProfiles={usingProfiles}
+                              lockTasks={!!editTaskId}
+                              expandedTasks={expandedTaskIds}
+                              setExpandedTasks={setExpandedTaskIds}
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-grey-500">
+                        No tasks yet — pick a floor and area, then add tasks above.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {typeof errors.groups?.message === "string" && (

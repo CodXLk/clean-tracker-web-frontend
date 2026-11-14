@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
-  useNotifications,
+  useRecentNotifications,
   useUnreadCount,
   useMarkRead,
   useMarkAllRead,
@@ -75,12 +75,12 @@ export function NotificationBell() {
   const role = useMe().data?.role;
 
   const unread = useUnreadCount();
-  const notifications = useNotifications();
+  const notifications = useRecentNotifications(6, open);
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
 
   const count = unread.data ?? 0;
-  const recent = (notifications.data ?? []).slice(0, 6);
+  const recent = notifications.data ?? [];
 
   useEffect(() => {
     if (!open) return;

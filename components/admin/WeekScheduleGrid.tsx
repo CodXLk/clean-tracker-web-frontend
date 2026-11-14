@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Building2, ChevronDown, GripVertical, Layers, ListChecks, Plus, Pencil, RotateCcw, Trash2, Flag } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { InitialsAvatar } from "@/components/shared/InitialsAvatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { PriorityFlagMenu, PRIORITY_META, type CriticalLevel } from "@/features/workforce/components/PriorityFlagMenu";
@@ -671,7 +672,10 @@ export function WeekScheduleGrid({
     return !!minAddDate && date < minAddDate;
   }
 
-  const gridTemplate = "minmax(460px, 2.5fr) repeat(7, minmax(64px, 1fr))";
+  const compact = useMediaQuery("(max-width: 767px)");
+  const gridTemplate = compact
+    ? "minmax(200px, 2fr) repeat(7, minmax(48px, 1fr))"
+    : "minmax(460px, 2.5fr) repeat(7, minmax(64px, 1fr))";
 
   /** Empty day-cell strip to complete a band row (site/floor headers). */
   function bandCells(className?: string) {
@@ -879,7 +883,7 @@ export function WeekScheduleGrid({
             e.stopPropagation();
             onEditTask(row.taskId, row.name);
           }}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-grey-100 hover:text-ink focus-visible:opacity-100 group-hover/trow:opacity-100"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-grey-100 hover:text-ink focus-visible:opacity-100 group-hover/trow:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <Pencil size={13} aria-hidden="true" />
         </button>
@@ -895,7 +899,7 @@ export function WeekScheduleGrid({
             e.stopPropagation();
             onDeleteTask(row.taskId, row.name);
           }}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-error/10 hover:text-error focus-visible:opacity-100 group-hover/trow:opacity-100"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-error/10 hover:text-error focus-visible:opacity-100 group-hover/trow:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <Trash2 size={13} aria-hidden="true" />
         </button>
@@ -1099,7 +1103,7 @@ export function WeekScheduleGrid({
                         sourceTaskId: row.taskId,
                       })
                     }
-                    className="absolute inset-1 flex items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-primary/10 hover:text-primary group-hover/trow:opacity-70 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="absolute inset-1 flex items-center justify-center rounded-md text-grey-400 opacity-0 transition-colors hover:bg-primary/10 hover:text-primary group-hover/trow:opacity-70 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [@media(hover:none)]:opacity-40"
                   >
                     <Plus size={14} aria-hidden="true" />
                   </button>
@@ -1145,8 +1149,8 @@ export function WeekScheduleGrid({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[1080px]">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <div className={compact ? "min-w-[600px]" : "min-w-[1080px]"}>
           <div className="sticky top-0 z-10 flex bg-surface">
             {managed && <div className="w-11 shrink-0 border-b-2 border-grey-300" aria-hidden="true" />}
             <div className="min-w-0 flex-1">
@@ -1223,7 +1227,7 @@ export function WeekScheduleGrid({
                             : undefined
                         }
                       >
-                        <div className="flex flex-col items-center gap-0.5 opacity-0 transition-opacity group-hover/floor:opacity-100 focus-within:opacity-100">
+                        <div className="flex flex-col items-center gap-0.5 opacity-0 transition-opacity group-hover/floor:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                           <button
                             type="button"
                             aria-label={`Add area to ${floor.name}`}
@@ -1424,7 +1428,7 @@ export function WeekScheduleGrid({
                                         />
                                       </button>
                                     )}
-                                    <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100">
+                                    <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/area:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                                       <button
                                         type="button"
                                         aria-label={`Add assignment to ${displayName}`}
@@ -1509,7 +1513,7 @@ export function WeekScheduleGrid({
                                             mode: dayView ? "DAY_WEEKLY" : "ONE_OFF",
                                           })
                                         }
-                                        className="flex h-5 w-5 items-center justify-center rounded-md text-ink opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                        className="flex h-5 w-5 items-center justify-center rounded-md text-ink opacity-0 transition-all hover:bg-primary hover:text-white group-hover/area:opacity-70 hover:!opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [@media(hover:none)]:opacity-70"
                                       >
                                         <Plus size={12} aria-hidden="true" />
                                       </button>
