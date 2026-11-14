@@ -22,6 +22,7 @@ import type { SupervisorSchedule } from "@/features/user-management/schemas/supe
 import { useMe } from "@/features/auth/hooks/useMe";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
+import { inSessionContext, sessionContextOf } from "@/features/attendance/lib/checkInEntries";
 import {
   toLocalDateString,
 } from "@/features/tasks/lib/task-utils";
@@ -58,8 +59,11 @@ export default function InspectionsPage() {
   const mustCheckIn = !isAdmin && !checkedInSiteId;
   const occurrences = useMemo(() => {
     if (mustCheckIn) return [];
-    return gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences;
-  }, [allOccurrences, gatedSiteId, mustCheckIn]);
+    const ctx = isAdmin ? null : sessionContextOf(sites);
+    return (gatedSiteId ? allOccurrences.filter((o) => o.siteId === gatedSiteId) : allOccurrences).filter((o) =>
+      inSessionContext(o, ctx),
+    );
+  }, [allOccurrences, gatedSiteId, mustCheckIn, isAdmin, sites]);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const setHeaderAction = useUIStore((s) => s.setHeaderAction);

@@ -57,6 +57,7 @@ export const CleanerSiteSchema = z.object({
     .nullable()
     .optional(),
   generalCheckInAllowed: z.boolean().optional().default(true),
+  generalMember: z.boolean().optional().default(true),
   workOrders: z
     .array(
       z.object({

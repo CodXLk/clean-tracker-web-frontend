@@ -17,6 +17,7 @@ import {
 } from "@/features/tasks/hooks/useTasks";
 import { useCreateComplaint } from "@/features/complaints/hooks/useCreateComplaint";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
+import { inSessionContext, sessionContextOf } from "@/features/attendance/lib/checkInEntries";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
@@ -148,10 +149,10 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   }, [isDragging]);
 
   // All occurrences in this area, regardless of status — role-agnostic.
-  const areaTasks = useMemo(
-    () => occurrences.filter((o) => (areaId ? o.areaId === areaId : true)),
-    [occurrences, areaId],
-  );
+  const areaTasks = useMemo(() => {
+    const ctx = sessionContextOf(sites);
+    return occurrences.filter((o) => (areaId ? o.areaId === areaId : true) && inSessionContext(o, ctx));
+  }, [occurrences, areaId, sites]);
 
   // A cleaner must have checked in to this area's site at some point today to complete
   // tasks here. They don't need to be checked in right now — CHECKED_OUT still counts,

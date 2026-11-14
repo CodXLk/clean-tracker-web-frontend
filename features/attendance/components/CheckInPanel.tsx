@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X, Clock, Info } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
-import { SiteSelector } from "@/components/shared/SiteSelector";
+import { SearchableSelect } from "@/features/user-management/components/SearchableSelect";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ModalPortal } from "@/components/shared/ModalPortal";
 import { isNfcSupported, readNfcTag } from "@/lib/nfc";
@@ -18,6 +18,7 @@ import { CriticalTaskAckModal } from "@/features/attendance/components/CriticalT
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CleanerSite } from "@/features/attendance/schemas/attendance.schema";
+import { checkInEntries, inSessionContext, type CheckInEntry } from "@/features/attendance/lib/checkInEntries";
 
 function formatTime(iso?: string | null, timeZone?: string | null): string {
   if (!iso) return "";
@@ -133,21 +134,19 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
   // Pending-task / early check-out warning shown before checking out.
   const [pendingPrompt, setPendingPrompt] = useState<
-    { site: CleanerSite; tasks: TaskOccurrence[]; early: boolean; serverMessage?: string } | null
+    { site: CheckInEntry; tasks: TaskOccurrence[]; early: boolean; serverMessage?: string } | null
   >(null);
-  // Chosen check-in context per site: "GENERAL" or a work order id.
-  const [contextBySite, setContextBySite] = useState<Record<string, string>>({});
   // Before/after-shift acknowledgement shown before a check-in outside shift hours.
   const [shiftAckPrompt, setShiftAckPrompt] = useState<
-    { site: CleanerSite; timing: "BEFORE" | "AFTER" } | null
+    { site: CheckInEntry; timing: "BEFORE" | "AFTER" } | null
   >(null);
   // HIGH-priority tasks shown right after a successful check-in for acknowledgement.
   const [criticalAck, setCriticalAck] = useState<
-    { site: CleanerSite; tasks: TaskOccurrence[] } | null
+    { site: CheckInEntry; tasks: TaskOccurrence[] } | null
   >(null);
   // HIGH-priority tasks acknowledged (with completion status) before check-out.
   const [checkoutAck, setCheckoutAck] = useState<
-    { site: CleanerSite; tasks: TaskOccurrence[] } | null
+    { site: CheckInEntry; tasks: TaskOccurrence[] } | null
   >(null);
   const [confirming, setConfirming] = useState(false);
   // NFC support is resolved after mount to avoid an SSR/hydration mismatch.
@@ -157,13 +156,23 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     setNfcSupported(isNfcSupported());
   }, []);
 
-  const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
+  // Each work order is its own "PO site" next to the site's general cleaning.
+  const entries = useMemo(() => checkInEntries(sites), [sites]);
+  const checkedInSiteId = entries.find((s) => s.status === "CHECKED_IN")?.entryKey ?? null;
+
+  // Whether a task belongs to an entry: its PO's tasks, or the site's general tasks.
+  const taskInEntry = (t: TaskOccurrence, e: CheckInEntry) =>
+    t.siteId === e.siteId &&
+    inSessionContext(t, { siteId: e.siteId, poId: e.contextPoId, workOrderSite: e.workOrderSite && !e.contextPoId });
 
   // Supervisors can check in to any site they're assigned to on any day (site visits/inspections
   // aren't bound to a schedule), so they see every assigned site. Cleaners only see sites that
   // actually have work for them today.
-  const siteHasTasksToday = (siteId: string) => todayTasks.some((t) => t.siteId === siteId);
-  const visibleSites = isSupervisor ? sites : sites.filter((s) => siteHasTasksToday(s.siteId));
+  const visibleSites = isSupervisor
+    ? entries
+    : entries.filter(
+        (e) => e.status === "CHECKED_IN" || e.status === "PAUSED" || todayTasks.some((t) => taskInEntry(t, e)),
+      );
 
   // Which of the cleaner's visible sites this single card/slider acts on. Defaults to
   // the checked-in site, but the cleaner can switch via the selector when they have more
@@ -175,11 +184,11 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
   // Schedule/time fallback used when location is unavailable: prefer a site whose shift window
   // currently allows check-in.
-  const schedulePreferredSiteId = visibleSites.find((s) => s.checkInAllowed)?.siteId ?? null;
+  const schedulePreferredSiteId = visibleSites.find((s) => s.checkInAllowed)?.entryKey ?? null;
 
   useEffect(() => {
     if (siteTouched || geoResolved) return;
-    setSelectedSiteId(checkedInSiteId ?? schedulePreferredSiteId ?? visibleSites[0]?.siteId ?? null);
+    setSelectedSiteId(checkedInSiteId ?? schedulePreferredSiteId ?? visibleSites[0]?.entryKey ?? null);
   }, [checkedInSiteId, schedulePreferredSiteId, visibleSites, siteTouched, geoResolved]);
 
   // Location-first default (requirement 6): on load, compare the device location to each assigned
@@ -196,7 +205,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     getCurrentPosition()
       .then((pos) => {
         if (cancelled || siteTouched) return;
-        let best: CleanerSite | null = null;
+        let best: CheckInEntry | null = null;
         let bestDist = Infinity;
         for (const s of candidates) {
           const dist = distanceMeters(pos.lat, pos.lng, s.latitude!, s.longitude!);
@@ -208,7 +217,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         }
         if (best) {
           setGeoResolved(true);
-          setSelectedSiteId(best.siteId);
+          setSelectedSiteId(best.entryKey);
         }
       })
       .catch(() => {
@@ -220,19 +229,19 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCleaner, siteTouched, geoResolved, checkedInSiteId, visibleSites.length]);
 
-  function bumpReset(siteId: string) {
-    setResetKeys((prev) => ({ ...prev, [siteId]: (prev[siteId] ?? 0) + 1 }));
+  function bumpReset(key: string) {
+    setResetKeys((prev) => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
   }
 
-  function pendingTasksFor(siteId: string): TaskOccurrence[] {
+  function pendingTasksFor(site: CheckInEntry): TaskOccurrence[] {
     return todayTasks.filter(
-      (t) => t.siteId === siteId && t.status !== "COMPLETED" && t.status !== "CANCELLED",
+      (t) => taskInEntry(t, site) && t.status !== "COMPLETED" && t.status !== "CANCELLED",
     );
   }
 
   // Redo/complaint tasks the cleaner must clear this shift at the given site.
-  function redoTasksFor(siteId: string): TaskOccurrence[] {
-    return pendingTasksFor(siteId).filter((t) => t.isRedo);
+  function redoTasksFor(site: CheckInEntry): TaskOccurrence[] {
+    return pendingTasksFor(site).filter((t) => t.isRedo);
   }
 
   // Open complaints the cleaner must complete (in the Complaints tab) before checking out.
@@ -243,34 +252,25 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
-  async function executeCheckout(site: CleanerSite, force: boolean) {
-    setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
+  async function executeCheckout(site: CheckInEntry, force: boolean) {
+    setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
     const payload = await acquirePayload(site);
     await checkOut.mutateAsync({ ...payload, force, acknowledgeIncomplete: force });
   }
 
-  async function doCheckIn(site: CleanerSite) {
-    setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
+  async function doCheckIn(site: CheckInEntry) {
+    setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
     const payload = await acquirePayload(site);
-    const ctx = contextFor(site);
-    await checkIn.mutateAsync(ctx === "GENERAL" ? payload : { ...payload, workOrderId: ctx });
-  }
-
-  /** The selected context, defaulting to whichever is open now (general first). */
-  function contextFor(site: CleanerSite): string {
-    const chosen = contextBySite[site.siteId];
-    if (chosen && (chosen === "GENERAL" || site.workOrders.some((w) => w.id === chosen))) return chosen;
-    if (!site.workOrderSite && site.generalCheckInAllowed) return "GENERAL";
-    const openWo = site.workOrders.find((w) => w.checkInAllowed) ?? site.workOrders[0];
-    if (openWo) return openWo.id;
-    return "GENERAL";
+    await checkIn.mutateAsync(
+      site.contextWorkOrderId ? { ...payload, workOrderId: site.contextWorkOrderId } : payload,
+    );
   }
 
   // HIGH-priority tasks assigned to this cleaner at the site that still need doing.
-  function highTasksFor(siteId: string): TaskOccurrence[] {
+  function highTasksFor(site: CheckInEntry): TaskOccurrence[] {
     return todayTasks.filter(
       (t) =>
-        t.siteId === siteId &&
+        taskInEntry(t, site) &&
         t.criticalLevel === "HIGH" &&
         t.status !== "CANCELLED" &&
         t.status !== "COMPLETED",
@@ -278,26 +278,26 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   }
 
   // Every HIGH-priority task at the site (any type, any status) — for the checkout acknowledgement.
-  function highAllFor(siteId: string): TaskOccurrence[] {
+  function highAllFor(site: CheckInEntry): TaskOccurrence[] {
     return todayTasks.filter(
-      (t) => t.siteId === siteId && t.criticalLevel === "HIGH" && t.status !== "CANCELLED",
+      (t) => taskInEntry(t, site) && t.criticalLevel === "HIGH" && t.status !== "CANCELLED",
     );
   }
 
   // After a successful check-in, surface the site's HIGH-priority tasks for acknowledgement.
-  function maybeShowCriticalAck(site: CleanerSite) {
-    const high = highTasksFor(site.siteId);
+  function maybeShowCriticalAck(site: CheckInEntry) {
+    const high = highTasksFor(site);
     if (high.length > 0) setCriticalAck({ site, tasks: high });
   }
 
   // The normal check-out flow after the HIGH-task acknowledgement: warn on unfinished tasks
   // and/or checking out before the shift ends, otherwise check out.
-  async function finishCheckout(site: CleanerSite) {
-    const pending = pendingTasksFor(site.siteId);
+  async function finishCheckout(site: CheckInEntry) {
+    const pending = pendingTasksFor(site);
     const early = isWithinAnyShift(site);
     if (pending.length > 0 || early) {
       setPendingPrompt({ site, tasks: pending, early });
-      bumpReset(site.siteId);
+      bumpReset(site.entryKey);
       return;
     }
     try {
@@ -308,30 +308,35 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       // The server can still require consent (e.g. below the site's minimum working period).
       if (status === 409 || /minimum|minutes of work|before the shift ends|still to complete/i.test(message)) {
         setPendingPrompt({ site, tasks: [], early: false, serverMessage: message });
-        bumpReset(site.siteId);
+        bumpReset(site.entryKey);
         return;
       }
-      setErrors((prev) => ({ ...prev, [site.siteId]: message }));
-      bumpReset(site.siteId);
+      setErrors((prev) => ({ ...prev, [site.entryKey]: message }));
+      bumpReset(site.entryKey);
     }
   }
 
   // Tap-to-scan NFC and check in automatically to whichever assigned site the tag belongs
   // to (the server validates the tag against each candidate site).
   async function scanAndCheckIn() {
-    const current = sites.find((s) => s.siteId === selectedSiteId) ?? sites[0];
+    const current = visibleSites.find((s) => s.entryKey === selectedSiteId) ?? visibleSites[0];
     if (!current) return;
     setScanning(true);
-    setErrors((prev) => ({ ...prev, [current.siteId]: "" }));
+    setErrors((prev) => ({ ...prev, [current.entryKey]: "" }));
     try {
       const uid = await readNfcTag();
-      const candidates = sites
+      const candidates = visibleSites
         .filter((s) => s.nfcRegistered && s.status !== "CHECKED_IN")
-        .sort((a, b) => (a.siteId === current.siteId ? -1 : b.siteId === current.siteId ? 1 : 0));
+        .sort((a, b) => (a.entryKey === current.entryKey ? -1 : b.entryKey === current.entryKey ? 1 : 0));
       let lastError: unknown = new Error("The scanned tag doesn't match any of your sites today.");
       for (const s of candidates) {
         try {
-          await checkIn.mutateAsync({ siteId: s.siteId, method: "NFC", nfcTagId: uid });
+          await checkIn.mutateAsync({
+            siteId: s.siteId,
+            method: "NFC",
+            nfcTagId: uid,
+            ...(s.contextWorkOrderId ? { workOrderId: s.contextWorkOrderId } : {}),
+          });
           maybeShowCriticalAck(s);
           return;
         } catch (e) {
@@ -342,14 +347,14 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       }
       throw lastError;
     } catch (err) {
-      setErrors((prev) => ({ ...prev, [current.siteId]: getMessage(err, "NFC check-in failed.") }));
+      setErrors((prev) => ({ ...prev, [current.entryKey]: getMessage(err, "NFC check-in failed.") }));
     } finally {
       setScanning(false);
     }
   }
 
-  async function run(site: CleanerSite, mode: "in" | "out") {
-    setErrors((prev) => ({ ...prev, [site.siteId]: "" }));
+  async function run(site: CheckInEntry, mode: "in" | "out") {
+    setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
     try {
       if (mode === "in") {
         // Checking in outside shift hours is allowed, but ask the cleaner to acknowledge it first.
@@ -357,7 +362,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         const timing = site.status === "PAUSED" ? null : checkInShiftTiming(site);
         if (timing) {
           setShiftAckPrompt({ site, timing });
-          bumpReset(site.siteId);
+          bumpReset(site.entryKey);
           return;
         }
         await doCheckIn(site);
@@ -366,19 +371,19 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       }
       // Check-out: acknowledge the site's HIGH-priority tasks (all types) first, then run the
       // normal unfinished/early check-out flow.
-      const highs = highAllFor(site.siteId);
+      const highs = highAllFor(site);
       if (highs.length > 0) {
         setCheckoutAck({ site, tasks: highs });
-        bumpReset(site.siteId);
+        bumpReset(site.entryKey);
         return;
       }
       await finishCheckout(site);
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        [site.siteId]: getMessage(err, mode === "in" ? "Check-in failed." : "Check-out failed."),
+        [site.entryKey]: getMessage(err, mode === "in" ? "Check-in failed." : "Check-out failed."),
       }));
-      bumpReset(site.siteId);
+      bumpReset(site.entryKey);
     }
   }
 
@@ -391,9 +396,9 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       setShiftAckPrompt(null);
       maybeShowCriticalAck(site);
     } catch (err) {
-      setErrors((prev) => ({ ...prev, [site.siteId]: getMessage(err, "Check-in failed.") }));
+      setErrors((prev) => ({ ...prev, [site.entryKey]: getMessage(err, "Check-in failed.") }));
       setShiftAckPrompt(null);
-      bumpReset(site.siteId);
+      bumpReset(site.entryKey);
     } finally {
       setConfirming(false);
     }
@@ -409,10 +414,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        [site.siteId]: getMessage(err, "Check-out failed."),
+        [site.entryKey]: getMessage(err, "Check-out failed."),
       }));
       setPendingPrompt(null);
-      bumpReset(site.siteId);
+      bumpReset(site.entryKey);
     } finally {
       setConfirming(false);
     }
@@ -447,33 +452,37 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
-  const site = visibleSites.find((s) => s.siteId === selectedSiteId) ?? visibleSites[0];
-  const error = errors[site.siteId];
-  const resetKey = resetKeys[site.siteId] ?? 0;
+  const site = visibleSites.find((s) => s.entryKey === selectedSiteId) ?? visibleSites[0];
+  const error = errors[site.entryKey];
+  const resetKey = resetKeys[site.entryKey] ?? 0;
   const checkedIn = site.status === "CHECKED_IN";
   const paused = site.status === "PAUSED";
   const forcedOut = site.status === "FORCED_CHECKOUT";
   const plainOut = site.status === "CHECKED_OUT";
   const sessionEnded = plainOut || forcedOut;
-  const redoTasks = sessionEnded ? [] : redoTasksFor(site.siteId);
+  const redoTasks = sessionEnded ? [] : redoTasksFor(site);
   // Open complaints hard-block checkout (the server enforces this too).
   const openComplaints = sessionEnded ? [] : openComplaintsFor(site.siteId);
 
   return (
     <div className="flex flex-col gap-3">
-      <div key={site.siteId} className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
+      <div key={site.entryKey} className="flex flex-col gap-2.5 rounded-2xl bg-white/70 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             {visibleSites.length > 1 ? (
-              <SiteSelector
-                sites={visibleSites}
-                selectedSiteId={selectedSiteId}
-                onChange={(siteId) => {
+              <SearchableSelect
+                options={visibleSites.map((s) => ({
+                  value: s.entryKey,
+                  label: s.siteName,
+                  sublabel: s.entryKey === checkedInSiteId ? "Checked in" : undefined,
+                }))}
+                value={site.entryKey}
+                onChange={(key) => {
                   setSiteTouched(true);
-                  setSelectedSiteId(siteId);
+                  setSelectedSiteId(key);
                 }}
-                checkedInSiteId={checkedInSiteId}
-                className="!bg-transparent !px-0 !py-0 !shadow-none"
+                placeholder="Select site"
+                searchable={false}
               />
             ) : (
               <>
@@ -623,31 +632,16 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 )}
               </div>
             )}
-            {!paused && site.workOrders.length > 0 && (
-              <label className="flex flex-col gap-1 text-xs text-grey-600">
-                Checking in for
-                <select
-                  value={contextFor(site)}
-                  onChange={(e) => setContextBySite((prev) => ({ ...prev, [site.siteId]: e.target.value }))}
-                  className="rounded-xl border border-grey-300 bg-white px-3 py-2 text-sm text-on-surface"
-                >
-                  {!site.workOrderSite && (
-                    <option value="GENERAL">
-                      General cleaning{site.generalCheckInAllowed ? "" : " (not open now)"}
-                    </option>
-                  )}
-                  {site.workOrders.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      Work order PO {w.poId}
-                      {w.checkInAllowed
-                        ? ""
-                        : w.checkInOpensAt
-                          ? ` (opens ${formatSiteTime(w.checkInOpensAt, site.timezone)})`
-                          : " (not open now)"}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {!paused && site.contextWorkOrderId && site.workOrders[0] && (
+              <span className="inline-flex items-center gap-1 self-start rounded-full bg-[#F97316]/10 px-2 py-0.5 text-[11px] font-medium text-[#C2410C]">
+                <Clock size={12} aria-hidden="true" />
+                Work order PO {site.workOrders[0].poId}
+                {site.workOrders[0].checkInAllowed
+                  ? ""
+                  : site.workOrders[0].checkInOpensAt
+                    ? ` · opens ${formatSiteTime(site.workOrders[0].checkInOpensAt, site.timezone)}`
+                    : " · not open now"}
+              </span>
             )}
             <SlideButton
               key={`in-${resetKey}`}
