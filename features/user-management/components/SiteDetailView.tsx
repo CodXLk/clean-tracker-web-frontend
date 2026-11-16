@@ -19,6 +19,8 @@ import {
   type Site,
 } from "@/features/user-management/schemas/site.schema";
 import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes";
+import { useSiteShiftPlans } from "@/features/shifts/hooks/useShiftPlans";
+import { formatPlanDay, type ShiftPlan } from "@/features/shifts/schemas/shiftPlan.schema";
 
 interface SiteDetailViewProps {
   open: boolean;
@@ -38,6 +40,51 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
 
 function hhmm(value?: string | null): string {
   return value ? value.slice(0, 5) : "";
+}
+
+/** True when a window ends at or before it starts, i.e. runs past midnight. */
+function overnight(start?: string | null, end?: string | null): boolean {
+  return !!start && !!end && end.slice(0, 5) <= start.slice(0, 5);
+}
+
+/** Cleaners' approved shifts at the site (the times check-in is based on), plus any awaiting approval. */
+function CleanerShifts({ siteId }: { siteId: string }) {
+  const { data: plans = [], isLoading, isError } = useSiteShiftPlans(siteId);
+  if (isLoading) return <p className="text-sm text-grey-500">Loading shifts…</p>;
+  if (isError) return <p className="text-sm text-grey-500">Shifts couldn&apos;t be loaded.</p>;
+  if (plans.length === 0) return <p className="text-sm text-grey-500">No cleaner shifts submitted yet.</p>;
+  const sorted = [...plans].sort(
+    (a, b) =>
+      (a.cleanerName ?? "").localeCompare(b.cleanerName ?? "") ||
+      Number(a.status !== "APPROVED") - Number(b.status !== "APPROVED"),
+  );
+  return (
+    <ul className="flex flex-col gap-2">
+      {sorted.map((p: ShiftPlan) => (
+        <li key={p.id} className="rounded-lg border border-grey-100 bg-grey-50 px-3 py-2 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-on-surface">{p.cleanerName || "Cleaner"}</span>
+            <span
+              className={
+                p.status === "APPROVED"
+                  ? "rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success"
+                  : "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+              }
+            >
+              {p.status === "APPROVED" ? "Approved" : "Awaiting approval"}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {p.days.map((d, i) => (
+              <span key={`${d.dayOfWeek ?? "all"}-${i}`} className="rounded-full bg-white px-2 py-0.5 text-xs text-grey-700">
+                {formatPlanDay(d)}
+              </span>
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -175,12 +222,18 @@ export function SiteDetailView({ open, onClose, site }: SiteDetailViewProps) {
                     {w.dayOfWeek ? DAY_LABELS[w.dayOfWeek] : "All working days"}
                   </span>
                   <span className="text-grey-600">
-                    {hhmm(w.startTime) || "—"} – {hhmm(w.endTime) || "—"}
+                    Start {hhmm(w.startTime) || "—"} · End {hhmm(w.endTime) || "—"}
+                    {overnight(w.startTime, w.endTime) ? " (next day)" : ""}
                   </span>
                 </li>
               ))}
             </ul>
           )}
+          {site.timezone ? <p className="mt-2 text-xs text-grey-500">Times are in {site.timezone}.</p> : null}
+        </Section>
+
+        <Section icon={Users} title="Cleaner shifts">
+          <CleanerShifts siteId={site.id} />
         </Section>
 
         <Section icon={ShieldCheck} title="Required certificates">

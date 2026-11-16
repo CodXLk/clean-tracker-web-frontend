@@ -15,8 +15,21 @@ export const shiftPlanKeys = {
   mine: () => [...shiftPlanKeys.all, "mine"] as const,
   pending: () => [...shiftPlanKeys.all, "pending"] as const,
   forCleaner: (cleanerId: string) => [...shiftPlanKeys.all, "cleaner", cleanerId] as const,
+  forSite: (siteId: string) => [...shiftPlanKeys.all, "site", siteId] as const,
   context: (siteId: string) => [...shiftPlanKeys.all, "context", siteId] as const,
 };
+
+/** A site's approved and pending cleaner shifts (for management / supervisors). */
+export function useSiteShiftPlans(siteId: string | null | undefined) {
+  return useQuery({
+    queryKey: shiftPlanKeys.forSite(siteId ?? ""),
+    enabled: !!siteId,
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.shiftPlans.forSite(siteId!));
+      return ShiftPlanListSchema.parse(data);
+    },
+  });
+}
 
 /** A cleaner's approved shifts (for management / supervisors). */
 export function useCleanerShiftPlans(cleanerId: string | null | undefined) {
