@@ -22,6 +22,7 @@ export const ENDPOINTS = {
     photo:       (id: string) => `/users/${id}/photo`,
     myPhoto:     "/users/me/photo",
     documents:   (id: string) => `/users/${id}/documents`,
+    certificateWaiver: (id: string) => `/users/${id}/certificate-waiver`,
   },
   documents: {
     byId:   (id: string) => `/documents/${id}`,
@@ -147,6 +148,7 @@ export const ENDPOINTS = {
     me:       "/attendance/me",
     timeSummary: "/attendance/time-summary",
     myTime:   "/attendance/my-time",
+    policy:   "/attendance/policy",
   },
   tasks: {
     myOccurrences:   "/tasks/my-occurrences",
@@ -299,6 +301,7 @@ export const ENDPOINTS = {
     mine:         "/shift-schedule/mine",
     move:         "/shift-schedule/moves",
     pendingMoves: "/shift-schedule/moves/pending",
+    moveLog:      "/shift-schedule/moves/log",
     approveMove:  (id: string) => `/shift-schedule/moves/${id}/approve`,
     rejectMove:   (id: string) => `/shift-schedule/moves/${id}/reject`,
   },
@@ -362,6 +365,7 @@ export const BACKEND = {
     photo:       (id: string) => `/api/v1/users/${id}/photo`,
     myPhoto:     "/api/v1/users/me/photo",
     documents:   (id: string) => `/api/v1/users/${id}/documents`,
+    certificateWaiver: (id: string) => `/api/v1/users/${id}/certificate-waiver`,
   },
   documents: {
     byId:   (id: string) => `/api/v1/documents/${id}`,
@@ -488,6 +492,7 @@ export const BACKEND = {
     me:       "/api/v1/attendance/me",
     timeSummary: "/api/v1/attendance/time-summary",
     myTime:   "/api/v1/attendance/my-time",
+    policy:   "/api/v1/attendance/policy",
   },
   tasks: {
     myOccurrences:   "/api/v1/tasks/my-occurrences",
@@ -640,6 +645,7 @@ export const BACKEND = {
     mine:         "/api/v1/shift-schedule/mine",
     move:         "/api/v1/shift-schedule/moves",
     pendingMoves: "/api/v1/shift-schedule/moves/pending",
+    moveLog:      "/api/v1/shift-schedule/moves/log",
     approveMove:  (id: string) => `/api/v1/shift-schedule/moves/${id}/approve`,
     rejectMove:   (id: string) => `/api/v1/shift-schedule/moves/${id}/reject`,
   },

@@ -47,8 +47,11 @@ function toPayload(input: SiteFormInput): Record<string, unknown> {
   payload.clientSiteManagementEnabled = input.clientSiteManagementEnabled ?? false;
   payload.worksOnPublicHolidays = input.worksOnPublicHolidays ?? false;
   payload.timezone = input.timezone || "Australia/Melbourne";
-  // 0 clears the minimum on update.
-  payload.minimumWorkMinutes = input.minimumWorkMinutes ?? 0;
+  // Every site keeps a minimum; leaving it out lets the backend apply its configured default.
+  if (input.minimumWorkMinutes != null && input.minimumWorkMinutes > 0) {
+    payload.minimumWorkMinutes = input.minimumWorkMinutes;
+  }
+  payload.minimumWorkMandatory = input.minimumWorkMandatory ?? false;
   payload.workOrderSite = input.workOrderSite ?? false;
   payload.cleaningTemplates = (input.cleaningTemplates ?? [])
     .filter((t) => t.templateId)

@@ -33,6 +33,7 @@ export function notificationHref(
     case "CHECKOUT_WITH_PENDING_TASKS":
     case "FORCED_CHECKOUT":
     case "ATTENDANCE_PAUSED":
+    case "ATTENDANCE_OFF_SHIFT":
       return isCleaner(role) ? "/dashboard" : "/admin/cleaner-logs";
     case "ASSIGNMENT_APPROVAL_REQUESTED":
       return "/dashboard";
@@ -45,6 +46,7 @@ export function notificationHref(
     case "WORK_ORDER_COMPLETED":
       return "/admin/workforce?tab=work-orders";
     case "DOCUMENT_UPLOADED":
+    case "CERTIFICATE_WAIVER_EXPIRED":
       return n.refId ? `/admin/workforce?docUser=${n.refId}` : "/admin/workforce";
     case "LEAVE_REQUESTED":
     case "LEAVE_COVER_ACCEPTED":

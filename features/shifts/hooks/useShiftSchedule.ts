@@ -43,11 +43,58 @@ export const ShiftMoveSchema = z.object({
 });
 export type ShiftMove = z.infer<typeof ShiftMoveSchema>;
 
+// Mirrors backend ShiftScheduleService.ShiftLogEntry.
+export const ShiftLogEntrySchema = z.object({
+  id: z.string().uuid(),
+  date: z.string(),
+  cleanerId: z.string().uuid(),
+  cleanerName: z.string().nullable().optional(),
+  siteId: z.string().uuid(),
+  siteName: z.string(),
+  timezone: z.string().nullable().optional(),
+  originalStart: z.string(),
+  originalEnd: z.string(),
+  movedStart: z.string(),
+  movedEnd: z.string(),
+  moveMinutes: z.number(),
+  /** APPLIED / PENDING / APPROVED / REJECTED / CANCELLED */
+  status: z.string(),
+  inForce: z.boolean(),
+  /** REMINDER / MANUAL */
+  source: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  requestedAt: z.string().nullable().optional(),
+  requestedByName: z.string().nullable().optional(),
+  reviewedAt: z.string().nullable().optional(),
+  reviewedByName: z.string().nullable().optional(),
+  reviewNote: z.string().nullable().optional(),
+});
+export type ShiftLogEntry = z.infer<typeof ShiftLogEntrySchema>;
+
+export interface ShiftLogFilters {
+  siteId?: string;
+  cleanerId?: string;
+  from?: string;
+  to?: string;
+}
+
 const keys = {
   all: ["shift-schedule"] as const,
   mine: (from: string, to: string) => [...keys.all, "mine", from, to] as const,
   pending: () => [...keys.all, "pending"] as const,
+  log: (filters: ShiftLogFilters) => [...keys.all, "log", filters] as const,
 };
+
+/** Every one-day shift move in the range (management: all sites; supervisors: their sites). */
+export function useShiftLog(filters: ShiftLogFilters) {
+  return useQuery({
+    queryKey: keys.log(filters),
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.shiftSchedule.moveLog, { params: filters });
+      return z.array(ShiftLogEntrySchema).parse(data);
+    },
+  });
+}
 
 export function useMyShiftSchedule(from: string, to: string) {
   return useQuery({

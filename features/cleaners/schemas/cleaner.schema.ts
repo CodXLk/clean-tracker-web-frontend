@@ -12,6 +12,8 @@ export const CleanerSchema = z.object({
   email: z.string().nullable().optional(),
   phoneNumber: z.string().nullable().optional(),
   validCertificates: z.array(z.string()).optional().default([]),
+  /** Until when an admin has waived this person's certificate checks; null when not waived. */
+  certificateWaiverUntil: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });

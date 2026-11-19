@@ -111,7 +111,7 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
           value: c.id,
           label: personName(c.firstName, c.lastName),
           sublabel: c.email ?? undefined,
-          ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel),
+          ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel, c.certificateWaiverUntil),
         });
       }
     } else {
@@ -120,7 +120,7 @@ export function WorkOrderProfilesModal({ open, onClose, workOrder, kind }: WorkO
           value: s.id,
           label: personName(s.firstName, s.lastName),
           sublabel: s.email ?? undefined,
-          ...candidateCertMeta(requiredKeys, s.validCertificates ?? [], certLabel),
+          ...candidateCertMeta(requiredKeys, s.validCertificates ?? [], certLabel, s.certificateWaiverUntil),
         });
       }
     }

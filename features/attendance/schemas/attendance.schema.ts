@@ -40,7 +40,8 @@ export const CleanerSiteSchema = z.object({
   timezone: z.string().nullable().optional(),
   workOrderSite: z.boolean().optional().default(false),
   minimumWorkMinutes: z.number().nullable().optional(),
-  enforceShiftWindow: z.boolean().optional().default(false),
+  minimumWorkMandatory: z.boolean().optional().default(false),
+  sessionScheduledEndAt: z.string().nullable().optional(),
   shift: z
     .object({
       date: z.string(),
@@ -75,6 +76,12 @@ export const CleanerSiteSchema = z.object({
   workOrderId: z.string().uuid().nullable().optional(),
   poId: z.string().nullable().optional(),
   pausedMinutes: z.number().optional().default(0),
+  generalCheckInClosesAt: z.string().nullable().optional(),
+  checkInClosedReason: z.string().nullable().optional(),
+  /** Non-blocking heads-up shown above the check-in slider (e.g. little General time left). */
+  checkInNotice: z.string().nullable().optional(),
+  closeReason: z.string().nullable().optional(),
+  checkedOutBy: z.string().nullable().optional(),
 });
 export const CleanerSiteListSchema = z.array(CleanerSiteSchema);
 export type CleanerSite = z.infer<typeof CleanerSiteSchema>;
@@ -121,6 +128,22 @@ export const AttendanceLogSchema = z.object({
   closeReason: z.string().nullable().optional(),
   leaveCoverId: z.string().uuid().nullable().optional(),
   coveredCleanerId: z.string().uuid().nullable().optional(),
+  minimumWorkMinutes: z.number().nullable().optional(),
+  minimumWorkMandatory: z.boolean().nullable().optional(),
+  workedPercent: z.number().nullable().optional(),
+  thresholdPercent: z.number().nullable().optional(),
+  belowThreshold: z.boolean().nullable().optional(),
+  /** CLEANER / SUPERVISOR / SYSTEM / OTHER / UNKNOWN; null while open. */
+  checkedOutBy: z.string().nullable().optional(),
+  closedAt: z.string().nullable().optional(),
+  checkoutNote: z.string().nullable().optional(),
+  generalWindowEndAt: z.string().nullable().optional(),
+  /** Minutes checked in before (shift start - 60m). */
+  earlyCheckInMinutes: z.number().nullable().optional(),
+  /** Minutes checked out after (shift end + 60m). */
+  lateCheckOutMinutes: z.number().nullable().optional(),
+  /** General time left at check-in, set only when it was less than the minimum. */
+  windowLeftMinutes: z.number().nullable().optional(),
 });
 export const AttendanceLogListSchema = z.array(AttendanceLogSchema);
 export type AttendanceLog = z.infer<typeof AttendanceLogSchema>;
@@ -134,8 +157,10 @@ export interface CheckInPayload {
   accuracyMeters?: number;
   /** Cleaner consents to checking out with incomplete tasks. */
   acknowledgeIncomplete?: boolean;
-  /** Cleaner confirms a forced check-out (incomplete tasks and/or before the shift ends). */
+  /** Cleaner confirms a forced check-out (incomplete tasks, or leaving a mandatory period early). */
   force?: boolean;
+  /** Why the check-out is forced — required whenever it is. */
+  note?: string;
   /** Work order (PO) being checked in for; omitted for general cleaning. */
   workOrderId?: string;
 }

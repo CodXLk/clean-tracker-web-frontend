@@ -58,6 +58,8 @@ export const UserSchema = z.object({
   setupComplete: z.boolean(),
   hasPhoto: z.boolean().optional().default(false),
   validCertificates: z.array(z.string()).optional().default([]),
+  /** Until when an admin has waived this person's certificate checks; null when not waived. */
+  certificateWaiverUntil: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });

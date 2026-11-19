@@ -43,6 +43,7 @@ export const SiteShiftContextSchema = z.object({
     .array(z.object({ dayOfWeek: DayOfWeekSchema, startTime: z.string(), endTime: z.string() }))
     .default([]),
   minimumWorkMinutes: z.number().nullable().optional(),
+  minimumWorkMandatory: z.boolean().optional().default(false),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   approvedPlan: ShiftPlanSchema.nullable().optional(),

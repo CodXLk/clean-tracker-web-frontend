@@ -90,8 +90,17 @@ export const CLOSE_REASON_LABELS: Record<string, string> = {
   CHECKED_OUT: "Checked out",
   BELOW_MINIMUM: "Below minimum",
   PENDING_TASKS: "Pending tasks",
-  EARLY_BEFORE_SHIFT_END: "Early",
-  FORGOT_CHECKOUT: "Forgot check-out",
+  EARLY_BEFORE_SHIFT_END: "Left before shift end",
+  FORGOT_CHECKOUT: "Forgot to check out",
   WORK_ORDER_COMPLETED: "Work order completed",
   FORCED: "Forced",
+};
+
+/** Who ended a session (backend CheckoutActor). */
+export const CHECKED_OUT_BY_LABELS: Record<string, string> = {
+  CLEANER: "cleaner",
+  SUPERVISOR: "supervisor",
+  SYSTEM: "system",
+  OTHER: "someone else",
+  UNKNOWN: "unknown",
 };

@@ -100,7 +100,7 @@ export function CleanerProfilesModal({
         value: c.id,
         label: personName(c.firstName, c.lastName),
         sublabel: c.email ?? undefined,
-        ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel),
+        ...candidateCertMeta(requiredKeys, c.validCertificates ?? [], certLabel, c.certificateWaiverUntil),
       })),
     ],
     [cleanersQuery.data, requiredKeys, certLabel],

@@ -16,6 +16,7 @@ import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { CriticalTaskAckModal } from "@/features/attendance/components/CriticalTaskAckModal";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import { formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CleanerSite } from "@/features/attendance/schemas/attendance.schema";
 import { checkInEntries, inSessionContext, type CheckInEntry } from "@/features/attendance/lib/checkInEntries";
@@ -43,63 +44,6 @@ function formatSiteTime(iso: string | null | undefined, timeZone?: string | null
 // Backend shift times arrive as "HH:mm:ss" — trim to "HH:mm" for display.
 function formatShiftTime(t: string): string {
   return t.slice(0, 5);
-}
-
-function shiftTimeToMinutes(t: string): number {
-  const [h, m] = t.slice(0, 5).split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
-
-/** Is the cleaner still inside their shift (i.e. checking out now is early)? */
-function isWithinAnyShift(site: CleanerSite): boolean {
-  if (site.shift) {
-    const now = Date.now();
-    return site.shift.inProgress && now >= Date.parse(site.shift.startAt) && now < Date.parse(site.shift.endAt);
-  }
-  const shifts = site.shifts ?? [];
-  if (shifts.length === 0) return false;
-  const now = new Date();
-  const nowM = now.getHours() * 60 + now.getMinutes();
-  return shifts.some((s) => {
-    const start = shiftTimeToMinutes(s.startTime);
-    const end = shiftTimeToMinutes(s.endTime);
-    return s.crossesMidnight ? nowM >= start || nowM < end : nowM >= start && nowM < end;
-  });
-}
-
-/** Whether a check-in now is before/after the site's shift window (for a soft acknowledgement).
- *  A 5-hour grace on each side (and midnight wrap-around) means checking in shortly before a
- *  shift starts or shortly after an overnight shift ends is treated as on-time — cleaners often
- *  still have tasks to finish right after the shift window. */
-function checkInShiftTiming(site: CleanerSite): "BEFORE" | "AFTER" | null {
-  // When shift windows are enforced the server blocks and explains; no soft acknowledgement.
-  if (site.enforceShiftWindow) return null;
-  if (site.shift) {
-    const now = Date.now();
-    if (now < Date.parse(site.shift.checkInOpensAt)) return "BEFORE";
-    if (now >= Date.parse(site.shift.checkInClosesAt)) return "AFTER";
-    return null;
-  }
-  const shifts = site.shifts ?? [];
-  if (shifts.length === 0) return null;
-  const GRACE_MIN = 60;
-  const now = new Date();
-  const nowM = now.getHours() * 60 + now.getMinutes();
-  let nearestBefore = Infinity; // minutes until the next shift start
-  let nearestAfter = Infinity; // minutes since the last shift end
-  for (const s of shifts) {
-    const start = shiftTimeToMinutes(s.startTime);
-    const end = shiftTimeToMinutes(s.endTime);
-    const inShift = s.crossesMidnight ? nowM >= start || nowM < end : nowM >= start && nowM < end;
-    if (inShift) return null;
-    const beforeStart = (start - nowM + 1440) % 1440;
-    const afterEnd = (nowM - end + 1440) % 1440;
-    if (beforeStart <= GRACE_MIN || afterEnd <= GRACE_MIN) return null;
-    nearestBefore = Math.min(nearestBefore, beforeStart);
-    nearestAfter = Math.min(nearestAfter, afterEnd);
-  }
-  // Outside every shift window and grace period: flag as before or after the nearer boundary.
-  return nearestBefore <= nearestAfter ? "BEFORE" : "AFTER";
 }
 
 function getMessage(error: unknown, fallback: string): string {
@@ -134,11 +78,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
   // Pending-task / early check-out warning shown before checking out.
   const [pendingPrompt, setPendingPrompt] = useState<
-    { site: CheckInEntry; tasks: TaskOccurrence[]; early: boolean; serverMessage?: string } | null
-  >(null);
-  // Before/after-shift acknowledgement shown before a check-in outside shift hours.
-  const [shiftAckPrompt, setShiftAckPrompt] = useState<
-    { site: CheckInEntry; timing: "BEFORE" | "AFTER" } | null
+    { site: CheckInEntry; tasks: TaskOccurrence[]; serverMessage?: string } | null
   >(null);
   // HIGH-priority tasks shown right after a successful check-in for acknowledgement.
   const [criticalAck, setCriticalAck] = useState<
@@ -149,6 +89,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     { site: CheckInEntry; tasks: TaskOccurrence[] } | null
   >(null);
   const [confirming, setConfirming] = useState(false);
+  // Why the cleaner is forcing a check-out (required by the server for every forced check-out).
+  const [forceNote, setForceNote] = useState("");
+  // Not-mandatory site: leaving before the shift ends is allowed, but the cleaner is told first.
+  const [earlyPrompt, setEarlyPrompt] = useState<{ site: CheckInEntry; endsAt: string } | null>(null);
   // NFC support is resolved after mount to avoid an SSR/hydration mismatch.
   const [nfcSupported, setNfcSupported] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -252,10 +196,10 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
-  async function executeCheckout(site: CheckInEntry, force: boolean) {
+  async function executeCheckout(site: CheckInEntry, force: boolean, note?: string) {
     setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
     const payload = await acquirePayload(site);
-    await checkOut.mutateAsync({ ...payload, force, acknowledgeIncomplete: force });
+    await checkOut.mutateAsync({ ...payload, force, acknowledgeIncomplete: force, ...(note ? { note } : {}) });
   }
 
   async function doCheckIn(site: CheckInEntry) {
@@ -290,30 +234,52 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     if (high.length > 0) setCriticalAck({ site, tasks: high });
   }
 
-  // The normal check-out flow after the HIGH-task acknowledgement: warn on unfinished tasks
-  // and/or checking out before the shift ends, otherwise check out.
+  // The normal check-out flow after the HIGH-task acknowledgement: unfinished tasks need a forced
+  // check-out (with a note); leaving before the shift ends on a non-mandatory site is allowed after
+  // a heads-up; a mandatory site refuses (409) and the cleaner may force it with a note.
   async function finishCheckout(site: CheckInEntry) {
     const pending = pendingTasksFor(site);
-    const early = isWithinAnyShift(site);
-    if (pending.length > 0 || early) {
-      setPendingPrompt({ site, tasks: pending, early });
+    if (pending.length > 0) {
+      openForcePrompt({ site, tasks: pending });
       bumpReset(site.entryKey);
       return;
     }
+    const endsAt = site.sessionScheduledEndAt;
+    if (!site.minimumWorkMandatory && endsAt && Date.now() < Date.parse(endsAt)) {
+      setEarlyPrompt({ site, endsAt });
+      bumpReset(site.entryKey);
+      return;
+    }
+    await plainCheckout(site);
+  }
+
+  function openForcePrompt(prompt: { site: CheckInEntry; tasks: TaskOccurrence[]; serverMessage?: string }) {
+    setForceNote("");
+    setPendingPrompt(prompt);
+  }
+
+  // Check out without forcing; the server may still ask for a forced check-out (409).
+  async function plainCheckout(site: CheckInEntry) {
     try {
       await executeCheckout(site, false);
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       const message = getMessage(err, "Check-out failed.");
-      // The server can still require consent (e.g. below the site's minimum working period).
-      if (status === 409 || /minimum|minutes of work|before the shift ends|still to complete/i.test(message)) {
-        setPendingPrompt({ site, tasks: [], early: false, serverMessage: message });
+      if (status === 409 || /still to complete|force the check-out/i.test(message)) {
+        openForcePrompt({ site, tasks: [], serverMessage: message });
         bumpReset(site.entryKey);
         return;
       }
       setErrors((prev) => ({ ...prev, [site.entryKey]: message }));
       bumpReset(site.entryKey);
     }
+  }
+
+  async function confirmEarlyCheckout() {
+    if (!earlyPrompt) return;
+    const { site } = earlyPrompt;
+    setEarlyPrompt(null);
+    await plainCheckout(site);
   }
 
   // Tap-to-scan NFC and check in automatically to whichever assigned site the tag belongs
@@ -357,14 +323,6 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
     try {
       if (mode === "in") {
-        // Checking in outside shift hours is allowed, but ask the cleaner to acknowledge it first.
-        // A paused shift resuming ("slide to start") skips this — they've already checked in today.
-        const timing = site.status === "PAUSED" ? null : checkInShiftTiming(site);
-        if (timing) {
-          setShiftAckPrompt({ site, timing });
-          bumpReset(site.entryKey);
-          return;
-        }
         await doCheckIn(site);
         maybeShowCriticalAck(site);
         return;
@@ -387,30 +345,14 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     }
   }
 
-  async function confirmShiftCheckIn() {
-    if (!shiftAckPrompt) return;
-    const { site } = shiftAckPrompt;
-    setConfirming(true);
-    try {
-      await doCheckIn(site);
-      setShiftAckPrompt(null);
-      maybeShowCriticalAck(site);
-    } catch (err) {
-      setErrors((prev) => ({ ...prev, [site.entryKey]: getMessage(err, "Check-in failed.") }));
-      setShiftAckPrompt(null);
-      bumpReset(site.entryKey);
-    } finally {
-      setConfirming(false);
-    }
-  }
-
   async function confirmPendingCheckout() {
-    if (!pendingPrompt) return;
+    if (!pendingPrompt || !forceNote.trim()) return;
     const { site } = pendingPrompt;
     setConfirming(true);
     try {
-      await executeCheckout(site, true);
+      await executeCheckout(site, true, forceNote.trim());
       setPendingPrompt(null);
+      setForceNote("");
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -563,14 +505,34 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         )}
 
         {checkedIn ? (
-          <SlideButton
-            key={`out-${resetKey}`}
-            label={openComplaints.length > 0 ? "Complete open complaints to check out" : "Slide to Check Out"}
-            variant="checkout"
-            completedLabel="Checking out…"
-            disabled={openComplaints.length > 0}
-            onComplete={() => run(site, "out")}
-          />
+          <div className="flex flex-col gap-2">
+            {site.minimumWorkMandatory && !site.contextWorkOrderId && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                {site.sessionScheduledEndAt
+                  ? `This site requires the whole shift, until ${formatSiteTime(site.sessionScheduledEndAt, site.timezone)}. Leaving earlier is a forced check-out with a note.`
+                  : site.checkInAt
+                    ? `This site requires ${formatMinutes(site.minimumWorkMinutes ?? 60)} per visit — you can check out from ${formatSiteTime(
+                        new Date(Date.parse(site.checkInAt) + (site.minimumWorkMinutes ?? 60) * 60_000).toISOString(),
+                        site.timezone,
+                      )}. Leaving earlier is a forced check-out with a note.`
+                    : `This site requires ${formatMinutes(site.minimumWorkMinutes ?? 60)} per visit. Leaving earlier is a forced check-out with a note.`}
+              </p>
+            )}
+            {!site.contextWorkOrderId && site.generalCheckInClosesAt && (
+              <p className="text-[11px] text-grey-500">
+                Check out before {formatSiteTime(site.generalCheckInClosesAt, site.timezone)} (end of General cleaning
+                time) — after that the session is closed automatically as a forgotten check-out.
+              </p>
+            )}
+            <SlideButton
+              key={`out-${resetKey}`}
+              label={openComplaints.length > 0 ? "Complete open complaints to check out" : "Slide to Check Out"}
+              variant="checkout"
+              completedLabel="Checking out…"
+              disabled={openComplaints.length > 0}
+              onComplete={() => run(site, "out")}
+            />
+          </div>
         ) : (
           <div className="flex flex-col gap-2">
             {sessionEnded && (
@@ -591,16 +553,43 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                   ) : (
                     <Check size={14} className="shrink-0" aria-hidden="true" />
                   )}
-                  {forcedOut ? "Force checked out" : "Checked out"}
+                  {site.checkedOutBy === "SYSTEM"
+                    ? "Checked out by the system"
+                    : forcedOut
+                      ? "Force checked out"
+                      : "Checked out"}
                   {site.checkOutAt ? ` at ${formatTime(site.checkOutAt)}` : ""}
                 </p>
+                {site.closeReason === "FORGOT_CHECKOUT" && (
+                  <p className="mt-1 text-[11px] text-grey-700">
+                    You didn&apos;t check out, so the system closed this session at the end of the General cleaning
+                    time. Time while paused isn&apos;t counted.
+                  </p>
+                )}
                 <p className="mt-1 text-[11px] text-grey-600">
                   You can slide to check in again to finish any remaining tasks.
                 </p>
               </div>
             )}
+            {!checkedIn && !paused && site.checkInClosedReason && (
+              <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {site.checkInClosedReason}
+              </p>
+            )}
+            {!checkedIn && !paused && !site.checkInClosedReason && site.checkInNotice && (
+              <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {site.checkInNotice}
+              </p>
+            )}
+            {!site.shift && site.generalCheckInClosesAt && !site.contextWorkOrderId && (
+              <span className="text-[11px] text-grey-500">
+                Check-in until {formatSiteTime(site.generalCheckInClosesAt, site.timezone)}
+              </span>
+            )}
             {site.shifts.length > 0 && !site.shift && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {site.shifts.map((sh) => (
                   <span
                     key={sh.id}
@@ -717,23 +706,13 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             <div className="px-5 pt-3">
               <p className="text-sm text-grey-700">
                 {pendingPrompt.serverMessage ? (
-                  <>
-                    {pendingPrompt.serverMessage} Checking out now is recorded as a forced check-out and your
-                    supervisor is notified.
-                  </>
-                ) : pendingPrompt.tasks.length > 0 ? (
+                  <>{pendingPrompt.serverMessage}</>
+                ) : (
                   <>
                     This is a forced check-out — you still have {pendingPrompt.tasks.length} unfinished task
                     {pendingPrompt.tasks.length === 1 ? "" : "s"} at{" "}
-                    <span className="font-medium text-on-surface">{pendingPrompt.site.siteName}</span>.
-                    {pendingPrompt.early ? " You are also checking out before the shift ends." : ""}{" "}
+                    <span className="font-medium text-on-surface">{pendingPrompt.site.siteName}</span>.{" "}
                     Your supervisor and company admin will be notified to assign a cleaner to this site.
-                  </>
-                ) : (
-                  <>
-                    You are checking out of{" "}
-                    <span className="font-medium text-on-surface">{pendingPrompt.site.siteName}</span>{" "}
-                    before the shift ends. This will be recorded as a forced check-out.
                   </>
                 )}
               </p>
@@ -758,6 +737,18 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                   ))}
                 </ul>
               )}
+
+              <label className="mt-3 flex flex-col gap-1 text-xs font-medium text-grey-700">
+                Why are you leaving now? (required)
+                <textarea
+                  value={forceNote}
+                  onChange={(e) => setForceNote(e.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="e.g. Ran out of supplies, unwell, site locked…"
+                  className="rounded-xl border border-grey-300 bg-white px-3 py-2 text-sm font-normal text-on-surface"
+                />
+              </label>
             </div>
 
             <div className="flex gap-3 px-5 pb-5 pt-4">
@@ -771,7 +762,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
               </button>
               <button
                 type="button"
-                disabled={confirming}
+                disabled={confirming || !forceNote.trim()}
                 onClick={confirmPendingCheckout}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-error px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:opacity-60"
               >
@@ -783,66 +774,43 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
         </ModalPortal>
       )}
 
-      {shiftAckPrompt && (
+      {earlyPrompt && (
         <ModalPortal>
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="shift-ack-title"
+          aria-labelledby="early-checkout-title"
         >
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => !confirming && setShiftAckPrompt(null)}
-            aria-hidden="true"
-          />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEarlyPrompt(null)} aria-hidden="true" />
           <div className="relative z-10 w-full max-w-md rounded-3xl bg-surface shadow-2xl">
-            <div className="flex items-start justify-between gap-3 px-5 pt-5">
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Info size={18} aria-hidden="true" />
-                </span>
-                <h2 id="shift-ack-title" className="text-base font-semibold text-on-surface">
-                  {shiftAckPrompt.timing === "BEFORE" ? "Before shift time" : "After shift time"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Close"
-                disabled={confirming}
-                onClick={() => setShiftAckPrompt(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-500 transition-colors hover:bg-grey-100 disabled:opacity-50"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
+            <div className="flex items-center gap-2 px-5 pt-5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Info size={18} aria-hidden="true" />
+              </span>
+              <h2 id="early-checkout-title" className="text-base font-semibold text-on-surface">
+                Leaving before your shift ends
+              </h2>
             </div>
-
-            <div className="px-5 pt-3">
-              <p className="text-sm text-grey-700">
-                {shiftAckPrompt.timing === "BEFORE"
-                  ? "You're checking in before the shift starts"
-                  : "You're checking in after the shift time"}{" "}
-                at <span className="font-medium text-on-surface">{shiftAckPrompt.site.siteName}</span>.
-                You can still check in.
-              </p>
-            </div>
-
+            <p className="px-5 pt-3 text-sm text-grey-700">
+              Your shift at <span className="font-medium text-on-surface">{earlyPrompt.site.siteName}</span> ends at{" "}
+              {formatSiteTime(earlyPrompt.endsAt, earlyPrompt.site.timezone)}. You can still check out now — your
+              hours are counted to the minute and the early check-out is recorded.
+            </p>
             <div className="flex gap-3 px-5 pb-5 pt-4">
               <button
                 type="button"
-                disabled={confirming}
-                onClick={() => setShiftAckPrompt(null)}
-                className="flex-1 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-50"
+                onClick={() => setEarlyPrompt(null)}
+                className="flex-1 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100"
               >
-                Cancel
+                Stay
               </button>
               <button
                 type="button"
-                disabled={confirming}
-                onClick={confirmShiftCheckIn}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-variant disabled:opacity-60"
+                onClick={confirmEarlyCheckout}
+                className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
               >
-                {confirming ? "Checking in…" : "OK, check in"}
+                Check out
               </button>
             </div>
           </div>

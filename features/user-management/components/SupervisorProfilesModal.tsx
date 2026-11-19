@@ -77,7 +77,7 @@ export function SupervisorProfilesModal({ open, onClose, site }: SupervisorProfi
         value: u.id,
         label: personName(u.firstName, u.lastName),
         sublabel: u.email ?? undefined,
-        ...candidateCertMeta(requiredKeys, u.validCertificates ?? [], certLabel),
+        ...candidateCertMeta(requiredKeys, u.validCertificates ?? [], certLabel, u.certificateWaiverUntil),
       })),
     ];
   }, [eligibleQuery.data, requiredKeys, certLabel]);
