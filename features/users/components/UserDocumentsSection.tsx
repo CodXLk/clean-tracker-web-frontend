@@ -11,6 +11,7 @@ import {
   useVerifyDocument,
 } from "@/features/users/hooks/useUserDocuments";
 import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
+import { CertificateWaiverPanel } from "@/features/users/components/CertificateWaiverPanel";
 import { SearchableSelect, type SelectOption } from "@/features/user-management/components/SearchableSelect";
 import {
   certificateNumberLabel,
@@ -234,6 +235,8 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
           be verified by management to count toward site assignment.
         </p>
       </div>
+
+      {isManagement && <CertificateWaiverPanel userId={userId} />}
 
       {documentsQuery.isLoading ? (
         <div className="flex justify-center py-6 text-grey-400">

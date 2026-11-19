@@ -82,7 +82,10 @@ export function planProblems(ctx: SiteShiftContext, plan: ShiftPlanInput): strin
       continue;
     }
     if (d.startTime === d.endTime) problems.push(`${label}: start and end can't be the same.`);
-    if (ctx.minimumWorkMinutes && lengthMinutes(d.startTime, d.endTime) < ctx.minimumWorkMinutes) {
+    const length = lengthMinutes(d.startTime, d.endTime);
+    if (ctx.minimumWorkMinutes && ctx.minimumWorkMandatory && length !== ctx.minimumWorkMinutes) {
+      problems.push(`${label}: must be exactly ${ctx.minimumWorkMinutes} minutes (mandatory working period).`);
+    } else if (ctx.minimumWorkMinutes && length < ctx.minimumWorkMinutes) {
       problems.push(`${label}: must be at least ${ctx.minimumWorkMinutes} minutes.`);
     }
     const check = d.dayOfWeek
@@ -126,6 +129,9 @@ export function SiteShiftFacts({ ctx }: { ctx: SiteShiftContext }) {
       {ctx.minimumWorkMinutes ? (
         <p className="mt-1">
           <span className="font-medium text-on-surface">Minimum working period:</span> {ctx.minimumWorkMinutes} min
+          {ctx.minimumWorkMandatory
+            ? " · mandatory: each shift is exactly this long and you stay until it ends"
+            : " · shifts at least this long; you can leave early"}
         </p>
       ) : null}
       <p className="mt-1">

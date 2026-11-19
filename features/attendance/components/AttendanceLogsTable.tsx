@@ -8,7 +8,7 @@ import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import { useAttendanceLogs, type AttendanceLogFilters } from "@/features/attendance/hooks/useAttendance";
 import { AttendanceMapModal } from "./AttendanceMapModal";
 import type { AttendanceLog } from "@/features/attendance/schemas/attendance.schema";
-import { CLOSE_REASON_LABELS, formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
+import { CHECKED_OUT_BY_LABELS, CLOSE_REASON_LABELS, formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 
 function fmtDate(value?: string | null): string {
   if (!value) return "—";
@@ -184,17 +184,58 @@ export function AttendanceLogsTable() {
                       <td className="px-4 py-3 text-grey-700">
                         {fmtTime(log.checkInAt, log.timezone)}
                         {log.lateMinutes ? <span className="ml-1 text-[11px] text-error">+{log.lateMinutes}m late</span> : null}
+                        {log.earlyCheckInMinutes ? (
+                          <span className="block text-[11px] font-medium text-amber-700">
+                            {formatMinutes(log.earlyCheckInMinutes)} before shift
+                          </span>
+                        ) : null}
+                        {log.windowLeftMinutes != null ? (
+                          <span className="block text-[11px] font-medium text-amber-700">
+                            only {formatMinutes(log.windowLeftMinutes)} of General time left
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-grey-700">
                         {fmtTime(log.checkOutAt, log.timezone)}
+                        {log.lateCheckOutMinutes ? (
+                          <span className="block text-[11px] font-medium text-amber-700">
+                            {formatMinutes(log.lateCheckOutMinutes)} after shift
+                          </span>
+                        ) : null}
+                        {log.checkedOutBy && (
+                          <span
+                            className={`block text-[11px] ${log.checkedOutBy === "SYSTEM" ? "font-medium text-amber-700" : "text-grey-500"}`}
+                          >
+                            by {CHECKED_OUT_BY_LABELS[log.checkedOutBy] ?? log.checkedOutBy}
+                            {log.checkedOutBy === "SYSTEM" && log.closedAt && log.closedAt !== log.checkOutAt
+                              ? ` (closed ${fmtTime(log.closedAt, log.timezone)})`
+                              : ""}
+                          </span>
+                        )}
                         {log.closeReason && log.closeReason !== "CHECKED_OUT" ? (
                           <span className="block text-[11px] text-grey-500">
                             {CLOSE_REASON_LABELS[log.closeReason] ?? log.closeReason}
                           </span>
                         ) : null}
+                        {log.checkoutNote && (
+                          <span className="block max-w-[220px] text-[11px] italic text-grey-600" title={log.checkoutNote}>
+                            &ldquo;{log.checkoutNote}&rdquo;
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-medium text-on-surface">
                         {log.workedMinutes != null ? formatMinutes(log.workedMinutes) : "—"}
+                        {log.workedPercent != null && log.minimumWorkMinutes != null && (
+                          <span
+                            className={`block text-[11px] font-normal ${log.belowThreshold ? "text-error" : "text-grey-500"}`}
+                            title={`Needs ${log.thresholdPercent}% of the ${log.minimumWorkMinutes}-minute minimum${
+                              log.minimumWorkMandatory ? " (mandatory)" : ""
+                            }`}
+                          >
+                            {log.workedPercent}% of {formatMinutes(log.minimumWorkMinutes)}
+                            {log.belowThreshold ? " · below minimum" : ""}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-grey-700">
                         {log.pausedMinutes ? formatMinutes(log.pausedMinutes) : "—"}

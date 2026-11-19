@@ -44,6 +44,7 @@ import { useClientCompanies } from "@/features/user-management/hooks/useClientCo
 import { useClients } from "@/features/user-management/hooks/useClients";
 import { useCreateSite, useUpdateSite } from "@/features/user-management/hooks/useSites";
 import { useCertificateTypes } from "@/features/users/hooks/useCertificateTypes";
+import { useAttendancePolicy } from "@/features/attendance/hooks/useAttendancePolicy";
 import { AddCertificateTypeButton } from "@/features/users/components/AddCertificateTypeButton";
 import { MANDATORY_CERTIFICATE_KEYS, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import { isNfcSupported, readNfcTag, NfcError } from "@/lib/nfc";
@@ -142,6 +143,7 @@ const EMPTY: SiteFormInput = {
   worksOnPublicHolidays: false,
   timezone: DEFAULT_SITE_TIMEZONE,
   minimumWorkMinutes: null,
+  minimumWorkMandatory: false,
   workOrderSite: false,
   cleaningTemplates: [],
 };
@@ -154,6 +156,7 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
   const createMutation = useCreateSite();
   const updateMutation = useUpdateSite();
   const certOptions = useCertificateTypes();
+  const policy = useAttendancePolicy();
   const active = isEdit ? updateMutation : createMutation;
 
   // On create, chain straight into a dedicated Floors modal (whose own "manage areas"
@@ -236,6 +239,7 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
             worksOnPublicHolidays: site.worksOnPublicHolidays ?? false,
             timezone: site.timezone || DEFAULT_SITE_TIMEZONE,
             minimumWorkMinutes: site.minimumWorkMinutes ?? null,
+            minimumWorkMandatory: site.minimumWorkMandatory ?? false,
             workOrderSite: site.workOrderSite ?? false,
             cleaningTemplates: (site.cleaningTemplates ?? []).map((t) => ({
               templateId: t.templateId,
@@ -256,6 +260,17 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
     setNfcScanning(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, site]);
+
+  // Pre-fill the configured default minimum working period (new sites, or older ones without one).
+  const defaultMinimum = policy.data?.defaultMinimumWorkMinutes;
+  const currentMinimum = watch("minimumWorkMinutes");
+  useEffect(() => {
+    if (open && defaultMinimum != null && currentMinimum == null) {
+      setValue("minimumWorkMinutes", defaultMinimum);
+    }
+    // Only fill once per open; afterwards the field is the user's.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, site, defaultMinimum]);
 
   // Auto-select the only client when a client-company has exactly one.
   const autoSelectGuard = useRef<string | null>(null);
@@ -822,20 +837,39 @@ export function SiteFormModal({ open, onClose, site, embedded, workOrderSite = f
             </div>
           )}
 
-          <TextField
-            label="Minimum working period (minutes, optional)"
-            type="number"
-            min={0}
-            step={15}
-            inputMode="numeric"
-            placeholder="e.g. 120"
-            hint="When set, cleaners must stay checked in at least this long (excluding paused time) before checking out, and check-in closes this long before the shift ends."
-            error={errors.minimumWorkMinutes?.message}
-            {...register("minimumWorkMinutes", {
-              setValueAs: (v: unknown) =>
-                v === "" || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v),
-            })}
-          />
+          <div className="flex flex-col gap-3 rounded-lg border border-grey-200 p-3">
+            <TextField
+              label="Minimum working period (minutes)"
+              type="number"
+              min={1}
+              step={15}
+              inputMode="numeric"
+              placeholder={policy.data ? String(policy.data.defaultMinimumWorkMinutes) : "e.g. 60"}
+              hint={
+                watch("minimumWorkMandatory")
+                  ? "Mandatory: every shift lasts exactly this long and cleaners can't check out before it ends (without a shift, before working this long). Days below 100% go to supervisor review."
+                  : `Cleaners can check out any time. Days below ${policy.data?.minimumReviewPercent ?? 80}% of this go to supervisor review; the rest are reviewed by the system. Shifts must be at least this long.`
+              }
+              error={errors.minimumWorkMinutes?.message}
+              {...register("minimumWorkMinutes", {
+                setValueAs: (v: unknown) =>
+                  v === "" || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v),
+              })}
+            />
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-grey-300"
+                {...register("minimumWorkMandatory")}
+              />
+              <span>
+                <span className="block text-sm font-medium text-on-surface">Minimum working period is mandatory</span>
+                <span className="block text-xs text-grey-500">
+                  Shifts are exactly the minimum and cleaners must stay until their shift ends.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
         </FormSection>
 

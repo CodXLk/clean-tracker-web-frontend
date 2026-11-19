@@ -57,11 +57,13 @@ export function holdsAllRequired(requiredKeys: string[], heldKeys: string[]): bo
  * Badges + view-only (disabled) metadata for a candidate in an assignment dropdown.
  * Badges show only the non-mandatory certificates the candidate actually holds; missing
  * required certificates are surfaced through {@link disabledReason} rather than as badges.
+ * A candidate whose checks an admin has temporarily waived ({@code waivedUntil}) stays selectable.
  */
 export function candidateCertMeta(
   requiredKeys: string[],
   heldKeys: string[],
   labelFor: (key: string) => string,
+  waivedUntil?: string | null,
 ): { badges: CertBadge[]; disabled: boolean; disabledReason?: string } {
   const held = new Set(heldKeys);
   const badges: CertBadge[] = heldKeys
@@ -72,6 +74,18 @@ export function candidateCertMeta(
       tone: "held" as const,
     }));
   const missing = requiredKeys.filter((k) => !held.has(k));
+  if (waivedUntil) {
+    const until = new Date(waivedUntil).toLocaleDateString([], { day: "numeric", month: "short" });
+    badges.unshift({
+      text: `Waived to ${until}`,
+      title:
+        missing.length > 0
+          ? `Certificate checks waived by an admin until ${until}. Missing: ${missing.map(labelFor).join(", ")}`
+          : `Certificate checks waived by an admin until ${until}`,
+      tone: "neutral",
+    });
+    return { badges, disabled: false };
+  }
   return {
     badges,
     disabled: missing.length > 0,

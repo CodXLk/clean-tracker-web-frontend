@@ -144,6 +144,12 @@ export function SiteDetailView({ open, onClose, site }: SiteDetailViewProps) {
             <Field label="Client">{site.clientName}</Field>
             <Field label="Client-managed">{site.clientSiteManagementEnabled ? "Enabled" : "Disabled"}</Field>
             <Field label="Public holidays">{site.worksOnPublicHolidays ? "Works" : "Closed"}</Field>
+            {!site.workOrderSite && (
+              <Field label="Minimum working period">
+                {site.minimumWorkMinutes != null ? `${site.minimumWorkMinutes} min` : "—"}
+                {site.minimumWorkMandatory ? " · mandatory" : " · not mandatory"}
+              </Field>
+            )}
           </dl>
         </Section>
 

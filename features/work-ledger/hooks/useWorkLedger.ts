@@ -45,8 +45,49 @@ export const WorkEntrySchema = z.object({
   invoiceId: z.string().uuid().nullable().optional(),
   canReview: z.boolean(),
   canApprove: z.boolean(),
+  minimumMinutes: z.number().nullable().optional(),
+  minimumMandatory: z.boolean().nullable().optional(),
+  thresholdPercent: z.number().nullable().optional(),
+  workedPercent: z.number().nullable().optional(),
+  belowMinimum: z.boolean().optional().default(false),
+  autoReviewed: z.boolean().optional().default(false),
+  sessions: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        checkInAt: z.string().nullable().optional(),
+        checkOutAt: z.string().nullable().optional(),
+        scheduledStartAt: z.string().nullable().optional(),
+        scheduledEndAt: z.string().nullable().optional(),
+        status: z.string().nullable().optional(),
+        closeReason: z.string().nullable().optional(),
+        grossMinutes: z.number(),
+        pausedMinutes: z.number(),
+        workedMinutes: z.number(),
+        workedPercent: z.number().nullable().optional(),
+        lateMinutes: z.number().nullable().optional(),
+        timezone: z.string().nullable().optional(),
+        pauses: z
+          .array(
+            z.object({
+              pausedAt: z.string().nullable().optional(),
+              resumedAt: z.string().nullable().optional(),
+              reason: z.string().nullable().optional(),
+            }),
+          )
+          .default([]),
+        checkedOutBy: z.string().nullable().optional(),
+        closedAt: z.string().nullable().optional(),
+        checkoutNote: z.string().nullable().optional(),
+        earlyCheckInMinutes: z.number().nullable().optional(),
+        lateCheckOutMinutes: z.number().nullable().optional(),
+        windowLeftMinutes: z.number().nullable().optional(),
+      }),
+    )
+    .default([]),
 });
 export type WorkEntry = z.infer<typeof WorkEntrySchema>;
+export type WorkSession = WorkEntry["sessions"][number];
 
 export interface WorkLedgerFilters {
   siteId?: string;
@@ -112,4 +153,11 @@ export const REVIEW_STATUS_LABELS: Record<WorkEntry["reviewStatus"], string> = {
   SUPERVISOR_REVIEWED: "Reviewed",
   APPROVED: "Approved",
   REOPENED: "Reopened",
+};
+
+export const PAUSE_REASON_LABELS: Record<string, string> = {
+  GEOFENCE: "Left the site",
+  STALE_HEARTBEAT: "No signal / app closed",
+  LOCATION_UNAVAILABLE: "Location unavailable",
+  APP_CLOSED: "App closed",
 };

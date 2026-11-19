@@ -160,6 +160,7 @@ export const SiteSchema = z.object({
   worksOnPublicHolidays: z.boolean().optional().default(false),
   timezone: z.string().nullable().optional().default(DEFAULT_SITE_TIMEZONE),
   minimumWorkMinutes: z.number().nullable().optional(),
+  minimumWorkMandatory: z.boolean().optional().default(false),
   workOrderSite: z.boolean().optional().default(false),
   oneTimeSite: z.boolean().optional().default(false),
   oneTimeSiteCompleted: z.boolean().optional().default(false),
@@ -229,6 +230,7 @@ export const SiteFormSchema = z
       .max(1440, "That is too long")
       .nullable()
       .optional(),
+    minimumWorkMandatory: z.boolean().optional(),
     workOrderSite: z.boolean().optional(),
     cleaningTemplates: z.array(
       z.object({
@@ -238,6 +240,14 @@ export const SiteFormSchema = z
     ),
   })
   .superRefine((val, ctx) => {
+    // Every general site has a minimum working period (work orders aren't measured against it).
+    if (!val.workOrderSite && (val.minimumWorkMinutes == null || val.minimumWorkMinutes < 1)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the minimum working period (at least 1 minute)",
+        path: ["minimumWorkMinutes"],
+      });
+    }
     if (val.startDate && val.endDate && val.endDate < val.startDate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

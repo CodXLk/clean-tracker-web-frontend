@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock, Loader2, X } from "lucide-react";
+import { Check, Clock, History, Loader2, X } from "lucide-react";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { usePendingShiftPlans, useReviewShiftPlan } from "@/features/shifts/hooks/useShiftPlans";
 import { formatMove, usePendingShiftMoves, useReviewShiftMove } from "@/features/shifts/hooks/useShiftSchedule";
 import { formatPlanDay } from "@/features/shifts/schemas/shiftPlan.schema";
+import { ShiftLogView } from "@/features/shifts/components/ShiftLogView";
 
 const SOURCE_LABELS: Record<string, string> = {
   ONBOARDING: "New site assignment",
@@ -22,6 +23,7 @@ export function ShiftRequestsTab() {
   const reviewMove = useReviewShiftMove();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
 
   async function decideMove(id: string, approve: boolean) {
     setError(null);
@@ -41,6 +43,8 @@ export function ShiftRequestsTab() {
     }
   }
 
+  if (showLog) return <ShiftLogView onBack={() => setShowLog(false)} />;
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
@@ -51,7 +55,16 @@ export function ShiftRequestsTab() {
 
   return (
     <section className="rounded-2xl bg-surface p-5 shadow-sm">
-      <h2 className="mb-1 text-sm font-semibold text-on-surface">Shift requests</h2>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-on-surface">Shift requests</h2>
+        <button
+          type="button"
+          onClick={() => setShowLog(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-grey-300 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-grey-50"
+        >
+          <History size={14} /> Shift log
+        </button>
+      </div>
       <p className="mb-4 text-xs text-grey-500">
         Cleaners propose the shifts they&apos;ll work at each site. Approved shifts drive check-in times and reminders.
       </p>
