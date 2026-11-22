@@ -168,12 +168,17 @@ export function FilterChips<T extends string>({ options, value, onChange }: {
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
             value === o.id
-              ? "border-ink bg-ink text-white"
-              : "border-grey-200 text-grey-600 hover:border-grey-300 hover:bg-grey-50",
+              ? "border-primary bg-primary text-white shadow-sm shadow-primary/25"
+              : "border-grey-200 bg-white text-grey-600 hover:border-primary/40 hover:bg-primary/5 hover:text-primary-variant",
           )}
         >
           {o.label}
-          <span className={cn("rounded-full px-1.5 text-xs", value === o.id ? "bg-white/25" : "bg-grey-100")}>
+          <span
+            className={cn(
+              "rounded-full px-1.5 text-xs font-semibold",
+              value === o.id ? "bg-white/25 text-white" : "bg-primary/10 text-primary-variant",
+            )}
+          >
             {o.count}
           </span>
         </button>
@@ -795,12 +800,14 @@ export function AdminDashboard() {
     }
     return c;
   }, [complaints]);
-  const complaintRows = useMemo(() => {
-    const rank = (s: Complaint["status"]) => (s === "open" || s === "in_progress" ? 0 : s === "closed" ? 1 : 2);
-    return [...complaints]
-      .sort((a, b) => rank(a.status) - rank(b.status) || b.reportedAt.localeCompare(a.reportedAt))
-      .slice(0, 8);
-  }, [complaints]);
+  // The table lists only complaints still needing action (open / in progress), newest first.
+  const complaintRows = useMemo(
+    () =>
+      complaints
+        .filter((c) => c.status !== "resolved" && c.status !== "closed")
+        .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt)),
+    [complaints],
+  );
 
   // The open modal follows each background refresh.
   const detailDay = useMemo(
@@ -1026,7 +1033,7 @@ export function AdminDashboard() {
         <div className="mt-5 border-t border-grey-100 pt-4">
           <div className="min-w-0">
             {complaintsQuery.isLoading ? spinner : complaintRows.length === 0 ? (
-              <EmptyRows text="No complaints raised." />
+              <EmptyRows text={complaints.length === 0 ? "No complaints raised." : "No open complaints — everything has been handled."} />
             ) : (
               <ComplaintsTable rows={complaintRows} now={now} onOpen={(c) => router.push(`/admin/complaints?complaint=${c.id}`)} />
             )}
