@@ -47,6 +47,8 @@ export const ENDPOINTS = {
     list:   "/clients",
     create: "/clients",
     byId:   (id: string) => `/clients/${id}`,
+    inviteLogin: (id: string) => `/clients/${id}/login/invite`,
+    login:  (id: string) => `/clients/${id}/login`,
   },
   sites: {
     list:   "/sites",
@@ -95,6 +97,8 @@ export const ENDPOINTS = {
   workOrders: {
     list:   "/work-orders",
     create: "/work-orders",
+    nextPoId: "/work-orders/next-po-id",
+    clientCreate: "/work-orders/client",
     byId:   (id: string) => `/work-orders/${id}`,
     status: (id: string) => `/work-orders/${id}/status`,
     photos: (id: string) => `/work-orders/${id}/photos`,
@@ -322,6 +326,9 @@ export const ENDPOINTS = {
   },
   dashboard: {
     overview: "/dashboard/overview",
+    siteDays: "/dashboard/site-days",
+    clientOverview: "/dashboard/client/overview",
+    clientSiteDays: "/dashboard/client/site-days",
   },
   // These have no Spring Boot backend to mirror — the Next.js route handler *is*
   // the backend. Consumed by client components via clientApi ("/api" baseURL).
@@ -334,6 +341,10 @@ export const ENDPOINTS = {
     create:  "/complaints",
     complete: (id: string) => `/complaints/${id}/complete`,
     resolve: (id: string) => `/complaints/${id}/resolve`,
+    reopen:  (id: string) => `/complaints/${id}/reopen`,
+    feedback: (id: string) => `/complaints/${id}/feedback`,
+    clientSites: "/complaints/client/sites",
+    clientCreate: "/complaints/client",
     photo:   (id: string) => `/complaints/photos/${id}`,
   },
   contact: {
@@ -390,6 +401,8 @@ export const BACKEND = {
     list:   "/api/v1/clients",
     create: "/api/v1/clients",
     byId:   (id: string) => `/api/v1/clients/${id}`,
+    inviteLogin: (id: string) => `/api/v1/clients/${id}/login/invite`,
+    login:  (id: string) => `/api/v1/clients/${id}/login`,
     byCompany: (companyId: string) => `/api/v1/clients?clientCompanyId=${companyId}`,
   },
   sites: {
@@ -439,6 +452,8 @@ export const BACKEND = {
   workOrders: {
     list:   "/api/v1/work-orders",
     create: "/api/v1/work-orders",
+    nextPoId: "/api/v1/work-orders/next-po-id",
+    clientCreate: "/api/v1/work-orders/client",
     byId:   (id: string) => `/api/v1/work-orders/${id}`,
     status: (id: string) => `/api/v1/work-orders/${id}/status`,
     photos: (id: string) => `/api/v1/work-orders/${id}/photos`,
@@ -666,12 +681,19 @@ export const BACKEND = {
   },
   dashboard: {
     overview: "/api/v1/dashboard/overview",
+    siteDays: "/api/v1/dashboard/site-days",
+    clientOverview: "/api/v1/dashboard/client/overview",
+    clientSiteDays: "/api/v1/dashboard/client/site-days",
   },
   complaints: {
     list:    "/api/v1/complaints",
     create:  "/api/v1/complaints",
     complete: (id: string) => `/api/v1/complaints/${id}/complete`,
     resolve: (id: string) => `/api/v1/complaints/${id}/resolve`,
+    reopen:  (id: string) => `/api/v1/complaints/${id}/reopen`,
+    feedback: (id: string) => `/api/v1/complaints/${id}/feedback`,
+    clientSites: "/api/v1/complaints/client/sites",
+    clientCreate: "/api/v1/complaints/client",
     photo:   (id: string) => `/api/v1/complaints/photos/${id}`,
   },
 } as const;

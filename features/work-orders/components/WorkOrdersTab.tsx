@@ -40,6 +40,15 @@ function formatDates(dates?: string[] | null): string {
   return `${first} → ${formatDate(sorted[sorted.length - 1])} (${sorted.length}d)`;
 }
 
+/** Marks work orders the client raised through the portal (awaiting review while Pending). */
+function ClientRequestBadge() {
+  return (
+    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">
+      Client request
+    </span>
+  );
+}
+
 const STATUS_STYLES: Record<WorkOrderStatus, string> = {
   PENDING: "bg-grey-100 text-grey-600",
   APPROVED: "bg-blue-100 text-blue-700",
@@ -207,7 +216,10 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                   <li key={w.id} className="flex flex-col gap-3 p-4">
                     <div className="flex items-start justify-between gap-2">
                       <button type="button" onClick={() => setDetail(w)} className="min-w-0 text-left">
-                        <p className="font-semibold text-on-surface">{w.poId}</p>
+                        <p className="flex items-center gap-1.5 font-semibold text-on-surface">
+                          {w.poId}
+                          {w.requestedByClient && <ClientRequestBadge />}
+                        </p>
                         <p className="truncate text-xs text-grey-500">{w.siteName ?? "—"}</p>
                         <p className="text-xs text-grey-500">{formatDates(w.taskDates)}</p>
                       </button>
@@ -265,7 +277,12 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
               <tbody>
                 {workOrders.map((w) => (
                   <tr key={w.id} className="border-b border-grey-100 last:border-0">
-                    <td className="px-5 py-3.5 font-medium text-on-surface">{w.poId}</td>
+                    <td className="px-5 py-3.5 font-medium text-on-surface">
+                      <span className="inline-flex items-center gap-1.5">
+                        {w.poId}
+                        {w.requestedByClient && <ClientRequestBadge />}
+                      </span>
+                    </td>
                     <td className="px-5 py-3.5 text-grey-700">{w.siteName ?? "—"}</td>
                     <td className="px-5 py-3.5 text-grey-700">{formatDates(w.taskDates)}</td>
                     {!isSupervisor && (

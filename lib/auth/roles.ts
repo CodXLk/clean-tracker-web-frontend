@@ -81,3 +81,23 @@ export function isSupervisorRouteAllowed(pathname: string): boolean {
     (href) => pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`)),
   );
 }
+
+/**
+ * Root hrefs of the client portal. AppNav builds the client nav from these and proxy.ts blocks
+ * clients from every other protected route (e.g. Workforce, which shows internal staffing).
+ */
+export const CLIENT_ALLOWED_HREFS = [
+  "/admin/dashboard",
+  "/admin/complaints",
+  "/admin/client-work-orders",
+  "/admin/item-requests",
+  "/admin/client-site-management",
+  "/admin/client-invoices",
+  "/dashboard/profile",
+  "/dashboard/notifications",
+  "/admin/notifications",
+] as const;
+
+export function isClientRouteAllowed(pathname: string): boolean {
+  return CLIENT_ALLOWED_HREFS.some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}

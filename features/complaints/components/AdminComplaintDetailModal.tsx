@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, MessageSquare, User, Camera, ImagePlus } from "lucide-react";
+import { X, MessageSquare, User, Camera, ImagePlus, ShieldAlert, Star, History, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
@@ -18,6 +18,40 @@ interface AdminComplaintDetailModalProps {
   completing?: boolean;
   /** Surfaces a failed complete/resolve request so the cleaner sees why it didn't go through. */
   actionError?: unknown;
+  /** Supervisor/management: send a completed complaint back to the cleaners. */
+  onReopen?: (id: string, note: string) => void;
+  reopening?: boolean;
+  /** Client: feedback on their resolved complaint. */
+  onFeedback?: (id: string, feedback: string, rating?: number) => void;
+  savingFeedback?: boolean;
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  CLIENT: "Client",
+  SUPERVISOR: "Supervisor",
+  OUTSOURCE_SUPERVISOR: "Supervisor",
+  CLEANER: "Cleaner",
+  OUTSOURCE_CLEANER: "Cleaner",
+  COMPANY_ADMIN: "Company admin",
+  SUPER_ADMIN: "Super admin",
+  CLIENT_SERVICE_MANAGER: "Client service manager",
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  CREATED: "Raised",
+  COMPLETED: "Completed by cleaner",
+  REOPENED: "Reopened",
+  RESOLVED: "Resolved",
+  REDO_SCHEDULED: "Redo scheduled",
+  FEEDBACK: "Client feedback",
+};
+
+function formatWhen(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function errorMessage(error: unknown): string | null {
@@ -54,8 +88,16 @@ export function AdminComplaintDetailModal({
   resolving,
   completing,
   actionError,
+  onReopen,
+  reopening,
+  onFeedback,
+  savingFeedback,
 }: AdminComplaintDetailModalProps) {
   const [note, setNote] = useState("");
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenNote, setReopenNote] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [rating, setRating] = useState<number | undefined>(undefined);
   const [photos, setPhotos] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +127,10 @@ export function AdminComplaintDetailModal({
     setFormComplaintId(complaint?.id);
     setNote("");
     setPhotos([]);
+    setReopenOpen(false);
+    setReopenNote("");
+    setFeedback(complaint?.clientFeedback ?? "");
+    setRating(complaint?.clientRating ?? undefined);
   }
 
   if (!open || !complaint) return null;
@@ -94,6 +140,8 @@ export function AdminComplaintDetailModal({
   const canComplete = isCleaner && complaint.status === "open" && !!onComplete;
   const canResolve =
     complaint.status === "closed" && role !== "CLEANER" && role !== "CLIENT";
+  const canReopen = canResolve && !!onReopen;
+  const canFeedback = role === "CLIENT" && complaint.status === "resolved" && !!onFeedback;
 
   function addPhotos(files: FileList | null) {
     if (!files) return;
@@ -148,6 +196,14 @@ export function AdminComplaintDetailModal({
               {STATUS_LABEL[complaint.status]}
             </span>
             <PriorityBadge priority={complaint.priority} />
+            {complaint.critical && (
+              <span
+                className="inline-flex items-center gap-1 rounded-xl bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700"
+                title="Cleaners must complete this before their other tasks at the site"
+              >
+                <ShieldAlert size={12} aria-hidden="true" /> Critical
+              </span>
+            )}
           </div>
 
           <h3 className="text-base font-semibold text-on-surface">{complaint.title}</h3>
@@ -162,12 +218,14 @@ export function AdminComplaintDetailModal({
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs font-medium text-grey-500">Location</p>
-              <p className="mt-1 text-sm text-on-surface">{complaint.floor}</p>
+              <p className="mt-1 text-sm text-on-surface">
+                {[complaint.floor, complaint.area].filter(Boolean).join(" · ") || "Whole site"}
+              </p>
               <p className="text-sm text-grey-500">{complaint.site}</p>
             </div>
             <div>
               <p className="text-xs font-medium text-grey-500">Date &amp; Time</p>
-              <p className="mt-1 text-sm text-on-surface">{complaint.reportedAt}</p>
+              <p className="mt-1 text-sm text-on-surface">{formatWhen(complaint.reportedAt)}</p>
             </div>
           </div>
 
@@ -176,7 +234,10 @@ export function AdminComplaintDetailModal({
               <p className="text-xs font-medium text-grey-500">Submitted By</p>
               <div className="mt-1 flex items-center gap-2">
                 <User size={16} className="text-grey-500" aria-hidden="true" />
-                <span className="text-sm text-on-surface">{complaint.reporterRole}</span>
+                <span className="text-sm text-on-surface">
+                  {complaint.reporterName ? `${complaint.reporterName} · ` : ""}
+                  {ROLE_LABEL[complaint.reporterRole] ?? complaint.reporterRole}
+                </span>
               </div>
             </div>
             {complaint.assignedTo && (
@@ -243,7 +304,7 @@ export function AdminComplaintDetailModal({
               {complaint.completedBy && (
                 <p className="mt-1 text-xs text-grey-600">
                   Completed by {complaint.completedBy}
-                  {complaint.completedAt ? ` · ${complaint.completedAt.slice(0, 10)}` : ""}
+                  {complaint.completedAt ? ` · ${formatWhen(complaint.completedAt)}` : ""}
                 </p>
               )}
               {complaint.completionNote && (
@@ -269,6 +330,86 @@ export function AdminComplaintDetailModal({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {complaint.previousCompletionPhotos.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-grey-200 bg-grey-50 p-4">
+              <p className="text-xs font-semibold text-ink">Earlier attempt (reopened)</p>
+              <p className="mt-1 text-xs text-grey-600">
+                Photos from a completion that was sent back. Kept for the record.
+              </p>
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {complaint.previousCompletionPhotos.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setLightboxUrl(`/api/complaints/photos/${p.id}`)}
+                    aria-label="View earlier attempt photo full screen"
+                    className="overflow-hidden rounded-lg opacity-80 transition-opacity hover:opacity-100"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/complaints/photos/${p.id}`}
+                      alt="Earlier attempt attachment"
+                      className="aspect-square w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {complaint.clientFeedback && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                Client feedback
+                {complaint.clientRating != null && (
+                  <span className="inline-flex items-center gap-0.5" aria-label={`${complaint.clientRating} out of 5`}>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <Star
+                        key={i}
+                        size={12}
+                        className={i < (complaint.clientRating ?? 0) ? "fill-amber-400 text-amber-400" : "text-amber-200"}
+                        aria-hidden="true"
+                      />
+                    ))}
+                  </span>
+                )}
+              </p>
+              <p className="mt-1 whitespace-pre-line text-sm text-on-surface">{complaint.clientFeedback}</p>
+              {complaint.clientFeedbackAt && (
+                <p className="mt-1 text-xs text-grey-500">{formatWhen(complaint.clientFeedbackAt)}</p>
+              )}
+            </div>
+          )}
+
+          {complaint.history.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-grey-500">
+                <History size={13} aria-hidden="true" /> History
+              </p>
+              <ol className="relative flex flex-col gap-3 border-l border-grey-200 pl-4">
+                {complaint.history.map((e, i) => (
+                  <li key={`${e.at}-${i}`} className="relative">
+                    <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-grey-400 ring-1 ring-grey-200" />
+                    <p className="text-sm font-medium text-on-surface">
+                      {ACTION_LABEL[e.action] ?? e.action}
+                      {e.toStatus && e.fromStatus !== e.toStatus && e.action !== "RESOLVED" && (
+                        <span className="ml-1.5 text-xs font-normal text-grey-500">
+                          → {STATUS_LABEL[e.toStatus as Complaint["status"]] ?? e.toStatus}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-grey-500">
+                      {[e.actorName, e.actorRole ? ROLE_LABEL[e.actorRole] ?? e.actorRole : null].filter(Boolean).join(" · ")}
+                      {" · "}
+                      {formatWhen(e.at)}
+                    </p>
+                    {e.note && <p className="mt-0.5 whitespace-pre-line text-xs text-grey-700">{e.note}</p>}
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
         </div>
@@ -366,14 +507,80 @@ export function AdminComplaintDetailModal({
               />
             </div>
           ) : canResolve ? (
-            <button
-              type="button"
-              disabled={resolving}
-              onClick={() => onResolve(complaint.id)}
-              className="h-11 w-full rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            >
-              {resolving ? "Resolving…" : "Mark as Resolved"}
-            </button>
+            <div className="flex flex-col gap-3">
+              {reopenOpen && (
+                <textarea
+                  value={reopenNote}
+                  onChange={(e) => setReopenNote(e.target.value)}
+                  placeholder="What wasn't done properly? (sent to the cleaners)"
+                  rows={2}
+                  maxLength={2048}
+                  className="w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
+                />
+              )}
+              <div className="flex gap-2">
+                {canReopen && (
+                  <button
+                    type="button"
+                    disabled={reopening || resolving}
+                    onClick={() => (reopenOpen ? onReopen?.(complaint.id, reopenNote) : setReopenOpen(true))}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-grey-300 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
+                  >
+                    <RotateCcw size={16} aria-hidden="true" />
+                    {reopening ? "Reopening…" : reopenOpen ? "Send back to cleaners" : "Reopen"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={resolving || reopening}
+                  onClick={() => onResolve(complaint.id)}
+                  className="h-11 flex-1 rounded-xl bg-primary text-sm font-medium text-white transition-colors hover:bg-primary-variant disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  {resolving ? "Resolving…" : "Mark as Resolved"}
+                </button>
+              </div>
+            </div>
+          ) : canFeedback ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-on-surface">How did we do?</span>
+                <div className="flex items-center gap-0.5" role="radiogroup" aria-label="Rating">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="radio"
+                      aria-checked={rating === i + 1}
+                      aria-label={`${i + 1} star${i === 0 ? "" : "s"}`}
+                      onClick={() => setRating(rating === i + 1 ? undefined : i + 1)}
+                      className="rounded p-0.5"
+                    >
+                      <Star
+                        size={20}
+                        className={i < (rating ?? 0) ? "fill-amber-400 text-amber-400" : "text-grey-300"}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Your feedback on how this was handled"
+                rows={2}
+                maxLength={2048}
+                className="w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                disabled={savingFeedback || !feedback.trim()}
+                onClick={() => onFeedback?.(complaint.id, feedback, rating)}
+                className="h-11 w-full rounded-xl bg-ink text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {savingFeedback ? "Saving…" : complaint.clientFeedback ? "Update feedback" : "Send feedback"}
+              </button>
+            </div>
           ) : (
             <button
               type="button"

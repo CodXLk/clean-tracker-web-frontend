@@ -9,6 +9,7 @@ import { useAttendanceLogs, type AttendanceLogFilters } from "@/features/attenda
 import { AttendanceMapModal } from "./AttendanceMapModal";
 import type { AttendanceLog } from "@/features/attendance/schemas/attendance.schema";
 import { CHECKED_OUT_BY_LABELS, CLOSE_REASON_LABELS, formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
+import { PAUSE_REASON_LABELS } from "@/features/work-ledger/hooks/useWorkLedger";
 
 function fmtDate(value?: string | null): string {
   if (!value) return "—";
@@ -28,6 +29,45 @@ function fmtTime(iso?: string | null, timeZone?: string | null): string {
 function fmtDistance(meters?: number | null): string {
   if (meters == null) return "—";
   return `${Math.round(meters)} m`;
+}
+
+const RESUMED_BY_LABELS: Record<string, string> = {
+  CLEANER: "restarted by cleaner (slide to start)",
+  AUTO: "restarted automatically — back on site",
+  SESSION_END: "not restarted — session ended",
+};
+
+/** Every pause in the session: when and why it paused, and when and how it started again. */
+function PauseList({ log }: { log: AttendanceLog }) {
+  if (log.pauses.length === 0 && !log.pauseRecheckAt) return null;
+  return (
+    <ol className="mt-1 flex min-w-[230px] flex-col gap-1 text-[11px]">
+      {log.pauses.map((p, i) => (
+        <li key={`${p.pausedAt}-${i}`} className="rounded-md bg-grey-50 px-2 py-1">
+          <span className="block font-medium text-[#ED5F25]">
+            ⏸ {fmtTime(p.pausedAt, log.timezone)} · {PAUSE_REASON_LABELS[p.reason ?? ""] ?? p.reason ?? "Paused"}
+            {p.distanceMeters != null ? ` (${Math.round(p.distanceMeters)} m away)` : ""}
+          </span>
+          {p.resumedAt ? (
+            <span className={`block ${p.resumedBy === "SESSION_END" ? "text-grey-500" : "text-success"}`}>
+              {p.resumedBy === "SESSION_END" ? "■" : "▶"} {fmtTime(p.resumedAt, log.timezone)} ·{" "}
+              {RESUMED_BY_LABELS[p.resumedBy ?? ""] ?? "restarted"}
+              {p.resumedBy === "AUTO" && p.resumeDistanceMeters != null
+                ? ` (${Math.round(p.resumeDistanceMeters)} m)`
+                : ""}
+            </span>
+          ) : (
+            <span className="block text-grey-500">
+              Still paused
+              {log.pauseRecheckAt && i === log.pauses.length - 1
+                ? ` · location check at ${fmtTime(log.pauseRecheckAt, log.timezone)}`
+                : " · no more location checks"}
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function MethodBadge({ method }: { method?: string | null }) {
@@ -161,7 +201,7 @@ export function AttendanceLogsTable() {
                   <th className="px-4 py-3 font-medium">Check-in</th>
                   <th className="px-4 py-3 font-medium">Check-out</th>
                   <th className="px-4 py-3 font-medium">Worked</th>
-                  <th className="px-4 py-3 font-medium">Paused</th>
+                  <th className="px-4 py-3 font-medium">Pauses</th>
                   <th className="px-4 py-3 font-medium">Method</th>
                   <th className="px-4 py-3 font-medium">Distance</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -238,7 +278,8 @@ export function AttendanceLogsTable() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-grey-700">
-                        {log.pausedMinutes ? formatMinutes(log.pausedMinutes) : "—"}
+                        {log.pausedMinutes ? formatMinutes(log.pausedMinutes) : log.pauses.length ? "0m" : "—"}
+                        <PauseList log={log} />
                       </td>
                       <td className="px-4 py-3">
                         <MethodBadge method={log.checkInMethod} />

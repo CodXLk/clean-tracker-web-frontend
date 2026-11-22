@@ -16,6 +16,16 @@ import { ScheduleCellDetailModal } from "./ScheduleCellDetailModal";
 import type { TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { DayOfWeek, AssignedShift } from "@/features/user-management/schemas/site.schema";
 import { useCleanerShiftPlans } from "@/features/shifts/hooks/useShiftPlans";
+import { useSiteDays, indexSiteDays } from "@/features/live-dashboard/hooks/useSiteDays";
+import {
+  SITE_DAY_STATUS_META,
+  cleanerDayStatus,
+  supervisorDayStatus,
+  weekdayShort,
+} from "@/features/live-dashboard/lib/siteDayStatus";
+import type { SiteDayStatus } from "@/features/live-dashboard/schemas/siteDay.schema";
+import type { DayStatusKey } from "@/features/live-dashboard/lib/siteDayStatus";
+import { DayStatusLegend, LiveDot } from "./SiteDayDetails";
 import { todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
@@ -142,6 +152,10 @@ export interface CellStat {
   hasComplaint: boolean;
   /** A cleaner has checked in for this site on this date (drives "today" status). */
   started?: boolean;
+  /** Check-in driven workflow status; when set the cell shows it as a badge. */
+  dayStatus?: DayStatusKey;
+  /** Extra tooltip text for {@link dayStatus} cells (e.g. carried-over source). */
+  dayNote?: string;
 }
 
 type CellStatus = "scheduled" | "cleaning" | "inspection" | "complaint";
@@ -252,6 +266,37 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
 
   const occurrencesQuery = useOccurrences({ from: range.from, to: range.to });
 
+  // Check-in driven day status for the selected person, plus the day-detail sessions.
+  const siteDaysQuery = useSiteDays({ from: range.from, to: range.to });
+  const siteDayIndex = useMemo(() => indexSiteDays(siteDaysQuery.data), [siteDaysQuery.data]);
+
+  // siteId -> date -> the person's own status: cleaners' check-ins (incl. carried-over days) or
+  // supervisors' inspections (scheduled days and any visit).
+  const personDays = useMemo(() => {
+    const map = new Map<
+      string,
+      { siteName: string; workOrder: boolean; days: Map<string, { status: SiteDayStatus; total: number; completed: number; note?: string }> }
+    >();
+    if (!effectivePersonId) return map;
+    for (const d of siteDaysQuery.data ?? []) {
+      const me = (isCleaner ? d.cleaners : d.supervisors).find((p) => p.id === effectivePersonId);
+      if (!me) continue;
+      const entry = map.get(d.siteId) ?? { siteName: d.siteName, workOrder: d.workOrderSite, days: new Map() };
+      entry.days.set(d.date, {
+        status: isCleaner ? cleanerDayStatus(me, d) : supervisorDayStatus(me),
+        total: d.totalTasks,
+        completed: d.completedTasks,
+        note: d.carriedFrom
+          ? `carried from ${weekdayShort(d.carriedFrom)}`
+          : d.carriedTo
+            ? `picked up on ${weekdayShort(d.carriedTo)}`
+            : undefined,
+      });
+      map.set(d.siteId, entry);
+    }
+    return map;
+  }, [isCleaner, effectivePersonId, siteDaysQuery.data]);
+
   // Only occurrences the selected person is assigned to.
   const personOccurrences = useMemo(() => {
     const list = occurrencesQuery.data ?? [];
@@ -281,6 +326,12 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
         });
       }
     }
+    // Include sites the person checked in at or is scheduled for (carried-over days, any-day inspections).
+    for (const [siteId, info] of personDays) {
+      if (!byId.has(siteId)) {
+        byId.set(siteId, { siteName: info.siteName, isWorkOrder: workOrderSiteIds.has(siteId) || info.workOrder });
+      }
+    }
     const entries = [...byId.entries()].sort((a, b) => {
       // Work order sites lead, then alphabetical within each group.
       if (a[1].isWorkOrder !== b[1].isWorkOrder) return a[1].isWorkOrder ? -1 : 1;
@@ -296,7 +347,7 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
       metas.set(siteId, { siteId, siteName: info.siteName, hex, isWorkOrder: info.isWorkOrder });
     }
     return metas;
-  }, [personOccurrences, workOrderSiteIds]);
+  }, [personOccurrences, workOrderSiteIds, personDays]);
 
   const siteRows = useMemo(() => [...siteMetas.values()], [siteMetas]);
 
@@ -336,8 +387,22 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
         if (cur) cur.hasComplaint = true;
       }
     }
+    for (const [siteId, info] of personDays) {
+      const inner = map.get(siteId) ?? new Map<string, CellStat>();
+      map.set(siteId, inner);
+      for (const [date, day] of info.days) {
+        const cur = inner.get(date) ?? {
+          total: day.total,
+          completed: day.completed,
+          hasComplaint: complaintsBySiteDate.get(siteId)?.has(date) ?? false,
+        };
+        cur.dayStatus = day.status;
+        cur.dayNote = day.note;
+        inner.set(date, cur);
+      }
+    }
     return map;
-  }, [personOccurrences, complaintsBySiteDate]);
+  }, [personOccurrences, complaintsBySiteDate, personDays]);
 
   // date -> distinct site ids (calendar month view).
   const byDateSites = useMemo(() => {
@@ -347,8 +412,15 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
       set.add(o.siteId);
       map.set(o.date, set);
     }
+    for (const [siteId, info] of personDays) {
+      for (const date of info.days.keys()) {
+        const set = map.get(date) ?? new Set<string>();
+        set.add(siteId);
+        map.set(date, set);
+      }
+    }
     return map;
-  }, [personOccurrences]);
+  }, [personOccurrences, personDays]);
 
   // siteId -> the selected cleaner's approved shifts at that site (their check-in/out windows).
   const cleanerPlansQuery = useCleanerShiftPlans(isCleaner ? effectivePersonId : null);
@@ -448,6 +520,28 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
           searchPlaceholder={`Search ${noun}s…`}
           noResultsLabel={`No ${noun}s match your search.`}
           noOptionsLabel={`No ${noun}s available.`}
+        />
+        <DayStatusLegend
+          statuses={
+            isCleaner
+              ? [
+                  "SCHEDULED",
+                  "CLEANING_IN_PROGRESS",
+                  "CLEANING_PAUSED",
+                  "CLEANING_INCOMPLETE",
+                  "PENDING_INSPECTION",
+                  "COMPLETED",
+                  "CLEANING_SKIPPED",
+                  "CARRIED_OVER",
+                ]
+              : [
+                  "INSPECTION_SCHEDULED",
+                  "INSPECTION_IN_PROGRESS",
+                  "INSPECTION_PAUSED",
+                  "COMPLETED",
+                  "INSPECTION_SKIPPED",
+                ]
+          }
         />
       </div>
 
@@ -634,6 +728,15 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
         date={detailCell?.date ?? ""}
         occurrences={detailOccurrences}
         complaints={detailComplaints}
+        siteDay={detailCell ? siteDayIndex.get(detailCell.siteId)?.get(detailCell.date) ?? null : null}
+        onOpenCleaner={(id) => {
+          setDetailCell(null);
+          router.push(`/admin/dashboard?tab=cleaners-schedule&cleaner=${id}`);
+        }}
+        onOpenSupervisor={(id) => {
+          setDetailCell(null);
+          router.push(`/admin/dashboard?tab=supervisor-schedule&supervisor=${id}`);
+        }}
       />
     </div>
   );
@@ -654,6 +757,8 @@ interface ScheduleTableProps {
   onCellClick?: (siteId: string, date: string, siteName: string) => void;
   /** When set, an eye icon by each site name opens that site in the Operations tab. */
   onOpenSite?: (siteId: string) => void;
+  /** Override labels/colours per status (e.g. client-facing wording). */
+  statusMeta?: Partial<Record<DayStatusKey, (typeof SITE_DAY_STATUS_META)[DayStatusKey]>>;
 }
 
 export function ScheduleTable({
@@ -666,6 +771,7 @@ export function ScheduleTable({
   futureLikePast = false,
   onCellClick,
   onOpenSite,
+  statusMeta,
 }: ScheduleTableProps) {
   const dayView = scopeView === "day";
 
@@ -761,8 +867,34 @@ export function ScheduleTable({
                     isToday && "bg-primary/[0.04]",
                   )}
                 >
-                  {total > 0 && stat && (
-                    mode === "status" ? (
+                  {stat && (total > 0 || stat.dayStatus) && (
+                    stat.dayStatus ? (
+                      (() => {
+                        const meta = statusMeta?.[stat.dayStatus] ?? SITE_DAY_STATUS_META[stat.dayStatus];
+                        const tasks = stat.total > 0 ? ` (${stat.completed}/${stat.total} done)` : "";
+                        const CellTag = onCellClick ? "button" : "div";
+                        return (
+                          <CellTag
+                            {...(onCellClick
+                              ? { type: "button" as const, onClick: () => onCellClick(s.siteId, dateStr, s.siteName) }
+                              : {})}
+                            title={`${s.siteName} — ${meta.label}: ${meta.description}${tasks}${stat.dayNote ? ` · ${stat.dayNote}` : ""}${stat.hasComplaint ? " · complaint raised" : ""}`}
+                            className={cn(
+                              "absolute inset-1 flex items-center justify-center gap-1 rounded-md px-1 text-[10px] font-semibold leading-tight shadow-sm transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                              meta.cls,
+                            )}
+                          >
+                            {meta.live && <LiveDot className="shrink-0" />}
+                            <span className="truncate">{meta.short}</span>
+                            {stat.hasComplaint && (
+                              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white">
+                                <TriangleAlert size={9} aria-hidden="true" />
+                              </span>
+                            )}
+                          </CellTag>
+                        );
+                      })()
+                    ) : mode === "status" ? (
                       (() => {
                         const status = statusOf(stat, dateStr, today);
                         const meta = STATUS_META[status];

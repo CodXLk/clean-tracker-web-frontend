@@ -129,6 +129,14 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
               No notes added.
             </p>
           )}
+          {workOrder.startNote && (
+            <p className="mt-2 whitespace-pre-line rounded-xl bg-sky-50 px-3.5 py-3 text-sm leading-relaxed text-on-surface">
+              <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-sky-700">
+                Start date note{workOrder.requestedByClient ? " from the client" : ""}
+              </span>
+              {workOrder.startNote}
+            </p>
+          )}
         </section>
 
         {(workOrder.requiredCertificatesAllWorkers.length > 0 ||

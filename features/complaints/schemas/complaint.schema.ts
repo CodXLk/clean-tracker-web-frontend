@@ -16,6 +16,16 @@ export const ComplaintTaskSchema = z.object({
   date:     z.string(),
 });
 
+export const ComplaintEventSchema = z.object({
+  action: z.enum(["CREATED", "COMPLETED", "REOPENED", "RESOLVED", "REDO_SCHEDULED", "FEEDBACK"]),
+  fromStatus: z.string().nullish(),
+  toStatus: z.string().nullish(),
+  actorName: z.string().nullish(),
+  actorRole: z.string().nullish(),
+  note: z.string().nullish(),
+  at: z.string(),
+});
+
 export const ComplaintSchema = z.object({
   id:           z.string(),
   code:         z.string(),
@@ -39,6 +49,7 @@ export const ComplaintSchema = z.object({
   tasks:        z.array(ComplaintTaskSchema).default([]),
   photos:       z.array(ComplaintPhotoSchema).default([]),
   completionPhotos: z.array(ComplaintPhotoSchema).default([]),
+  previousCompletionPhotos: z.array(ComplaintPhotoSchema).default([]),
   cleaners:     z
     .array(
       z.object({
@@ -48,6 +59,12 @@ export const ComplaintSchema = z.object({
       }),
     )
     .default([]),
+  /** Must be completed before the cleaners' other tasks at the site (all client complaints). */
+  critical: z.boolean().default(false),
+  clientFeedback: z.string().nullish(),
+  clientRating: z.number().nullish(),
+  clientFeedbackAt: z.string().nullish(),
+  history: z.array(ComplaintEventSchema).default([]),
 });
 
 export const ComplaintKpisSchema = z.object({
@@ -73,8 +90,25 @@ export const CreateComplaintSchema = z.object({
 });
 
 export type ComplaintPhoto        = z.infer<typeof ComplaintPhotoSchema>;
+export type ComplaintEvent        = z.infer<typeof ComplaintEventSchema>;
 export type ComplaintTask         = z.infer<typeof ComplaintTaskSchema>;
 export type Complaint             = z.infer<typeof ComplaintSchema>;
 export type ComplaintKpis         = z.infer<typeof ComplaintKpisSchema>;
 export type ComplaintsResponse    = z.infer<typeof ComplaintsResponseSchema>;
 export type CreateComplaintInput  = z.infer<typeof CreateComplaintSchema>;
+
+/** The client's sites with floors and areas, for raising a complaint. */
+export const ClientSiteOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  floors: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        areas: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
+      }),
+    )
+    .default([]),
+});
+export type ClientSiteOption = z.infer<typeof ClientSiteOptionSchema>;

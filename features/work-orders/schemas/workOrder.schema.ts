@@ -106,6 +106,10 @@ export const WorkOrderSchema = z.object({
   taskCount: z.number().default(0),
   active: z.boolean().default(true),
   createdAt: z.string().nullable().optional(),
+  /** Client's note about the start date (e.g. recurring visits). */
+  startNote: z.string().nullable().optional(),
+  /** Raised by the client through the portal. */
+  requestedByClient: z.boolean().default(false),
 });
 export type WorkOrder = z.infer<typeof WorkOrderSchema>;
 export const WorkOrderListSchema = z.array(WorkOrderSchema);
@@ -128,7 +132,8 @@ export interface OneTimeSiteInput {
 }
 
 export interface CreateWorkOrderInput {
-  poId: string;
+  /** Optional — a PW-number is generated when blank. */
+  poId?: string;
   /** Existing site to attach the work order to. Omit when creating a one-time site. */
   siteId?: string;
   /** When true, create a one-time (temporary) site named after the PO ID. */
@@ -172,4 +177,25 @@ export interface UpdateWorkOrderInput {
   status?: WorkOrderStatus;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];
+}
+
+/** Outbound client-portal request — matches ClientWorkOrderRequest. */
+export interface ClientWorkOrderInput {
+  siteId?: string;
+  newSite?: boolean;
+  siteName?: string;
+  siteType?: string;
+  googleMapsLink?: string;
+  streetAddress?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  siteContactName?: string;
+  siteContactNumber?: string;
+  /** The client's own PO reference (optional). */
+  poId?: string;
+  description: string;
+  startDate?: string;
+  startNote?: string;
+  startTime?: string;
+  endTime?: string;
 }

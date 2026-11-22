@@ -17,6 +17,23 @@ const STATUS_CLASSES: Record<Complaint["status"], string> = {
   closed:      "bg-primary/10 text-ink",
 };
 
+const ROLE_LABEL: Record<string, string> = {
+  CLIENT: "Client",
+  SUPERVISOR: "Supervisor",
+  OUTSOURCE_SUPERVISOR: "Supervisor",
+  COMPANY_ADMIN: "Company admin",
+  SUPER_ADMIN: "Super admin",
+  CLIENT_SERVICE_MANAGER: "Client service manager",
+};
+
+function formatWhen(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
 interface ComplaintRowProps {
   complaint: Complaint;
   onClick:   () => void;
@@ -44,7 +61,7 @@ export function ComplaintRow({ complaint, onClick }: ComplaintRowProps) {
                 {complaint.code}
               </span>
             </div>
-            <p className="text-xs text-grey-500">{complaint.floor}</p>
+            <p className="text-xs text-grey-500">{[complaint.floor, complaint.area].filter(Boolean).join(" · ")}</p>
             <p className="text-xs text-grey-500">{complaint.site}</p>
           </div>
         </div>
@@ -58,9 +75,18 @@ export function ComplaintRow({ complaint, onClick }: ComplaintRowProps) {
 
       <p className="text-sm text-grey-500">{complaint.description}</p>
 
-      <div className="flex items-center justify-between border-t border-grey-100 pt-3 text-xs text-grey-500">
-        <span>{complaint.reporterRole}</span>
-        <span>{complaint.reportedAt}</span>
+      {complaint.critical && complaint.status === "open" && (
+        <span className="self-start rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+          Critical · complete first
+        </span>
+      )}
+
+      <div className="flex items-center justify-between gap-2 border-t border-grey-100 pt-3 text-xs text-grey-500">
+        <span className="min-w-0 truncate">
+          {complaint.reporterName ? `${complaint.reporterName} · ` : ""}
+          {ROLE_LABEL[complaint.reporterRole] ?? complaint.reporterRole}
+        </span>
+        <span className="shrink-0">{formatWhen(complaint.reportedAt)}</span>
       </div>
 
       {complaint.assignedTo && (

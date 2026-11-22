@@ -72,10 +72,12 @@ function SessionBreakdown({ entry }: { entry: WorkEntry }) {
                 <li key={j}>
                   Paused {siteTime(p.pausedAt, s.timezone)} →{" "}
                   {p.resumedAt
-                    ? p.resumedAt === s.checkOutAt
-                      ? `${siteTime(p.resumedAt, s.timezone)} (never resumed)`
-                      : `resumed ${siteTime(p.resumedAt, s.timezone)}`
-                    : "not resumed"}
+                    ? p.resumedBy === "SESSION_END" || (!p.resumedBy && p.resumedAt === s.checkOutAt)
+                      ? `${siteTime(p.resumedAt, s.timezone)} (never restarted — session ended)`
+                      : p.resumedBy === "AUTO"
+                        ? `restarted automatically ${siteTime(p.resumedAt, s.timezone)} (back on site)`
+                        : `restarted by cleaner ${siteTime(p.resumedAt, s.timezone)}`
+                    : "not restarted"}
                   {p.reason ? ` · ${PAUSE_REASON_LABELS[p.reason] ?? p.reason}` : ""}
                 </li>
               ))}

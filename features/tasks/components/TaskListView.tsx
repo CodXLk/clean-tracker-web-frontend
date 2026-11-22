@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Camera,
   Check,
   ChevronDown,
@@ -21,6 +22,8 @@ import { TaskInfoPopup } from "@/features/tasks/components/TaskInfoPopup";
 import { assignmentTypeColor, assignmentTypeLabel } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { MAX_PHOTOS_PER_STAGE, fitToStageLimit, preparePhotos } from "@/features/tasks/lib/photoLimits";
 
 /** Stable selection key: redos are keyed by their redoId, regular tasks by taskId. */
 function occKey(task: TaskOccurrence): string {
@@ -98,6 +101,7 @@ export function TaskListView({
   // Membership = expanded; areas start collapsed by default.
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   // Inspection-mode panel state (rating optional; photos are complaint evidence).
   const [rating, setRating] = useState<number | null>(null);
@@ -282,14 +286,24 @@ export function TaskListView({
     });
   }
 
-  function handlePhotosPicked(fileList: FileList | null, stage: "BEFORE" | "AFTER") {
+  async function handlePhotosPicked(fileList: FileList | null, stage: "BEFORE" | "AFTER") {
     if (!fileList || fileList.length === 0 || draftRefs.length === 0) return;
     // Upload immediately so the shots persist server-side and reappear when the box reopens.
     const files = Array.from(fileList);
-    saveDraftPhotos.mutate({ occurrences: draftRefs, type: stage, photos: files });
+    const current = drafts.filter((p) => (p.type ?? "AFTER") === stage).length;
+    const { accepted, notice } = fitToStageLimit(current, files, stage === "BEFORE" ? "before" : "after");
+    setPhotoNotice(notice);
+    if (accepted.length === 0) return;
+    const refs = draftRefs;
+    const prepared = await preparePhotos(accepted);
+    saveDraftPhotos.mutate({ occurrences: refs, type: stage, photos: prepared });
   }
 
   function resetSelection() {
+    setPhotoNotice(null);
+    saveDraftPhotos.reset();
+    deleteDraftPhoto.reset();
+    completeTasks.reset();
     setSelectedIds(new Set());
     setNote("");
     setRating(null);
@@ -338,6 +352,7 @@ export function TaskListView({
   }
 
   const hasSelection = selectedIds.size > 0;
+  const taskError = completeTasks.error ?? saveDraftPhotos.error ?? deleteDraftPhoto.error ?? null;
 
   if (areaGroups.length === 0) {
     return <p className="rounded-2xl bg-grey-50 p-4 text-sm text-grey-500">No tasks in this floor.</p>;
@@ -725,6 +740,7 @@ export function TaskListView({
             {(["BEFORE", "AFTER"] as const).map((stage) => {
               const isBefore = stage === "BEFORE";
               const stageDrafts = drafts.filter((p) => (p.type ?? "AFTER") === stage);
+              const stageFull = stageDrafts.length >= MAX_PHOTOS_PER_STAGE;
               const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
               const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
               return (
@@ -736,12 +752,16 @@ export function TaskListView({
                     {saveDraftPhotos.isPending && (
                       <span className="text-[10px] text-grey-400">Saving…</span>
                     )}
+                    <span className={cn("ml-auto text-xs font-medium", stageFull ? "text-primary" : "text-grey-400")}>
+                      {stageDrafts.length}/{MAX_PHOTOS_PER_STAGE}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => cameraRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull || saveDraftPhotos.isPending}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <Camera size={18} />
                       Take Photo
@@ -749,7 +769,8 @@ export function TaskListView({
                     <button
                       type="button"
                       onClick={() => galleryRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull || saveDraftPhotos.isPending}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <ImagePlus size={18} />
                       Add Photos
@@ -796,10 +817,20 @@ export function TaskListView({
               className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
             />
 
+            {photoNotice && (
+              <p className="mb-3 rounded-lg bg-grey-50 px-3 py-2 text-xs text-grey-600">{photoNotice}</p>
+            )}
+            {taskError && (
+              <p role="alert" className="mb-3 flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {getErrorMessage(taskError)}
+              </p>
+            )}
+
             <button
               type="button"
               onClick={handleComplete}
-              disabled={completeTasks.isPending}
+              disabled={completeTasks.isPending || saveDraftPhotos.isPending}
               className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {completeTasks.isPending ? "Completing…" : "Complete"}

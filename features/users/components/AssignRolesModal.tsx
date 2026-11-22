@@ -44,6 +44,8 @@ export function AssignRolesModal({ open, onClose, user, embedded }: AssignRolesM
   }
 
   const optionNames = (rolesQuery.data ?? []).map((r) => r.name);
+  // A client login is a portal account only — it never combines with staff roles (enforced by the API too).
+  const isClientUser = selectedRoles.includes("CLIENT" as Role) || user?.role === "CLIENT";
   const extraCurrentRoles = selectedRoles.filter((r) => !optionNames.includes(r));
 
   return (
@@ -59,15 +61,22 @@ export function AssignRolesModal({ open, onClose, user, embedded }: AssignRolesM
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {(rolesQuery.data ?? []).map((role) => {
             const checked = selectedRoles.includes(role.name);
+            const blocked = !checked && (isClientUser ? role.name !== "CLIENT" : role.name === "CLIENT");
             return (
               <label
                 key={role.name}
-                className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-grey-300 px-3.5 py-2.5 text-sm text-on-surface transition-colors hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                title={blocked ? "The Client role can't be combined with other roles" : undefined}
+                className={
+                  blocked
+                    ? "flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-grey-200 px-3.5 py-2.5 text-sm text-grey-400"
+                    : "flex cursor-pointer items-center gap-2.5 rounded-xl border border-grey-300 px-3.5 py-2.5 text-sm text-on-surface transition-colors hover:border-primary has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                }
               >
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-grey-300 text-primary focus:ring-primary/30"
                   checked={checked}
+                  disabled={blocked}
                   onChange={(e) => toggleRole(role.name, e.target.checked)}
                 />
                 {role.label}
@@ -77,6 +86,9 @@ export function AssignRolesModal({ open, onClose, user, embedded }: AssignRolesM
         </div>
 
         {rolesQuery.isLoading && <p className="text-xs text-body-2">Loading roles…</p>}
+        {isClientUser && (
+          <p className="text-xs text-body-2">Client logins are portal accounts and can&apos;t hold any other role.</p>
+        )}
         {extraCurrentRoles.length > 0 && (
           <p className="text-xs text-body-2">Also currently assigned: {extraCurrentRoles.join(", ")}</p>
         )}

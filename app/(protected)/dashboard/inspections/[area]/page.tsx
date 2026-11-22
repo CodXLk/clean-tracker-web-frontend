@@ -24,6 +24,8 @@ import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.s
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { MAX_PHOTOS_PER_STAGE, fitToStageLimit, preparePhotos } from "@/features/tasks/lib/photoLimits";
 
 const RATINGS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -98,6 +100,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
   const [afterPhotos, setAfterPhotos] = useState<File[]>([]);
   const [rating, setRating] = useState<number | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [fullscreenPhotoUrl, setFullscreenPhotoUrl] = useState<string | null>(null);
 
   const beforeCameraInputRef = useRef<HTMLInputElement>(null);
@@ -220,22 +223,33 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   }
 
-  function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
+  async function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
     if (!fileList || fileList.length === 0) return;
     // Snapshot into a plain array immediately — fileList is a live reference to the
     // input's FileList, and the input gets cleared (value = "") right after this call
     // returns, which would otherwise empty it out before the setState updater below runs.
     const files = Array.from(fileList);
+    const current = stage === "before" ? beforePhotos.length : afterPhotos.length;
+    const { accepted, notice } = fitToStageLimit(current, files, stage);
+    setPhotoNotice(notice);
+    if (accepted.length === 0) return;
+    const prepared = await preparePhotos(accepted);
     const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
-    setter((prev) => [...prev, ...files]);
+    setter((prev) => [...prev, ...prepared].slice(0, MAX_PHOTOS_PER_STAGE));
   }
 
   function removePhoto(index: number, stage: "before" | "after") {
+    setPhotoNotice(null);
     const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
     setter((prev) => prev.filter((_, i) => i !== index));
   }
 
   function resetActionState() {
+    setPhotoNotice(null);
+    completeTasks.reset();
+    completeForInspection.reset();
+    submitInspection.reset();
+    createComplaint.reset();
     setSelectedIds(new Set());
     setNote("");
     setBeforePhotos([]);
@@ -286,6 +300,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
         // and this same panel switches to the rating/complaint inspection actions.
         onSuccess: () => {
           setNote("");
+          setPhotoNotice(null);
           setBeforePhotos([]);
           setAfterPhotos([]);
         },
@@ -323,6 +338,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       {
         onError: (error) => {
           console.error("Failed to close out inspection for complaint", complaintId, error);
+          // Logged only — don't surface it as the panel's error the next time it opens.
+          submitInspection.reset();
         },
       },
     );
@@ -341,8 +358,8 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
       },
       {
         onSuccess: (complaint) => {
-          closeInspectionForComplaint(selected, complaint.id);
           resetActionState();
+          closeInspectionForComplaint(selected, complaint.id);
         },
       },
     );
@@ -353,6 +370,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
     createComplaint.isPending ||
     completeForInspection.isPending;
   const hasSelection = selectedIds.size > 0;
+  const actionError = completeTasks.error ?? completeForInspection.error ?? submitInspection.error ?? createComplaint.error ?? null;
 
   // Completion photos are shown read-only when exactly one already-completed task is
   // selected — reviewing what the cleaner uploaded, distinct from the supervisor's own
@@ -745,25 +763,33 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
             {((["before", "after"] as const)).map((stage) => {
               const isBefore = stage === "before";
               const stagePhotos = isBefore ? beforePhotos : afterPhotos;
+              const stageFull = stagePhotos.length >= MAX_PHOTOS_PER_STAGE;
               const stagePreviews = isBefore ? beforePreviews : afterPreviews;
               const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
               const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
               return (
                 <div key={stage} className="mb-3">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-grey-500">
-                    {isBefore ? "Before photos" : "After photos"}
+                  <p className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-grey-500">
+                    <span>{isBefore ? "Before photos" : "After photos"}</span>
+                    <span className={cn("font-medium normal-case tracking-normal", stageFull ? "text-primary" : "text-grey-400")}>
+                      {stagePhotos.length}/{MAX_PHOTOS_PER_STAGE}
+                    </span>
                   </p>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => cameraRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <Camera size={18} />
                       Take Photo
                     </button>
                     <button
+                      type="button"
                       onClick={() => galleryRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <ImagePlus size={18} />
                       Add Photos
@@ -806,6 +832,16 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
               maxLength={2048}
               className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
             />
+
+            {photoNotice && (
+              <p className="mb-3 rounded-lg bg-grey-50 px-3 py-2 text-xs text-grey-600">{photoNotice}</p>
+            )}
+            {actionError && (
+              <p role="alert" className="mb-3 flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {getErrorMessage(actionError)}
+              </p>
+            )}
 
             {isSupervisor ? (
               allSelectedCompleted ? (

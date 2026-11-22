@@ -78,6 +78,8 @@ export const CleanerSiteSchema = z.object({
   pausedMinutes: z.number().optional().default(0),
   generalCheckInClosesAt: z.string().nullable().optional(),
   checkInClosedReason: z.string().nullable().optional(),
+  /** While paused: when the one follow-up location check is due (back on site restarts it). Null = slide to start. */
+  pauseRecheckAt: z.string().nullable().optional(),
   /** Non-blocking heads-up shown above the check-in slider (e.g. little General time left). */
   checkInNotice: z.string().nullable().optional(),
   closeReason: z.string().nullable().optional(),
@@ -144,6 +146,22 @@ export const AttendanceLogSchema = z.object({
   lateCheckOutMinutes: z.number().nullable().optional(),
   /** General time left at check-in, set only when it was less than the minimum. */
   windowLeftMinutes: z.number().nullable().optional(),
+  pauseRecheckAt: z.string().nullable().optional(),
+  /** Every pause in the session, oldest first. */
+  pauses: z
+    .array(
+      z.object({
+        pausedAt: z.string(),
+        /** GEOFENCE / STALE_HEARTBEAT / LOCATION_UNAVAILABLE / APP_CLOSED */
+        reason: z.string().nullable().optional(),
+        distanceMeters: z.number().nullable().optional(),
+        resumedAt: z.string().nullable().optional(),
+        /** CLEANER (slid to start) / AUTO (back on site at the 15-minute check) / SESSION_END */
+        resumedBy: z.string().nullable().optional(),
+        resumeDistanceMeters: z.number().nullable().optional(),
+      }),
+    )
+    .default([]),
 });
 export const AttendanceLogListSchema = z.array(AttendanceLogSchema);
 export type AttendanceLog = z.infer<typeof AttendanceLogSchema>;
