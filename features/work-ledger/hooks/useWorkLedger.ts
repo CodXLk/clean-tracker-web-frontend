@@ -73,6 +73,8 @@ export const WorkEntrySchema = z.object({
               pausedAt: z.string().nullable().optional(),
               resumedAt: z.string().nullable().optional(),
               reason: z.string().nullable().optional(),
+              /** CLEANER / AUTO / SESSION_END */
+              resumedBy: z.string().nullable().optional(),
             }),
           )
           .default([]),

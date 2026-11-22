@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Briefcase,
   ChevronDown,
   ClipboardList,
   ContactRound,
@@ -77,6 +78,12 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
+/** Client-portal-only sections (not part of the staff nav). */
+const CLIENT_ONLY_ITEMS: NavItemConfig[] = [
+  { label: "Work Orders", href: "/admin/client-work-orders", icon: Briefcase },
+  { label: "Invoices", href: "/admin/client-invoices", icon: Receipt },
+];
+
 /** Cleaner role sees a minimal 5-item nav (Home, Tasks, Complaints, Inventory,
  *  Profile) — everyone else still sees the full merged list for now, until
  *  their own restriction is defined. */
@@ -117,22 +124,24 @@ const SUPERVISOR_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) => item.href && SUPERVISOR_HREFS.has(item.href),
 );
 
-/** Clients see a minimal nav: Dashboard, Complaints, Workforce, Profile — plus the
- *  Client Site Management tab only when they have a site with that view enabled. */
-const CLIENT_BASE_HREFS = [
+/** Clients see the client portal: Dashboard, Complaints, Work Orders, Client Inventory, Invoices and
+ *  Profile — plus Client Site Management only when they have a site with that view enabled. Route
+ *  access is enforced in proxy.ts (CLIENT_ALLOWED_HREFS). */
+const CLIENT_PORTAL_HREF = "/admin/client-site-management";
+const CLIENT_ORDERED_HREFS = [
   "/admin/dashboard",
   "/admin/complaints",
-  "/admin/workforce",
+  "/admin/client-work-orders",
   "/admin/item-requests",
+  CLIENT_PORTAL_HREF,
+  "/admin/client-invoices",
   "/dashboard/profile",
 ];
-const CLIENT_PORTAL_HREF = "/admin/client-site-management";
-const CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href && CLIENT_BASE_HREFS.includes(item.href),
-);
-const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = NAV_ITEMS.filter(
-  (item) => item.href && (CLIENT_BASE_HREFS.includes(item.href) || item.href === CLIENT_PORTAL_HREF),
-);
+const CLIENT_SOURCE_ITEMS = [...NAV_ITEMS, ...CLIENT_ONLY_ITEMS];
+const CLIENT_NAV_ITEMS_WITH_PORTAL: NavItemConfig[] = CLIENT_ORDERED_HREFS
+  .map((href) => CLIENT_SOURCE_ITEMS.find((item) => item.href === href))
+  .filter((item): item is NavItemConfig => Boolean(item));
+const CLIENT_NAV_ITEMS: NavItemConfig[] = CLIENT_NAV_ITEMS_WITH_PORTAL.filter((i) => i.href !== CLIENT_PORTAL_HREF);
 
 /** Everyone who isn't a client (e.g. company admin) sees the full admin nav, including the
  *  Client Site Management view (management sees every site there). The cleaner Tasks and
@@ -191,6 +200,8 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/admin/client-site-management", "Client Site Management"],
   ["/admin/cleaner-logs", "Cleaner Logs"],
   ["/admin/invoices", "Invoices"],
+  ["/admin/client-work-orders", "Work Orders"],
+  ["/admin/client-invoices", "Invoices"],
   ["/admin/notifications", "Notifications"],
   ["/admin/announcements", "Announcements"],
   ["/dashboard/announcements", "Announcements"],

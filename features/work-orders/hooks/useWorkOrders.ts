@@ -8,6 +8,7 @@ import {
   WorkOrderSchema,
   WorkOrderCleanerProfileListSchema,
   WorkOrderSupervisorProfileListSchema,
+  type ClientWorkOrderInput,
   type CreateWorkOrderInput,
   type UpdateWorkOrderInput,
   type WorkOrder,
@@ -69,6 +70,32 @@ export function useCreateWorkOrder() {
       queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
       queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
     },
+  });
+}
+
+/** The next generated PO ID (management create form prefill). */
+export function useNextPoId(enabled: boolean) {
+  return useQuery({
+    queryKey: [...workOrderKeys.all, "next-po-id"],
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.workOrders.nextPoId);
+      return (data as { poId: string }).poId;
+    },
+  });
+}
+
+/** Client portal: request a work order (it starts Pending for management review). */
+export function useCreateClientWorkOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ClientWorkOrderInput) => {
+      const { data } = await clientApi.post(ENDPOINTS.workOrders.clientCreate, input);
+      return WorkOrderSchema.parse(data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: workOrderKeys.all }),
   });
 }
 

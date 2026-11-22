@@ -46,6 +46,13 @@ export function PausedResumeBanner({ site }: { site: CleanerSite }) {
           {site.awayDistanceMeters
             ? `You moved about ${Math.round(site.awayDistanceMeters)} m away. `
             : "Your location was lost or the app was closed. "}
+          {site.pauseRecheckAt
+                      ? `We'll check your location again at ${new Date(site.pauseRecheckAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          ...(site.timezone ? { timeZone: site.timezone } : {}),
+                        })} ? if you're back on site, your shift restarts by itself. `
+                      : ""}
           Your tasks are view-only — slide to start to resume and complete them.
         </p>
       </div>

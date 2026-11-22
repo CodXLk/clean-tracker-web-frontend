@@ -76,3 +76,33 @@ export function useDeleteClient() {
     },
   });
 }
+
+/** Send (or resend) the contact's portal invitation — creates the login if it's missing. */
+export function useInviteClientLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await clientApi.post(ENDPOINTS.clients.inviteLogin(id));
+      return ClientSchema.parse(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+}
+
+/** Remove (deactivate) the contact's portal login. */
+export function useRemoveClientLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await clientApi.delete(ENDPOINTS.clients.login(id));
+      return ClientSchema.parse(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
+  });
+}

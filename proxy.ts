@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "@/lib/constants";
-import { landingPath, roleFromToken, isSupervisorRouteAllowed, isAccessTokenExpired } from "@/lib/auth/roles";
+import {
+  landingPath,
+  roleFromToken,
+  isSupervisorRouteAllowed,
+  isClientRouteAllowed,
+  isAccessTokenExpired,
+} from "@/lib/auth/roles";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
@@ -48,6 +54,11 @@ export function proxy(request: NextRequest) {
     // navigation to anything else, not just hide it from the nav (AppNav.tsx).
     if (isProtected && role === "SUPERVISOR" && !isSupervisorRouteAllowed(pathname)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // Clients only reach the client portal sections.
+    if (isProtected && role === "CLIENT" && !isClientRouteAllowed(pathname)) {
+      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
     }
   }
 

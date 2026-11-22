@@ -15,6 +15,7 @@ import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useMe } from "@/features/auth/hooks/useMe";
 import { CriticalTaskAckModal } from "@/features/attendance/components/CriticalTaskAckModal";
+import { CriticalComplaintsBanner } from "@/features/complaints/components/CriticalComplaintsBanner";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import { formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
@@ -455,6 +456,8 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
           </div>
         </div>
 
+        {isCleaner && !sessionEnded && <CriticalComplaintsBanner siteId={site.siteId} />}
+
         {redoTasks.length > 0 && (
           <div className="rounded-xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-3 py-2.5">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-[#7C3AED]">
@@ -499,6 +502,13 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
               {site.awayDistanceMeters
                 ? `You moved about ${Math.round(site.awayDistanceMeters)} m from ${site.siteName}. `
                 : `Your location was lost or the app was closed. `}
+              {site.pauseRecheckAt
+                          ? `We'll check your location again at ${new Date(site.pauseRecheckAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              ...(site.timezone ? { timeZone: site.timezone } : {}),
+                            })} ? if you're back on site, your shift restarts by itself. `
+                          : ""}
               Slide to start to keep completing tasks — they are view-only until you do.
             </p>
           </div>

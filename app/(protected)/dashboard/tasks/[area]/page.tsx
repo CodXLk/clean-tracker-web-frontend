@@ -19,6 +19,8 @@ import { toLocalDateString, assignmentTypeColor, assignmentTypeLabel } from "@/f
 import type { TaskOccurrence, TaskStatus } from "@/features/tasks/schemas/task.schema";
 import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
+import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { MAX_PHOTOS_PER_STAGE, fitToStageLimit, preparePhotos } from "@/features/tasks/lib/photoLimits";
 
 const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
   SCHEDULED: "Scheduled",
@@ -76,6 +78,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const [afterPhotos, setAfterPhotos] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [completeBlockedError, setCompleteBlockedError] = useState<string | null>(null);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
 
   const beforeCameraInputRef = useRef<HTMLInputElement>(null);
   const beforeGalleryInputRef = useRef<HTMLInputElement>(null);
@@ -219,22 +222,32 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
     setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
   }
 
-  function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
+  async function handlePhotosPicked(fileList: FileList | null, stage: "before" | "after") {
     if (!fileList || fileList.length === 0) return;
     // Snapshot into a plain array immediately — fileList is a live reference to the
     // input's FileList, and the input gets cleared (value = "") right after this call
     // returns, which would otherwise empty it out before the setState updater below runs.
     const files = Array.from(fileList);
+    const current = stage === "before" ? beforePhotos.length : afterPhotos.length;
+    const { accepted, notice } = fitToStageLimit(current, files, stage);
+    setPhotoNotice(notice);
+    if (accepted.length === 0) return;
+    const prepared = await preparePhotos(accepted);
     const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
-    setter((prev) => [...prev, ...files]);
+    setter((prev) => [...prev, ...prepared].slice(0, MAX_PHOTOS_PER_STAGE));
   }
 
   function removePhoto(index: number, stage: "before" | "after") {
+    setPhotoNotice(null);
     const setter = stage === "before" ? setBeforePhotos : setAfterPhotos;
     setter((prev) => prev.filter((_, i) => i !== index));
   }
 
   function resetActionState() {
+    setPhotoNotice(null);
+    completeTasks.reset();
+    reviewComplete.reset();
+    createComplaint.reset();
     setSelectedIds(new Set());
     setNote("");
     setBeforePhotos([]);
@@ -311,6 +324,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
   const supervisorPending =
     reviewComplete.isPending || createComplaint.isPending;
   const hasSelection = selectedIds.size > 0;
+  const actionError = completeTasks.error ?? reviewComplete.error ?? createComplaint.error ?? null;
 
   return (
     <div
@@ -591,25 +605,33 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
             {((["before", "after"] as const)).map((stage) => {
               const isBefore = stage === "before";
               const stagePhotos = isBefore ? beforePhotos : afterPhotos;
+              const stageFull = stagePhotos.length >= MAX_PHOTOS_PER_STAGE;
               const stagePreviews = isBefore ? beforePreviews : afterPreviews;
               const cameraRef = isBefore ? beforeCameraInputRef : afterCameraInputRef;
               const galleryRef = isBefore ? beforeGalleryInputRef : afterGalleryInputRef;
               return (
                 <div key={stage} className="mb-3">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-grey-500">
-                    {isBefore ? "Before photos" : "After photos"}
+                  <p className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-grey-500">
+                    <span>{isBefore ? "Before photos" : "After photos"}</span>
+                    <span className={cn("font-medium normal-case tracking-normal", stageFull ? "text-primary" : "text-grey-400")}>
+                      {stagePhotos.length}/{MAX_PHOTOS_PER_STAGE}
+                    </span>
                   </p>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => cameraRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <Camera size={18} />
                       Take Photo
                     </button>
                     <button
+                      type="button"
                       onClick={() => galleryRef.current?.click()}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50"
+                      disabled={stageFull}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-grey-300 py-2.5 text-sm font-medium text-grey-700 transition-colors hover:bg-grey-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
                       <ImagePlus size={18} />
                       Add Photos
@@ -652,6 +674,16 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
               maxLength={2048}
               className="mb-3 w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
             />
+
+            {photoNotice && (
+              <p className="mb-3 rounded-lg bg-grey-50 px-3 py-2 text-xs text-grey-600">{photoNotice}</p>
+            )}
+            {actionError && (
+              <p role="alert" className="mb-3 flex items-start gap-1.5 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {getErrorMessage(actionError)}
+              </p>
+            )}
 
             {isSupervisor ? (
               <div className="flex gap-2">

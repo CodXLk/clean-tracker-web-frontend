@@ -17,9 +17,11 @@ interface LocationPickerProps {
   onChange: (link: string) => void;
   /** Called with the raw coordinates whenever a location is selected. */
   onCoordsChange?: (coords: { lat: number; lng: number }) => void;
+  /** Whether the parent form shows a Google Maps link field above the map (hints refer to it). */
+  linkFieldShown?: boolean;
 }
 
-export function LocationPicker({ value, onChange, onCoordsChange }: LocationPickerProps) {
+export function LocationPicker({ value, onChange, onCoordsChange, linkFieldShown = true }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapObj = useRef<GoogleMap | null>(null);
@@ -232,7 +234,11 @@ export function LocationPicker({ value, onChange, onCoordsChange }: LocationPick
         {loadError ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-grey-500">
             <MapPin size={24} aria-hidden="true" />
-            <p>Map could not be loaded. You can still paste a Google Maps link above.</p>
+            <p>
+              {linkFieldShown
+                ? "Map could not be loaded. You can still paste a Google Maps link above."
+                : "Map could not be loaded. Search for the address above, or refresh the page and try again."}
+            </p>
           </div>
         ) : (
           <>
@@ -250,7 +256,7 @@ export function LocationPicker({ value, onChange, onCoordsChange }: LocationPick
       {statusMessage && <p className="text-xs text-grey-500">{statusMessage}</p>}
       <p className="text-xs text-grey-500">
         Start typing to pick a suggested place, click anywhere on the map, drag the marker, or use your live location.
-        The Google Maps link above updates automatically.
+        {linkFieldShown && " The Google Maps link above updates automatically."}
       </p>
     </div>
   );

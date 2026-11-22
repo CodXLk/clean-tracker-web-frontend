@@ -5,6 +5,8 @@ import { CheckCircle2, Clock, TriangleAlert } from "lucide-react";
 import { Modal } from "@/components/shared/Modal";
 import type { TaskOccurrence } from "@/features/workforce/schemas/assignment.schema";
 import type { Complaint } from "@/features/complaints/schemas/complaint.schema";
+import type { SiteDay } from "@/features/live-dashboard/schemas/siteDay.schema";
+import { SiteDayDetails } from "./SiteDayDetails";
 
 interface ScheduleCellDetailModalProps {
   open: boolean;
@@ -15,6 +17,10 @@ interface ScheduleCellDetailModalProps {
   occurrences: TaskOccurrence[];
   /** Complaints raised for this site on this date. */
   complaints: Complaint[];
+  /** Workflow status for the day (check-ins, pauses, check-outs, inspection). */
+  siteDay?: SiteDay | null;
+  onOpenCleaner?: (cleanerId: string) => void;
+  onOpenSupervisor?: (supervisorId: string) => void;
 }
 
 function formatDateLong(dateStr: string): string {
@@ -48,6 +54,9 @@ export function ScheduleCellDetailModal({
   date,
   occurrences,
   complaints,
+  siteDay,
+  onOpenCleaner,
+  onOpenSupervisor,
 }: ScheduleCellDetailModalProps) {
   const active = useMemo(() => occurrences.filter((o) => o.status !== "CANCELLED"), [occurrences]);
   const total = active.length;
@@ -85,15 +94,17 @@ export function ScheduleCellDetailModal({
       <div className="flex flex-col gap-4">
         {/* Summary */}
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
-              allDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {allDone ? <CheckCircle2 size={15} aria-hidden="true" /> : <Clock size={15} aria-hidden="true" />}
-            {completed}/{total} tasks completed
-          </span>
-          {allDone && (
+          {(total > 0 || !siteDay) && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
+                allDone ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {allDone ? <CheckCircle2 size={15} aria-hidden="true" /> : <Clock size={15} aria-hidden="true" />}
+              {completed}/{total} tasks completed
+            </span>
+          )}
+          {allDone && !siteDay && (
             <span className="text-sm font-medium text-emerald-700">Cleaning completed</span>
           )}
           {complaints.length > 0 && (
@@ -103,6 +114,10 @@ export function ScheduleCellDetailModal({
             </span>
           )}
         </div>
+
+        {siteDay && (
+          <SiteDayDetails day={siteDay} onOpenCleaner={onOpenCleaner} onOpenSupervisor={onOpenSupervisor} />
+        )}
 
         {/* Complaints */}
         {complaints.length > 0 && (

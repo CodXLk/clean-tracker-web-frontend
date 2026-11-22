@@ -11,6 +11,9 @@ export const ClientSchema = z.object({
   email: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
+  /** Portal login: NONE (no account), INVITED (setup pending), ACTIVE, REMOVED (deactivated). */
+  loginStatus: z.enum(["NONE", "INVITED", "ACTIVE", "REMOVED"]).optional().default("NONE"),
+  loginUserId: z.string().nullable().optional(),
 });
 
 export const ClientListSchema = z.array(ClientSchema);

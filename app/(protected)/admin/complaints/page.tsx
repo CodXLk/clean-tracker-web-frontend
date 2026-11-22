@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, CheckCircle, CheckCircle2, Clock, MessageSquare } from "lucide-react";
+import { AlertCircle, CheckCircle, CheckCircle2, Clock, MessageSquare, Plus } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -15,6 +15,8 @@ import { SiteSelector } from "@/components/shared/SiteSelector";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { ComplaintRow } from "@/features/complaints/components/ComplaintRow";
 import { AdminComplaintDetailModal } from "@/features/complaints/components/AdminComplaintDetailModal";
+import { ClientComplaintModal } from "@/features/complaints/components/ClientComplaintModal";
+import { useComplaintFeedback, useReopenComplaint } from "@/features/complaints/hooks/useClientComplaints";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useResolveComplaint } from "@/features/complaints/hooks/useResolveComplaint";
 import { useCompleteComplaint } from "@/features/complaints/hooks/useCompleteComplaint";
@@ -69,18 +71,38 @@ export default function ComplaintsPage() {
   const resolveComplaintMutation = useResolveComplaint();
   const completeComplaintMutation = useCompleteComplaint();
   const role = useMe().data?.role;
+  const isClient = role === "CLIENT";
+  const reopenMutation = useReopenComplaint();
+  const feedbackMutation = useComplaintFeedback();
+  // /admin/complaints?new=1 (from the client dashboard) opens the new-complaint form straight away.
+  const [newOpen, setNewOpen] = useState<boolean>(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1",
+  );
   const { sites, selectedSiteId, setSelectedSiteId, checkedInSiteId, isAdmin } = useSiteScope();
 
   const [filter, setFilter] = useState<FilterOption>("All");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Complaint | null>(null);
+  // Deep link from the dashboard overview: /admin/complaints?complaint=<id> opens that complaint.
+  const [deepLinkId, setDeepLinkId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("complaint"),
+  );
 
   const allComplaints = useMemo(() => data?.complaints ?? [], [data]);
 
-  // Only show complaints for the active (checked-in or selected) site.
+  if (deepLinkId && data) {
+    setDeepLinkId(null);
+    const linked = data.complaints.find((c) => c.id === deepLinkId);
+    if (linked) setSelected(linked);
+  }
+
+  // Only show complaints for the active (checked-in or selected) site. Clients see all of their own.
   const siteScoped = useMemo(
-    () => (selectedSiteId ? allComplaints.filter((c) => c.siteId === selectedSiteId) : allComplaints),
-    [allComplaints, selectedSiteId],
+    () =>
+      selectedSiteId && role !== "CLIENT"
+        ? allComplaints.filter((c) => c.siteId === selectedSiteId)
+        : allComplaints,
+    [allComplaints, selectedSiteId, role],
   );
 
   const filtered = useMemo(
@@ -117,8 +139,28 @@ export default function ComplaintsPage() {
   function openComplaint(complaint: Complaint) {
     completeComplaintMutation.reset();
     resolveComplaintMutation.reset();
+    reopenMutation.reset();
+    feedbackMutation.reset();
     setSelected(complaint);
   }
+
+  function handleReopen(id: string, note: string) {
+    reopenMutation.mutate({ id, note }, { onSuccess: () => setSelected(null) });
+  }
+
+  function handleFeedback(id: string, feedback: string, rating?: number) {
+    feedbackMutation.mutate({ id, feedback, rating }, { onSuccess: (updated) => setSelected(updated) });
+  }
+
+  const newComplaintButton = isClient ? (
+    <button
+      type="button"
+      onClick={() => setNewOpen(true)}
+      className="inline-flex items-center justify-center gap-1.5 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+    >
+      <Plus size={16} aria-hidden="true" /> Complaint
+    </button>
+  ) : null;
 
   function closeComplaint() {
     completeComplaintMutation.reset();
@@ -157,9 +199,13 @@ export default function ComplaintsPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm text-grey-500">View and manage complaints</p>
+              <p className="text-sm text-grey-500">
+                {isClient ? "Complaints you have raised about your sites" : "View and manage complaints"}
+              </p>
             </div>
-            {isAdmin ? (
+            {isClient ? (
+              newComplaintButton
+            ) : isAdmin ? (
               <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             ) : (
               sites.length > 1 && (
@@ -173,7 +219,7 @@ export default function ComplaintsPage() {
             )}
           </div>
 
-          <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
+          <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
             <AdminStatCard
               icon={MessageSquare}
               iconBg="bg-[#ED5F25]/10"
@@ -244,7 +290,9 @@ export default function ComplaintsPage() {
             !useDrawerNav ? "-mt-5" : "pt-5",
           )}
         >
-          {isAdmin ? (
+          {isClient ? (
+            <div className="flex justify-end pt-5">{newComplaintButton}</div>
+          ) : isAdmin ? (
             <div className="pt-5">
               <AdminSiteFilter sites={sites} value={selectedSiteId} onChange={setSelectedSiteId} />
             </div>
@@ -331,8 +379,25 @@ export default function ComplaintsPage() {
         onComplete={handleComplete}
         resolving={resolveComplaintMutation.isPending}
         completing={completeComplaintMutation.isPending}
-        actionError={completeComplaintMutation.error ?? resolveComplaintMutation.error}
+        actionError={
+          completeComplaintMutation.error ??
+          resolveComplaintMutation.error ??
+          reopenMutation.error ??
+          feedbackMutation.error
+        }
+        onReopen={handleReopen}
+        reopening={reopenMutation.isPending}
+        onFeedback={handleFeedback}
+        savingFeedback={feedbackMutation.isPending}
       />
+
+      {isClient && (
+        <ClientComplaintModal
+          open={newOpen}
+          onClose={() => setNewOpen(false)}
+          onCreated={(created) => openComplaint(created)}
+        />
+      )}
     </>
   );
 }

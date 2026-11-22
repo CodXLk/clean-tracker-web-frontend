@@ -91,6 +91,42 @@ export function useAttendanceHeartbeat(sites: CleanerSite[]) {
     sites.find((s) => s.status === "CHECKED_IN" && s.hasCoordinates)?.siteId ?? null;
   // Any actively checked-in site (even without coordinates) — used for the close/pause beacon.
   const checkedInSiteId = sites.find((s) => s.status === "CHECKED_IN")?.siteId ?? null;
+  // Paused: no regular pings, just the one follow-up check when it's due (back on site restarts the shift).
+  const recheckSite = activeSiteId
+    ? null
+    : (sites.find((s) => s.status === "PAUSED" && s.hasCoordinates && s.pauseRecheckAt) ?? null);
+  const recheckSiteId = recheckSite?.siteId ?? null;
+  const recheckAt = recheckSite?.pauseRecheckAt ?? null;
+
+  useEffect(() => {
+    if (!recheckSiteId || !recheckAt) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const pos = await getCurrentPosition();
+        if (cancelled) return;
+        await heartbeat.mutateAsync({
+          siteId: recheckSiteId,
+          latitude: pos.lat,
+          longitude: pos.lng,
+          accuracyMeters: pos.accuracy,
+        });
+      } catch {
+        if (cancelled) return;
+        try {
+          await heartbeat.mutateAsync({ siteId: recheckSiteId, unreachable: true });
+        } catch {
+          /* best-effort */
+        }
+      }
+    };
+    const id = setTimeout(check, Math.max(0, Date.parse(recheckAt) - Date.now()));
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recheckSiteId, recheckAt]);
 
   useEffect(() => {
     if (!activeSiteId) return;

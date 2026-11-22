@@ -30,6 +30,7 @@ import {
   useUploadWorkOrderPhotos,
   useDeleteWorkOrderPhoto,
   useWorkOrder,
+  useNextPoId,
 } from "@/features/work-orders/hooks/useWorkOrders";
 import type { WorkOrder } from "@/features/work-orders/schemas/workOrder.schema";
 import {
@@ -80,6 +81,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const canViewPricing = !!me.data && COMPANY_MANAGER_ROLES.has(me.data.role);
 
   const [poId, setPoId] = useState(workOrder?.poId ?? "");
+  // New work orders get the next PW-number prefilled; staff can replace it with the client's own PO.
+  const nextPo = useNextPoId(open && !isEdit);
+  const [poTouched, setPoTouched] = useState(false);
+  const [prefilledPo, setPrefilledPo] = useState<string | null>(null);
+  if (!isEdit && !poTouched && nextPo.data && nextPo.data !== prefilledPo) {
+    setPrefilledPo(nextPo.data);
+    setPoId(nextPo.data);
+  }
   const [siteId, setSiteId] = useState(workOrder?.siteId ?? "");
   // Site selection mode — a temporary "one-time" site (default on create) vs picking an existing one.
   const [siteMode, setSiteMode] = useState<"one-time" | "existing">(isEdit ? "existing" : "one-time");
@@ -214,6 +223,9 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     update.reset();
     setPendingFiles([]);
     if (!isEdit) {
+      setPoId("");
+      setPoTouched(false);
+      setPrefilledPo(null);
       setSiteMode("one-time");
       setOtClientCompanyId("");
       setOtClientId("");
@@ -265,7 +277,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   }
 
   function validate(): string | null {
-    if (!poId.trim()) return "Enter the PO ID.";
+    if (isEdit && !poId.trim()) return "Enter the PO ID.";
     if (!isEdit && siteMode === "one-time") {
       if (!otSiteName.trim()) return "Enter a site name for the one-time site.";
       if (!otClientCompanyId) return "Select a client company for the one-time site.";
@@ -361,7 +373,7 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     const oneTime = siteMode === "one-time";
     create.mutate(
       {
-        poId: trimmedPo,
+        poId: trimmedPo || undefined,
         ...(oneTime
           ? {
               oneTimeSite: true,
@@ -426,14 +438,25 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       maxWidthClassName="max-w-xl"
     >
       <div className="flex flex-col gap-4">
-        <TextField
-          label="PO ID"
-          name="wo-po"
-          required
-          value={poId}
-          onChange={(e) => setPoId(e.target.value)}
-          placeholder="e.g. PO-2025-0142"
-        />
+        <div className="flex flex-col gap-1">
+          <TextField
+            label="PO ID"
+            name="wo-po"
+            required={isEdit}
+            value={poId}
+            onChange={(e) => {
+              setPoTouched(true);
+              setPoId(e.target.value);
+            }}
+            placeholder={isEdit ? "e.g. PO-2025-0142" : nextPo.isLoading ? "Generating…" : "e.g. PW-25"}
+          />
+          {!isEdit && (
+            <p className="text-xs text-grey-500">
+              Generated automatically. Replace it with the client&apos;s PO number if they gave you one — or leave it
+              blank to use the next PW- number.
+            </p>
+          )}
+        </div>
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-on-surface">
@@ -570,13 +593,13 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <TextField
-                      label="Contact person name"
+                      label="Site contact name"
                       name="wo-ot-contact-name"
                       value={otContactPersonName}
                       onChange={(e) => setOtContactPersonName(e.target.value)}
                     />
                     <TextField
-                      label="Contact number"
+                      label="Site contact number"
                       name="wo-ot-contact-number"
                       value={otContactNumber}
                       onChange={(e) => setOtContactNumber(e.target.value)}
@@ -750,6 +773,92 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           />
         </div>
 
+        {/* Photos */}
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-on-surface">Photos from the client</span>
+          <div className="flex flex-wrap gap-2">
+            {isEdit &&
+              savedPhotos.map((p) => (
+                <div key={p.id} className="relative h-20 w-20 overflow-hidden rounded-lg border border-grey-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photoUrl(p.id)} alt={p.originalFilename ?? "Work order photo"} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    aria-label="Remove photo"
+                    title="Remove photo"
+                    disabled={pending || uploadPhotos.isPending}
+                    onClick={() => removePhoto(p.id)}
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Replace ${p.originalFilename ?? "photo"}`}
+                    title="Replace photo"
+                    disabled={pending || uploadPhotos.isPending}
+                    onClick={() => {
+                      replacementPhotoId.current = p.id;
+                      replaceInputRef.current?.click();
+                    }}
+                    className="absolute bottom-0.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                  >
+                    <Replace size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            {previews.map((p, i) => (
+              <div key={p.url} className="relative h-20 w-20 overflow-hidden rounded-lg border border-grey-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={p.file.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove photo"
+                  disabled={pending || uploadPhotos.isPending}
+                  onClick={() => setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              disabled={pending || uploadPhotos.isPending}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-grey-300 text-xs text-grey-500 transition-colors hover:border-primary hover:text-ink"
+            >
+              <Upload size={16} aria-hidden="true" />
+              Add
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              disabled={pending || uploadPhotos.isPending}
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.currentTarget.value = "";
+              }}
+            />
+            <input
+              ref={replaceInputRef}
+              type="file"
+              aria-label="Replacement photo"
+              accept="image/*"
+              disabled={pending || uploadPhotos.isPending}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                e.currentTarget.value = "";
+                void replacePhoto(file);
+              }}
+            />
+          </div>
+        </div>
+
         {/* Required certificates */}
         <div className="flex flex-col gap-3 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
           <div className="flex items-center gap-2">
@@ -899,92 +1008,6 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             )}
           </div>
         )}
-
-        {/* Photos */}
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-on-surface">Photos from the client</span>
-          <div className="flex flex-wrap gap-2">
-            {isEdit &&
-              savedPhotos.map((p) => (
-                <div key={p.id} className="relative h-20 w-20 overflow-hidden rounded-lg border border-grey-200">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photoUrl(p.id)} alt={p.originalFilename ?? "Work order photo"} className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    aria-label="Remove photo"
-                    title="Remove photo"
-                    disabled={pending || uploadPhotos.isPending}
-                    onClick={() => removePhoto(p.id)}
-                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
-                  >
-                    <X size={12} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Replace ${p.originalFilename ?? "photo"}`}
-                    title="Replace photo"
-                    disabled={pending || uploadPhotos.isPending}
-                    onClick={() => {
-                      replacementPhotoId.current = p.id;
-                      replaceInputRef.current?.click();
-                    }}
-                    className="absolute bottom-0.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
-                  >
-                    <Replace size={14} aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            {previews.map((p, i) => (
-              <div key={p.url} className="relative h-20 w-20 overflow-hidden rounded-lg border border-grey-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt={p.file.name} className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  aria-label="Remove photo"
-                  disabled={pending || uploadPhotos.isPending}
-                  onClick={() => setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              disabled={pending || uploadPhotos.isPending}
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-grey-300 text-xs text-grey-500 transition-colors hover:border-primary hover:text-ink"
-            >
-              <Upload size={16} aria-hidden="true" />
-              Add
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              disabled={pending || uploadPhotos.isPending}
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                addFiles(e.target.files);
-                e.currentTarget.value = "";
-              }}
-            />
-            <input
-              ref={replaceInputRef}
-              type="file"
-              aria-label="Replacement photo"
-              accept="image/*"
-              disabled={pending || uploadPhotos.isPending}
-              className="hidden"
-              onChange={(e) => {
-                const file = e.currentTarget.files?.[0];
-                e.currentTarget.value = "";
-                void replacePhoto(file);
-              }}
-            />
-          </div>
-        </div>
 
         {(formError || isError) && (
           <p className="text-sm font-medium text-error">

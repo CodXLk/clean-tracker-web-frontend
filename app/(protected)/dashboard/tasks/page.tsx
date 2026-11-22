@@ -12,6 +12,7 @@ import { FilterTabs } from "@/components/shared/FilterTabs";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { AdminSiteFilter } from "@/components/shared/AdminSiteFilter";
 import { CheckInRequiredBanner } from "@/components/shared/CheckInRequiredBanner";
+import { CriticalComplaintsBanner } from "@/features/complaints/components/CriticalComplaintsBanner";
 import { PausedResumeBanner } from "@/features/attendance/components/PausedResumeBanner";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useTaskFiltersStore } from "@/features/tasks/store/taskFilters.store";
@@ -154,6 +155,9 @@ export default function TasksPage() {
             </div>
           )}
 
+          {isCleaner && checkedInSiteId && (
+            <CriticalComplaintsBanner siteId={checkedInSiteId} className="mb-4" />
+          )}
           {isLoading ? (
             <div className="flex justify-center py-16">
               <LoadingSpinner />
@@ -246,6 +250,9 @@ export default function TasksPage() {
             </div>
           )}
 
+          {isCleaner && checkedInSiteId && (
+            <CriticalComplaintsBanner siteId={checkedInSiteId} className="mb-4" />
+          )}
           {isLoading ? (
             <div className="flex justify-center py-16">
               <LoadingSpinner />
