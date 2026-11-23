@@ -11,6 +11,7 @@ import { SearchInput } from "@/components/shared/SearchInput";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import { useWorkOrders } from "@/features/work-orders/hooks/useWorkOrders";
 import { ClientWorkOrderFormModal } from "@/features/work-orders/components/ClientWorkOrderFormModal";
+import { ClientReviewForm, ClientReviewList } from "@/features/work-orders/components/ClientWorkOrderReview";
 import type { WorkOrder, WorkOrderStatus } from "@/features/work-orders/schemas/workOrder.schema";
 import { cn } from "@/lib/utils/cn";
 
@@ -39,8 +40,10 @@ function formatWindow(w: WorkOrder): string {
   return w.endTime ? `${fmt(w.startTime)} – ${fmt(w.endTime)}` : `From ${fmt(w.startTime)}`;
 }
 
-function StatusPill({ status }: { status: WorkOrderStatus }) {
-  const s = CLIENT_STATUS[status];
+function StatusPill({ status, changesRequested }: { status: WorkOrderStatus; changesRequested?: boolean }) {
+  const s = changesRequested
+    ? { label: "Changes requested", cls: "bg-amber-100 text-amber-700" }
+    : CLIENT_STATUS[status];
   return <span className={cn("inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium", s.cls)}>{s.label}</span>;
 }
 
@@ -122,7 +125,7 @@ export default function ClientWorkOrdersPage() {
                           <p className="line-clamp-2">{w.description ?? "—"}</p>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-grey-700">{formatDate(w.startDate)}</td>
-                        <td className="px-4 py-3"><StatusPill status={w.status} /></td>
+                        <td className="px-4 py-3"><StatusPill status={w.status} changesRequested={w.changesRequested} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -139,7 +142,7 @@ export default function ClientWorkOrdersPage() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-semibold text-on-surface">{w.poId}</p>
-                        <StatusPill status={w.status} />
+                        <StatusPill status={w.status} changesRequested={w.changesRequested} />
                       </div>
                       <p className="text-xs text-grey-500">{w.siteName ?? "—"} · {formatDate(w.startDate)}</p>
                       {w.description && <p className="line-clamp-2 text-sm text-grey-700">{w.description}</p>}
@@ -168,7 +171,7 @@ export default function ClientWorkOrdersPage() {
         {detail && (
           <div className="flex flex-col gap-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusPill status={detail.status} />
+              <StatusPill status={detail.status} changesRequested={detail.changesRequested} />
               <span className="inline-flex items-center gap-1 text-xs text-grey-500">
                 <Briefcase size={13} aria-hidden="true" /> Requested {formatDate(detail.createdAt)}
               </span>
@@ -209,6 +212,23 @@ export default function ClientWorkOrdersPage() {
                 <p className="whitespace-pre-line rounded-xl bg-sky-50 px-3.5 py-3 text-on-surface">{detail.startNote}</p>
               </section>
             )}
+            {detail.status === "PENDING_REVIEW" && !detail.changesRequested && (
+              <ClientReviewForm
+                workOrder={detail}
+                onDone={(saved) => {
+                  setDetail(saved);
+                  setNotice(saved.status === "COMPLETED"
+                    ? `Thanks — work order ${saved.poId} is approved and completed.`
+                    : `Thanks — we've sent your requested changes for ${saved.poId} to the team.`);
+                }}
+              />
+            )}
+            {detail.changesRequested && (
+              <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
+                You asked for changes. We&apos;ll let you know when the work is ready for your review again.
+              </p>
+            )}
+            <ClientReviewList reviews={detail.clientReviews} title="Your reviews" />
           </div>
         )}
       </Modal>

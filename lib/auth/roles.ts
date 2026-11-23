@@ -72,6 +72,7 @@ export const SUPERVISOR_ALLOWED_HREFS = [
   "/admin/workforce",
   "/admin/cleaner-logs",
   "/admin/user-management/sites",
+  "/dashboard/invoices",
   "/dashboard/profile",
 ] as const;
 

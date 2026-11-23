@@ -26,6 +26,9 @@ interface AdminComplaintDetailModalProps {
   savingFeedback?: boolean;
 }
 
+/** How long after resolution a client may still reopen their complaint (matches the backend). */
+const CLIENT_REOPEN_DAYS = 30;
+
 const ROLE_LABEL: Record<string, string> = {
   CLIENT: "Client",
   SUPERVISOR: "Supervisor",
@@ -96,6 +99,8 @@ export function AdminComplaintDetailModal({
   const [note, setNote] = useState("");
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenNote, setReopenNote] = useState("");
+  // Fixed when the modal opens, for the client's reopen window.
+  const [openedAt] = useState(() => Date.now());
   const [feedback, setFeedback] = useState("");
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [photos, setPhotos] = useState<File[]>([]);
@@ -142,6 +147,35 @@ export function AdminComplaintDetailModal({
     complaint.status === "closed" && role !== "CLEANER" && role !== "CLIENT";
   const canReopen = canResolve && !!onReopen;
   const canFeedback = role === "CLIENT" && complaint.status === "resolved" && !!onFeedback;
+  // The client who raised it can send it back once completed, or within 30 days of it being resolved.
+  const resolvedRecently = !!complaint.resolvedAt
+    && openedAt - new Date(complaint.resolvedAt).getTime() <= CLIENT_REOPEN_DAYS * 24 * 60 * 60 * 1000;
+  const canClientReopen = role === "CLIENT" && !!onReopen
+    && (complaint.status === "closed" || (complaint.status === "resolved" && resolvedRecently));
+
+  const clientReopenBlock = canClientReopen ? (
+    <div className="flex flex-col gap-2">
+      {reopenOpen && (
+        <textarea
+          value={reopenNote}
+          onChange={(e) => setReopenNote(e.target.value)}
+          placeholder="What still needs to be fixed?"
+          rows={2}
+          maxLength={2048}
+          className="w-full resize-none rounded-xl border border-grey-300 p-3 text-sm text-on-surface outline-none focus:border-primary"
+        />
+      )}
+      <button
+        type="button"
+        disabled={reopening || (reopenOpen && !reopenNote.trim())}
+        onClick={() => (reopenOpen ? onReopen?.(complaint.id, reopenNote) : setReopenOpen(true))}
+        className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-grey-300 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-60"
+      >
+        <RotateCcw size={16} aria-hidden="true" />
+        {reopening ? "Reopening…" : reopenOpen ? "Reopen complaint" : "Not fixed? Reopen"}
+      </button>
+    </div>
+  ) : null;
 
   function addPhotos(files: FileList | null) {
     if (!files) return;
@@ -580,7 +614,10 @@ export function AdminComplaintDetailModal({
               >
                 {savingFeedback ? "Saving…" : complaint.clientFeedback ? "Update feedback" : "Send feedback"}
               </button>
+              {clientReopenBlock}
             </div>
+          ) : clientReopenBlock ? (
+            clientReopenBlock
           ) : (
             <button
               type="button"

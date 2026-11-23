@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { InvoicesPanel } from "@/features/invoices/components/InvoicesPanel";
 import { RatesPanel } from "@/features/invoices/components/RatesPanel";
 import { cn } from "@/lib/utils/cn";
@@ -16,7 +16,8 @@ export default function InvoicesPage() {
     <div className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <p className="mb-4 text-sm text-grey-500">
-          Invoices for in-house cleaners and supervisors from approved hours, with site rates and agreed hours.
+          Cleaners and supervisors create and complete their own invoices; pending ones wait here for your approval.
+          Set site rates, agreed hours and supervision rates under Rates &amp; agreed hours.
         </p>
         <div className="mb-4 flex gap-2" role="tablist">
           {TABS.map((t) => (
@@ -35,7 +36,13 @@ export default function InvoicesPage() {
             </button>
           ))}
         </div>
-        {tab === "invoices" ? <InvoicesPanel /> : <RatesPanel />}
+        {tab === "invoices" ? (
+          <Suspense fallback={null}>
+            <InvoicesPanel />
+          </Suspense>
+        ) : (
+          <RatesPanel />
+        )}
       </div>
     </div>
   );

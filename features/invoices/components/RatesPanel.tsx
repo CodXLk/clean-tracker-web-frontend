@@ -247,6 +247,7 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
   const [error, setError] = useState<string | null>(null);
   const [effectiveFrom, setEffectiveFrom] = useState(() => toLocalDateString(new Date()));
   const [rate, setRate] = useState("");
+  const [agreedHours, setAgreedHours] = useState("");
   const [weekend, setWeekend] = useState("1");
   const [holiday, setHoliday] = useState("1");
 
@@ -257,6 +258,11 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
       setError("Enter the supervision rate.");
       return;
     }
+    const agreed = num(agreedHours);
+    if (agreed != null && (agreed < 0 || agreed > 24)) {
+      setError("Agreed supervision hours must be between 0 and 24.");
+      return;
+    }
     try {
       await addRate.mutateAsync({
         siteId,
@@ -264,11 +270,13 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
           effectiveFrom,
           cleaningRateType: "HOURLY",
           supervisionHourlyRate: value,
+          supervisionAgreedMinutesPerDay: agreed == null ? null : Math.round(agreed * 60),
           supervisionWeekendMultiplier: num(weekend),
           supervisionPublicHolidayMultiplier: num(holiday),
         },
       });
       setRate("");
+      setAgreedHours("");
     } catch (e) {
       setError(getErrorMessage(e));
     }
@@ -281,7 +289,7 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
       </h3>
       <p className="mb-3 text-xs text-grey-500">
         {siteId
-          ? "Supervisors' hours at this site. Leave empty to use the company default supervision rate."
+          ? "Supervisors' hours at this site. Leave empty to use the company default supervision rate. Agreed hours are the default final hours on supervisors' invoices."
           : "Used for supervision at any site that has no supervision rate of its own."}
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -292,6 +300,11 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
         <label className="flex flex-col gap-1 text-xs text-grey-600">
           Hourly rate ($)
           <input type="number" min={0} step="0.01" className={input} value={rate} onChange={(e) => setRate(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-grey-600">
+          Agreed supervision hours per day (optional)
+          <input type="number" min={0} max={24} step="0.25" className={input} value={agreedHours}
+            onChange={(e) => setAgreedHours(e.target.value)} placeholder="e.g. 1.5" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-grey-600">
           Weekend multiplier
@@ -321,7 +334,8 @@ function SupervisionRateBox({ siteId, rates }: { siteId: string | null; rates: R
             {rates.map((r) => (
               <li key={r.id} className="flex items-center justify-between py-2">
                 <span>
-                  From {r.effectiveFrom} · {formatMoney(r.supervisionHourlyRate)}/h · weekend ×
+                  From {r.effectiveFrom} · {formatMoney(r.supervisionHourlyRate)}/h
+                  {r.supervisionAgreedMinutesPerDay != null ? ` · agreed ${hoursText(r.supervisionAgreedMinutesPerDay)}/day` : ""} · weekend ×
                   {r.supervisionWeekendMultiplier ?? 1} · holiday ×{r.supervisionPublicHolidayMultiplier ?? 1}
                 </span>
                 <DeleteRateButton id={r.id} />

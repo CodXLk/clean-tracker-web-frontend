@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/shared/Modal";
 import { TextField } from "@/components/shared/TextField";
@@ -47,6 +47,11 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
     resolver: zodResolver(ClientFormSchema),
     defaultValues: EMPTY,
   });
+
+  const emailValue = useWatch({ control, name: "email" });
+  const hasLogin = !!client && (client.loginStatus === "ACTIVE" || client.loginStatus === "INVITED");
+  const emailChanged =
+    hasLogin && (emailValue ?? "").trim().toLowerCase() !== (client?.email ?? "").trim().toLowerCase();
 
   useEffect(() => {
     reset(
@@ -127,6 +132,14 @@ export function ClientFormModal({ open, onClose, client }: ClientFormModalProps)
             {...register("email")}
           />
         </div>
+
+        {emailChanged && (
+          <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm text-on-surface">
+            {client?.loginStatus === "INVITED"
+              ? "Their portal login moves to this email and a new setup invitation is sent there."
+              : "They'll sign in to the portal with this email from now on (same password). A notice is sent to both the old and new addresses."}
+          </p>
+        )}
 
         {active.isError && (
           <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">

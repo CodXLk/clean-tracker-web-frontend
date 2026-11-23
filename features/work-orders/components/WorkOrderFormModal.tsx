@@ -123,6 +123,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   const [cleaningAllocatedAmount, setCleaningAllocatedAmount] = useState<string>(
     workOrder?.cleaningAllocatedAmount != null ? String(workOrder.cleaningAllocatedAmount) : "",
   );
+  const [supervisionAllocatedType, setSupervisionAllocatedType] = useState<WorkOrderPriceType>(
+    workOrder?.supervisionAllocatedType ?? "RATE_PER_HOUR",
+  );
+  const [supervisionAllocatedAmount, setSupervisionAllocatedAmount] = useState<string>(
+    workOrder?.supervisionAllocatedAmount != null ? String(workOrder.supervisionAllocatedAmount) : "",
+  );
   const [certsAll, setCertsAll] = useState<string[]>(
     Array.from(new Set([...MANDATORY_CERTIFICATE_KEYS, ...(workOrder?.requiredCertificatesAllWorkers ?? [])])),
   );
@@ -191,6 +197,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     if (value === cleaningAllocatedType) return;
     setCleaningAllocatedType(value);
     setCleaningAllocatedAmount("");
+  }
+
+  function handleSupervisionTypeChange(value: WorkOrderPriceType) {
+    if (value === supervisionAllocatedType) return;
+    setSupervisionAllocatedType(value);
+    setSupervisionAllocatedAmount("");
   }
 
   // A client company with exactly one contact needs no choice — preselect it.
@@ -293,6 +305,10 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       const allocated = Number(cleaningAllocatedAmount);
       if (Number.isNaN(allocated) || allocated < 0) return "Enter a valid cleaning allocated amount (0 or more).";
     }
+    if (supervisionAllocatedAmount.trim()) {
+      const allocated = Number(supervisionAllocatedAmount);
+      if (Number.isNaN(allocated) || allocated < 0) return "Enter a valid supervisor allocated amount (0 or more).";
+    }
     if (!startTime && endTime) return "Enter a start time when setting an end time.";
     return null;
   }
@@ -309,11 +325,14 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
 
     const parsedPrice = priceAmount.trim() ? Number(priceAmount) : undefined;
     const parsedAllocated = cleaningAllocatedAmount.trim() ? Number(cleaningAllocatedAmount) : undefined;
+    const parsedSupervision = supervisionAllocatedAmount.trim() ? Number(supervisionAllocatedAmount) : undefined;
     const pricePayload = {
       priceType: parsedPrice != null ? priceType : undefined,
       priceAmount: parsedPrice,
       cleaningAllocatedAmount: parsedAllocated,
       cleaningAllocatedType: parsedAllocated != null ? cleaningAllocatedType : undefined,
+      supervisionAllocatedAmount: parsedSupervision,
+      supervisionAllocatedType: parsedSupervision != null ? supervisionAllocatedType : undefined,
     };
     const timePayload = {
       startDate: startDate || undefined,
@@ -752,9 +771,44 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
             />
           </div>
 
+          {/* Supervisor allocated amount — what supervisors are paid on this work order (invoices) */}
+          <div className="flex flex-col gap-2 rounded-xl border border-grey-200 bg-grey-50/60 p-3.5">
+            <span className="text-sm font-medium text-on-surface">Supervisor allocated amount</span>
+            <div className="flex flex-wrap gap-2">
+              {WORK_ORDER_PRICE_TYPE_VALUES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleSupervisionTypeChange(value)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                    supervisionAllocatedType === value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-grey-300 text-on-surface hover:bg-grey-100"
+                  }`}
+                >
+                  {WORK_ORDER_PRICE_TYPE_LABELS[value]}
+                </button>
+              ))}
+            </div>
+            <TextField
+              label={
+                supervisionAllocatedType === "RATE_PER_HOUR"
+                  ? "Supervisor rate per hour (AUD)"
+                  : "Supervisor allocated amount (AUD, shared by the supervisors)"
+              }
+              name="wo-supervision-amount"
+              type="number"
+              min={0}
+              step="0.01"
+              value={supervisionAllocatedAmount}
+              onChange={(e) => setSupervisionAllocatedAmount(e.target.value)}
+              placeholder={supervisionAllocatedType === "RATE_PER_HOUR" ? "e.g. 35.00" : "e.g. 150.00"}
+            />
+          </div>
+
           <p className="text-xs text-grey-500">
-            The client amount is what you charge; the cleaning amount is what you allocate to the cleaners.
-            Each can be a total price or an hourly rate, independently.
+            The client amount is what you charge; the cleaning and supervisor amounts are what you allocate to the
+            cleaners and supervisors (used on their invoices). Each can be a total price or an hourly rate, independently.
           </p>
         </div>
         )}

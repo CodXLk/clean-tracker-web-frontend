@@ -44,6 +44,8 @@ export function notificationHref(
     case "WORK_ORDER_TASKS_COMPLETED":
     case "WORK_ORDER_PENDING_REVIEW":
     case "WORK_ORDER_COMPLETED":
+    case "WORK_ORDER_CLIENT_REVIEWED":
+      if (role === "CLIENT") return "/admin/client-work-orders";
       return "/admin/workforce?tab=work-orders";
     case "DOCUMENT_UPLOADED":
     case "CERTIFICATE_WAIVER_EXPIRED":
@@ -77,6 +79,12 @@ export function notificationHref(
     case "ANNOUNCEMENT":
     case "ANNOUNCEMENT_URGENT":
       return admin ? "/admin/announcements" : "/dashboard/announcements";
+    case "INVOICE_SUBMITTED":
+      return n.refId ? `/admin/invoices?id=${n.refId}` : "/admin/invoices";
+    case "INVOICE_APPROVED":
+    case "INVOICE_REJECTED":
+    case "INVOICE_REOPENED":
+      return n.refId ? `/dashboard/invoices?id=${n.refId}` : "/dashboard/invoices";
     default:
       return null;
   }
