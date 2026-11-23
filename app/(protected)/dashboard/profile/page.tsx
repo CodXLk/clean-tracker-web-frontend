@@ -20,7 +20,6 @@ import {
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { InvoicesModal } from "@/components/modals/InvoicesModal";
 import { EditProfileModal } from "@/components/modals/EditProfileModal";
 import { ResetPasswordModal } from "@/components/modals/ResetPasswordModal";
 import { NotificationsModal } from "@/components/modals/NotificationsModal";
@@ -28,6 +27,7 @@ import { SignOutConfirmModal } from "@/components/modals/SignOutConfirmModal";
 import { UserDocumentsModal } from "@/features/users/components/UserDocumentsModal";
 import { useLogout } from "@/features/auth/hooks/useAuth";
 import { useMe } from "@/features/auth/hooks/useMe";
+import { useInvoiceAccess } from "@/features/invoices/hooks/useInvoices";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { useMyAttendanceHistory } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
@@ -69,7 +69,6 @@ const SETTINGS_ROWS: SettingsRow[] = [
 
 export default function ProfilePage() {
   const useDrawerNav = useIsDrawerNav();
-  const [invoicesOpen,      setInvoicesOpen]      = useState(false);
   const [editProfileOpen,   setEditProfileOpen]   = useState(false);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -79,7 +78,8 @@ export default function ProfilePage() {
   const router = useRouter();
   const logout = useLogout();
   const me = useMe();
-
+  // Only in-house cleaners and supervisors have invoices (client invoices are separate).
+  const hasInvoices = useInvoiceAccess(!!me.data && me.data.role !== "CLIENT").data?.eligible ?? false;
   // Users assigned more than one role can switch the active role without re-entering credentials.
   const canSwitchRole = (me.data?.roles?.length ?? 0) > 1;
   const canRequestLeave = me.data?.role === "CLEANER" || me.data?.role === "SUPERVISOR";
@@ -180,19 +180,21 @@ export default function ProfilePage() {
             <section className="rounded-2xl bg-surface p-5 shadow-sm">
               <h2 className="mb-3 text-sm font-semibold text-on-surface">Settings</h2>
               <div className="flex flex-col">
+                {hasInvoices && (
                 <button
-                  onClick={() => setInvoicesOpen(true)}
+                  onClick={() => router.push("/dashboard/invoices")}
                   className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
                 >
                   <div className="flex items-center gap-3">
                     <FileText size={18} className="text-ink" />
                     <div>
                       <p className="text-sm font-medium text-on-surface">My Invoices</p>
-                      <p className="text-xs text-grey-500">View payment history</p>
+                      <p className="text-xs text-grey-500">Create, complete and track your invoices</p>
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-grey-500" />
                 </button>
+                )}
 
                 {SETTINGS_ROWS.map((row) => {
                   const Icon = row.icon;
@@ -312,9 +314,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* My Invoices card */}
+            {/* My Invoices card (in-house cleaners and supervisors only) */}
+            {hasInvoices && (
             <button
-              onClick={() => setInvoicesOpen(true)}
+              onClick={() => router.push("/dashboard/invoices")}
               className="flex w-full items-center justify-between rounded-2xl bg-white p-4 shadow-sm text-left transition-shadow hover:shadow-md"
             >
               <div className="flex items-center gap-3">
@@ -323,11 +326,12 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-on-surface">My Invoices</p>
-                  <p className="text-xs text-grey-500">View payment history</p>
+                  <p className="text-xs text-grey-500">Create, complete and track your invoices</p>
                 </div>
               </div>
               <ChevronRight size={18} className="text-grey-500" />
             </button>
+            )}
 
             {/* Settings */}
             <div className="flex flex-col gap-2">
@@ -431,10 +435,6 @@ export default function ProfilePage() {
       </div>
 
       {/* Modals */}
-      <InvoicesModal
-        open={invoicesOpen}
-        onClose={() => setInvoicesOpen(false)}
-      />
       <EditProfileModal
         open={editProfileOpen}
         onClose={() => setEditProfileOpen(false)}

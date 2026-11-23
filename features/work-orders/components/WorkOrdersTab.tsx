@@ -219,6 +219,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                         <p className="flex items-center gap-1.5 font-semibold text-on-surface">
                           {w.poId}
                           {w.requestedByClient && <ClientRequestBadge />}
+                          {w.changesRequested && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Client asked for changes</span>}
                         </p>
                         <p className="truncate text-xs text-grey-500">{w.siteName ?? "—"}</p>
                         <p className="text-xs text-grey-500">{formatDates(w.taskDates)}</p>
@@ -281,6 +282,7 @@ export function WorkOrdersTab({ onAddWorkOrderSite }: { onAddWorkOrderSite?: () 
                       <span className="inline-flex items-center gap-1.5">
                         {w.poId}
                         {w.requestedByClient && <ClientRequestBadge />}
+                        {w.changesRequested && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Client asked for changes</span>}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-grey-700">{w.siteName ?? "—"}</td>

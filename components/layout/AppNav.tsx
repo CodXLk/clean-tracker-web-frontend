@@ -26,6 +26,7 @@ import {
   Users,
   UsersRound,
   CalendarCheck,
+  FileText,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -75,6 +76,7 @@ const NAV_ITEMS: NavItemConfig[] = [
   { label: "Client Site Management", href: "/admin/client-site-management", icon: CalendarCheck },
   { label: "Clients", href: "/admin/clients", icon: ContactRound },
   { label: "Announcements", href: "/admin/announcements", icon: Megaphone },
+  { label: "My Invoices", href: "/dashboard/invoices", icon: FileText },
   { label: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
@@ -150,6 +152,7 @@ const NON_CLIENT_NAV_ITEMS: NavItemConfig[] = NAV_ITEMS.filter(
   (item) =>
     item.href !== "/dashboard/tasks" &&
     item.href !== "/dashboard/inspections" &&
+    item.href !== "/dashboard/invoices" &&
     item.href !== "/admin/item-requests",
 );
 
@@ -208,6 +211,7 @@ const SECTION_TITLES: ReadonlyArray<readonly [string, string]> = [
   ["/dashboard/tasks", "Tasks"],
   ["/dashboard/inspections", "Inspections"],
   ["/dashboard/profile", "Profile"],
+  ["/dashboard/invoices", "My Invoices"],
   ["/dashboard/notifications", "Notifications"],
   ["/dashboard", "Home"],
 ];

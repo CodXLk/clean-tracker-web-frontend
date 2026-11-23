@@ -352,6 +352,8 @@ export const InventoryDeliverySchema = z.object({
   handoverBy: z.string().uuid().nullable().optional(),
   handoverAt: z.string().nullable().optional(),
   overrideReason: z.string().nullable().optional(),
+  reimbursedInvoiceId: z.string().uuid().nullable().optional(),
+  reimbursedInvoiceNumber: z.string().nullable().optional(),
   id: z.string().uuid(),
   siteId: z.string().uuid().nullable().optional(),
   siteName: z.string().nullable().optional(),

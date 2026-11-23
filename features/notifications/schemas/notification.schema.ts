@@ -55,6 +55,12 @@ export const NotificationTypeSchema = z
     // Announcements from management
     "ANNOUNCEMENT",
     "ANNOUNCEMENT_URGENT",
+    // Invoices
+    "INVOICE_SUBMITTED",
+    "INVOICE_APPROVED",
+    "INVOICE_REJECTED",
+    "INVOICE_REOPENED",
+    "WORK_ORDER_CLIENT_REVIEWED",
     // Forward-compat fallback (never sent by the backend)
     "OTHER",
   ])

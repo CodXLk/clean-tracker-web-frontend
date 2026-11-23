@@ -56,6 +56,16 @@ export function DeliveryDetailModal({ open, onClose, delivery }: DeliveryDetailM
             <Field label="Procurement method" value={delivery.procurementMethod === "HAND_CARRY" ? "Hand Carry" : delivery.procurementMethod === "SUPPLIER_DELIVERY" ? "Supplier Delivery" : delivery.source ?? "Warehouse transfer"} />
             <Field label="Receiving person" value={delivery.assignedReceiverName ?? "-"} />
             {delivery.handCarryPersonName && <Field label="Hand-carry person" value={delivery.handCarryPersonName} />}
+            {delivery.source === "HAND_CARRY" && (
+              <Field
+                label="Reimbursement"
+                value={delivery.reimbursedInvoiceNumber
+                  ? `Reimbursed on invoice ${delivery.reimbursedInvoiceNumber}`
+                  : delivery.status === "DELIVERED" || delivery.status === "PARTIALLY_DELIVERED" || delivery.status === "RECEIVED"
+                    ? "Added to the carrier's invoice for the day the items were brought"
+                    : "Added to the carrier's invoice once receipt is confirmed"}
+              />
+            )}
             <Field label="Destination address" value={delivery.destinationAddress ?? "-"} />
             {delivery.handoverAt && <Field label="Items brought at" value={fmtDateTime(delivery.handoverAt)} />}
             {delivery.overrideReason && <Field label="Management override" value={delivery.overrideReason} />}</>}

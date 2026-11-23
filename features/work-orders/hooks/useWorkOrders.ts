@@ -142,6 +142,32 @@ export function useDeleteWorkOrder() {
 }
 
 /** Upload one or more client-sent photos to a work order (multipart). */
+/** Client: approve a work order awaiting review, or ask for changes (note + photos). */
+export function useClientReviewWorkOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, decision, note, files }: {
+      id: string;
+      decision: "APPROVED" | "CHANGES_REQUESTED";
+      note?: string;
+      files: File[];
+    }) => {
+      const formData = new FormData();
+      formData.append("decision", decision);
+      if (note?.trim()) formData.append("note", note.trim());
+      for (const file of files) formData.append("photos", file);
+      const { data } = await clientApi.post(ENDPOINTS.workOrders.clientReview(id), formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return WorkOrderSchema.parse(data);
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData(workOrderKeys.detail(saved.id), saved);
+      return queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
+    },
+  });
+}
+
 export function useUploadWorkOrderPhotos() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -60,7 +60,11 @@ export function useUpdateClient() {
       const { data } = await clientApi.put(ENDPOINTS.clients.byId(id), toPayload(input));
       return ClientSchema.parse(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      // An email change also moves the contact's portal login to the new address.
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
+    },
   });
 }
 

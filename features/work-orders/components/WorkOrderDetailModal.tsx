@@ -8,6 +8,7 @@ import { useCertificateLabels } from "@/features/users/hooks/useCertificateTypes
 import { useMe } from "@/features/auth/hooks/useMe";
 import { COMPANY_MANAGER_ROLES } from "@/features/users/lib/permissions";
 import { useWorkOrder } from "@/features/work-orders/hooks/useWorkOrders";
+import { ClientReviewList } from "@/features/work-orders/components/ClientWorkOrderReview";
 import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRICE_TYPE_LABELS,
@@ -29,11 +30,11 @@ function formatPrice(wo: WorkOrder): string {
   return wo.priceType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
 }
 
-/** Cleaning-allocated amount (interpreted per its own type), or "—" when not set. */
-function formatAmount(value: number | null | undefined, wo: WorkOrder): string {
+/** An allocated amount (interpreted per its own type), or "—" when not set. */
+function formatAmount(value: number | null | undefined, type: WorkOrder["cleaningAllocatedType"]): string {
   if (value == null) return "—";
   const amount = value.toLocaleString(undefined, { style: "currency", currency: "AUD" });
-  return wo.cleaningAllocatedType === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
+  return type === "RATE_PER_HOUR" ? `${amount}/hr` : amount;
 }
 
 /** Compact span of the dates a work order has tasks on. */
@@ -88,6 +89,11 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[workOrder.status]}`}>
             {WORK_ORDER_STATUS_LABELS[workOrder.status]}
           </span>
+          {(currentWorkOrder.data ?? workOrder).changesRequested && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+              Client asked for changes
+            </span>
+          )}
           {canViewPricing && workOrder.priceType && workOrder.priceAmount != null && (
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               {WORK_ORDER_PRICE_TYPE_LABELS[workOrder.priceType]}: {formatPrice(workOrder)}
@@ -108,12 +114,17 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
           <StatCard icon={<ListChecks size={15} />} label="Tasks" value={String(workOrder.taskCount)} />
         </div>
 
-        {canViewPricing && workOrder.cleaningAllocatedAmount != null && (
+        {canViewPricing && (workOrder.cleaningAllocatedAmount != null || workOrder.supervisionAllocatedAmount != null) && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
               icon={<DollarSign size={15} />}
               label="Cleaning allocated"
-              value={formatAmount(workOrder.cleaningAllocatedAmount, workOrder)}
+              value={formatAmount(workOrder.cleaningAllocatedAmount, workOrder.cleaningAllocatedType)}
+            />
+            <StatCard
+              icon={<DollarSign size={15} />}
+              label="Supervisor allocated"
+              value={formatAmount(workOrder.supervisionAllocatedAmount, workOrder.supervisionAllocatedType)}
             />
           </div>
         )}
@@ -138,6 +149,8 @@ export function WorkOrderDetailModal({ open, onClose, workOrder }: WorkOrderDeta
             </p>
           )}
         </section>
+
+        <ClientReviewList reviews={(currentWorkOrder.data ?? workOrder).clientReviews} title="Client reviews" />
 
         {(workOrder.requiredCertificatesAllWorkers.length > 0 ||
           workOrder.requiredCertificatesAnyWorker.length > 0) && (

@@ -96,6 +96,8 @@ export const WorkOrderSchema = z.object({
   priceAmount: z.number().nullable().optional(),
   cleaningAllocatedAmount: z.number().nullable().optional(),
   cleaningAllocatedType: WorkOrderPriceTypeSchema.nullable().optional(),
+  supervisionAllocatedAmount: z.number().nullable().optional(),
+  supervisionAllocatedType: WorkOrderPriceTypeSchema.nullable().optional(),
   profitAmount: z.number().nullable().optional(),
   status: WorkOrderStatusSchema,
   requiredCertificatesAllWorkers: z.array(z.string()).default([]),
@@ -110,8 +112,26 @@ export const WorkOrderSchema = z.object({
   startNote: z.string().nullable().optional(),
   /** Raised by the client through the portal. */
   requestedByClient: z.boolean().default(false),
+  /** The client's reviews of the finished work, oldest first. */
+  clientReviews: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        decision: z.enum(["APPROVED", "CHANGES_REQUESTED"]),
+        note: z.string().nullable().optional(),
+        reviewerName: z.string().nullable().optional(),
+        createdAt: z.string(),
+        photos: z
+          .array(z.object({ id: z.string().uuid(), originalFilename: z.string().nullable().optional() }))
+          .default([]),
+      }),
+    )
+    .default([]),
+  /** The client asked for changes in the current review round (waiting for management). */
+  changesRequested: z.boolean().default(false),
 });
 export type WorkOrder = z.infer<typeof WorkOrderSchema>;
+export type WorkOrderClientReview = WorkOrder["clientReviews"][number];
 export const WorkOrderListSchema = z.array(WorkOrderSchema);
 
 // Outbound create payload — matches CreateWorkOrderRequest. Work-order dates come from its tasks.
@@ -150,6 +170,8 @@ export interface CreateWorkOrderInput {
   priceAmount?: number;
   cleaningAllocatedAmount?: number;
   cleaningAllocatedType?: WorkOrderPriceType;
+  supervisionAllocatedAmount?: number;
+  supervisionAllocatedType?: WorkOrderPriceType;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];
   outsourceEnabled?: boolean;
@@ -174,6 +196,8 @@ export interface UpdateWorkOrderInput {
   priceAmount?: number;
   cleaningAllocatedAmount?: number;
   cleaningAllocatedType?: WorkOrderPriceType;
+  supervisionAllocatedAmount?: number;
+  supervisionAllocatedType?: WorkOrderPriceType;
   status?: WorkOrderStatus;
   requiredCertificatesAllWorkers?: string[];
   requiredCertificatesAnyWorker?: string[];

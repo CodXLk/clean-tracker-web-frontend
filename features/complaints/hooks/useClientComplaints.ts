@@ -62,7 +62,7 @@ export function useCreateClientComplaint() {
   });
 }
 
-/** Supervisor/management: send a completed complaint back to the cleaners. */
+/** Send a complaint back to the cleaners: supervisor/management once completed, or the client who raised it. */
 export function useReopenComplaint() {
   const queryClient = useQueryClient();
   return useMutation({
