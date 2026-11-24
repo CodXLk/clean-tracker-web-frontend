@@ -10,6 +10,10 @@ import { useMe } from "@/features/auth/hooks/useMe";
 import { useUpdateUser } from "@/features/users/hooks/useUserActions";
 import { useUploadMyPhoto } from "@/features/users/hooks/useProfilePhoto";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { useCancelEmailChange, useRequestEmailChange, useVerifyEmailChange } from "@/features/users/hooks/useEmailChange";
+import { canChangeOwnEmail, changesEmailWithoutVerification } from "@/lib/auth/roles";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface EditProfileModalProps {
   open:    boolean;
@@ -20,17 +24,27 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
   const me = useMe();
   const updateUser = useUpdateUser();
   const uploadPhoto = useUploadMyPhoto();
+  const requestEmailChange = useRequestEmailChange();
+  const verifyEmailChange = useVerifyEmailChange();
+  const cancelEmailChange = useCancelEmailChange();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
   const [phone,     setPhone]     = useState("");
+  const [email,     setEmail]     = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [error,     setError]     = useState<string | null>(null);
   const [cropFile,  setCropFile]  = useState<File | null>(null);
+  // Set while a self-service email change waits for the code sent to this (new) address.
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Re-fill from the cleaner's real data each time the modal transitions to open —
   // adjusting state during render (React's documented pattern for this) instead of an
-  // effect, since the modal stays mounted between opens/closes.
+  // effect, since the modal stays mounted between opens/closes. A change waiting for its emailed
+  // code stays on the code step (with the password kept for "resend") until it's verified or cancelled.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -39,8 +53,21 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
       setLastName(me.data.lastName ?? "");
       setPhone(me.data.phoneNumber ?? "");
       setError(null);
+      setNotice(null);
+      if (!verifyEmail) {
+        setEmail(me.data.email);
+        setCurrentPassword("");
+        setCode("");
+      }
     }
   }
+
+  // Everyone manages their own sign-in email, confirmed with the current password. Super admins and
+  // company admins apply it straight away; everyone else verifies the new address with an emailed code.
+  const emailEditable = canChangeOwnEmail(me.data?.role);
+  const emailDirect = changesEmailWithoutVerification(me.data?.role);
+  const busy = updateUser.isPending || requestEmailChange.isPending;
+  const emailDirty = emailEditable && !!me.data && email.trim().toLowerCase() !== me.data.email.toLowerCase();
 
   if (!open) return null;
 
@@ -50,15 +77,46 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
       setError("First name is required.");
       return;
     }
+    const nextEmail = email.trim().toLowerCase();
+    const emailChanged = emailEditable && nextEmail !== me.data.email.toLowerCase();
+    if (emailChanged && !EMAIL_PATTERN.test(nextEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (emailChanged && !currentPassword) {
+      setError("Enter your current password to change your email.");
+      return;
+    }
     setError(null);
+    const details = { firstName: firstName.trim(), lastName: lastName.trim(), phoneNumber: phone.trim() };
+    if (emailChanged && !emailDirect) {
+      // Save the other details now; the email only changes once the code sent to it is entered.
+      updateUser.mutate(
+        { id: me.data.id, input: details },
+        {
+          onSuccess: () =>
+            requestEmailChange.mutate(
+              { newEmail: nextEmail, currentPassword },
+              {
+                onSuccess: (pending) => {
+                  setVerifyEmail(pending.pendingEmail);
+                  setCode("");
+                  setNotice(pending.codeSent ? null : "A code was sent to this address a moment ago. Check your inbox.");
+                },
+                onError: (err) => setError(getErrorMessage(err)),
+              },
+            ),
+          onError: (err) => setError(getErrorMessage(err)),
+        },
+      );
+      return;
+    }
+    // After a direct email change the session token still names the old email; the API client's
+    // single-flight 401 refresh re-issues it on the next request, so no manual refresh is needed.
     updateUser.mutate(
       {
         id: me.data.id,
-        input: {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phoneNumber: phone.trim(),
-        },
+        input: { ...details, ...(emailChanged ? { email: nextEmail, currentPassword } : {}) },
       },
       {
         onSuccess: onClose,
@@ -67,6 +125,47 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
     );
   }
 
+  function handleVerify() {
+    if (!/^\d{4,8}$/.test(code.trim())) {
+      setError("Enter the code from the email.");
+      return;
+    }
+    setError(null);
+    verifyEmailChange.mutate(code, {
+      onSuccess: onClose,
+      onError: (err) => setError(getErrorMessage(err)),
+    });
+  }
+
+  function handleResend() {
+    if (!verifyEmail) return;
+    setError(null);
+    requestEmailChange.mutate(
+      { newEmail: verifyEmail, currentPassword },
+      {
+        onSuccess: (pending) =>
+          setNotice(
+            pending.codeSent
+              ? `We sent a new code to ${verifyEmail}.`
+              : "The last code was sent less than a minute ago. Check your inbox, or try again shortly.",
+          ),
+        onError: (err) => setError(getErrorMessage(err)),
+      },
+    );
+  }
+
+  function handleCancelEmailChange() {
+    cancelEmailChange.mutate(undefined, {
+      onSettled: () => {
+        setVerifyEmail(null);
+        setCode("");
+        setCurrentPassword("");
+        setEmail(me.data?.email ?? "");
+        setError(null);
+        setNotice(null);
+      },
+    });
+  }
   return (
     <>
       {/* Backdrop */}
@@ -139,7 +238,56 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
           </div>
         </div>
 
-        {/* Fields */}
+        {verifyEmail ? (
+          <div className="flex flex-col gap-3 px-6 pb-8 pt-4">
+            <h3 className="text-base font-semibold text-on-surface">Confirm your new email</h3>
+            <p className="text-sm text-grey-600">
+              We sent a 6-digit code to <strong className="text-on-surface">{verifyEmail}</strong>. Enter it below to
+              start signing in with this address. Until then your current email keeps working.
+            </p>
+            <label className="flex flex-col gap-0.5 rounded-2xl border border-grey-300 bg-white px-4 py-3">
+              <span className="text-xs text-grey-500">Verification code</span>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                aria-label="Verification code"
+                className="bg-transparent text-lg font-semibold tracking-[0.4em] text-on-surface outline-none"
+              />
+            </label>
+            {notice && <p className="px-1 text-xs text-success">{notice}</p>}
+            {error && (
+              <p role="alert" className="rounded-lg bg-error/10 px-3 py-2 text-sm font-medium text-error">
+                {error}
+              </p>
+            )}
+            <div className="mt-2">
+              <PillButton variant="orange" onClick={handleVerify} disabled={verifyEmailChange.isPending}>
+                {verifyEmailChange.isPending ? "Verifying…" : "Verify email"}
+              </PillButton>
+            </div>
+            <div className="flex items-center justify-between px-1">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={requestEmailChange.isPending}
+                className="text-sm font-medium text-ink hover:underline disabled:opacity-60"
+              >
+                {requestEmailChange.isPending ? "Sending…" : "Resend code"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEmailChange}
+                disabled={cancelEmailChange.isPending}
+                className="text-sm font-medium text-danger hover:underline disabled:opacity-60"
+              >
+                Keep my current email
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="flex flex-col gap-3 px-6 pb-8 pt-4">
           {/* First + Last name row */}
           <div className="flex gap-3">
@@ -157,12 +305,30 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
             />
           </div>
 
-          {/* Email isn't editable — the backend has no email-change endpoint. */}
-          <EditFieldRow
-            label="Email"
-            value={me.data?.email ?? "…"}
-            readOnly
-          />
+          {emailEditable ? (
+            <EditFieldRow label="Email" value={email} onChange={setEmail} type="email" />
+          ) : (
+            <EditFieldRow label="Email" value={me.data?.email ?? "…"} readOnly />
+          )}
+          {emailDirty && (
+            <>
+              <p className="-mt-1 px-1 text-xs text-grey-500">
+                {emailDirect
+                  ? "You'll sign in with the new email from now on. Your history stays with your account."
+                  : "We'll email a code to the new address to confirm it. Your history stays with your account."}
+              </p>
+              <label className="flex flex-col gap-0.5 rounded-2xl border border-grey-300 bg-white px-4 py-3">
+                <span className="text-xs text-grey-500">Current password (to confirm the email change)</span>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="bg-transparent text-sm font-medium text-on-surface outline-none"
+                />
+              </label>
+            </>
+          )}
 
           <EditFieldRow
             label="Phone"
@@ -181,12 +347,13 @@ export function EditProfileModal({ open, onClose }: EditProfileModalProps) {
             <PillButton
               variant="orange"
               onClick={handleSave}
-              disabled={updateUser.isPending || !me.data}
+              disabled={busy || !me.data}
             >
-              {updateUser.isPending ? "Saving…" : "Save"}
+              {busy ? "Saving…" : emailDirty && !emailDirect ? "Save & send code" : "Save"}
             </PillButton>
           </div>
         </div>
+        )}
       </div>
 
       <ImageCropModal

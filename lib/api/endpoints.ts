@@ -21,6 +21,8 @@ export const ENDPOINTS = {
     resendSetup: (id: string) => `/users/${id}/resend-setup`,
     photo:       (id: string) => `/users/${id}/photo`,
     myPhoto:     "/users/me/photo",
+    emailChange:       "/users/me/email-change",
+    emailChangeVerify: "/users/me/email-change/verify",
     documents:   (id: string) => `/users/${id}/documents`,
     certificateWaiver: (id: string) => `/users/${id}/certificate-waiver`,
   },
@@ -260,6 +262,7 @@ export const ENDPOINTS = {
     unreadCount: "/notifications/unread-count",
     read:        (id: string) => `/notifications/${id}/read`,
     readAll:     "/notifications/read-all",
+    pushPreferences: "/notifications/push-preferences",
   },
   announcements: {
     list:    "/announcements",
@@ -383,6 +386,8 @@ export const BACKEND = {
     resendSetup: (id: string) => `/api/v1/users/${id}/resend-setup`,
     photo:       (id: string) => `/api/v1/users/${id}/photo`,
     myPhoto:     "/api/v1/users/me/photo",
+    emailChange:       "/api/v1/users/me/email-change",
+    emailChangeVerify: "/api/v1/users/me/email-change/verify",
     documents:   (id: string) => `/api/v1/users/${id}/documents`,
     certificateWaiver: (id: string) => `/api/v1/users/${id}/certificate-waiver`,
   },
@@ -623,6 +628,7 @@ export const BACKEND = {
     unreadCount: "/api/v1/notifications/unread-count",
     read:        (id: string) => `/api/v1/notifications/${id}/read`,
     readAll:     "/api/v1/notifications/read-all",
+    pushPreferences: "/api/v1/notifications/push-preferences",
   },
   announcements: {
     list:    "/api/v1/announcements",

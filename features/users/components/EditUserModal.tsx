@@ -12,6 +12,8 @@ import { useUpdateUser } from "@/features/users/hooks/useUserActions";
 import { useUploadUserPhoto, useDeleteUserPhoto } from "@/features/users/hooks/useProfilePhoto";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { AvatarUploadField } from "./AvatarUploadField";
+import { useMe } from "@/features/auth/hooks/useMe";
+import { canCorrectUserEmails } from "@/lib/auth/roles";
 
 interface EditUserModalProps {
   open: boolean;
@@ -25,6 +27,10 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
   const uploadPhoto = useUploadUserPhoto();
   const deletePhoto = useDeleteUserPhoto();
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const me = useMe();
+  // Recovery path: super/company admins correct a person's sign-in email (e.g. a mistyped one) directly —
+  // no verification code. People change their own from their profile.
+  const canEditEmail = canCorrectUserEmails(me.data?.role) && !!user && user.id !== me.data?.id;
 
   const {
     register,
@@ -34,7 +40,7 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
     formState: { errors },
   } = useForm<UpdateUserInput>({
     resolver: zodResolver(UpdateUserSchema),
-    defaultValues: { firstName: "", lastName: "", phoneNumber: "", dateOfBirth: "" },
+    defaultValues: { firstName: "", lastName: "", phoneNumber: "", dateOfBirth: "", email: undefined },
   });
 
   useEffect(() => {
@@ -44,6 +50,8 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
       lastName: user.lastName ?? "",
       phoneNumber: user.phoneNumber ?? "",
       dateOfBirth: (user.dateOfBirth ?? "").slice(0, 10),
+      // Only editable (and so only validated) for admins correcting someone else.
+      email: canEditEmail ? user.email : undefined,
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPhotoFile(null);
@@ -61,7 +69,13 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
   function onSubmit(values: UpdateUserInput) {
     if (!user) return;
     // Drop an empty DOB so the backend doesn't try to parse "" as a date.
-    const input: UpdateUserInput = { ...values, dateOfBirth: values.dateOfBirth || undefined };
+    const nextEmail = values.email?.trim().toLowerCase();
+    const input: UpdateUserInput = {
+      ...values,
+      dateOfBirth: values.dateOfBirth || undefined,
+      // Only send the email when an admin actually changed it.
+      email: canEditEmail && nextEmail && nextEmail !== user.email.toLowerCase() ? nextEmail : undefined,
+    };
     update.mutate({ id: user.id, input }, { onSuccess: close });
   }
 
@@ -78,7 +92,7 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
   }
 
   return (
-    <PanelOrModal embedded={embedded} open={open} onClose={close} title="Edit details" description="Update the person's name, phone and date of birth." embeddedMaxWidthClassName="w-full">
+    <PanelOrModal embedded={embedded} open={open} onClose={close} title="Edit details" description={canEditEmail ? "Update the person's name, sign-in email, phone and date of birth." : "Update the person's name, phone and date of birth."} embeddedMaxWidthClassName="w-full">
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
         <div
           className={`flex flex-col gap-5 rounded-2xl border border-grey-200 bg-surface p-4 sm:p-5 ${
@@ -122,6 +136,21 @@ export function EditUserModal({ open, onClose, user, embedded }: EditUserModalPr
                 )}
               />
               <TextField label="Date of birth" type="date" error={errors.dateOfBirth?.message} {...register("dateOfBirth")} />
+              {canEditEmail && (
+                <div className="sm:col-span-2">
+                  <TextField
+                    label="Sign-in email"
+                    type="email"
+                    autoComplete="off"
+                    error={errors.email?.message}
+                    {...register("email")}
+                  />
+                  <p className="mt-1 text-xs text-grey-500">
+                    Changes where they sign in straight away (no verification code). Both the old and new address
+                    get a notice; a pending invite is re-sent to the new one. Their history is unaffected.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

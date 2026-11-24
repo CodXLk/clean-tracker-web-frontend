@@ -5,6 +5,7 @@ import { clientApi } from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 import {
   NotificationListSchema,
+  PushPreferenceListSchema,
   UnreadCountSchema,
   type Notification,
 } from "@/features/notifications/schemas/notification.schema";
@@ -79,5 +80,32 @@ export function useMarkAllRead() {
       qc.invalidateQueries({ queryKey: notificationKeys.all });
       qc.invalidateQueries({ queryKey: ["announcements"] });
     },
+  });
+}
+
+/**
+ * Which phone push categories (Primeway mobile app) this user receives. The backend only returns
+ * categories relevant to the active role — e.g. clients only get complaint updates. Keyed by role
+ * so switching role never shows another role's list.
+ */
+export function usePushPreferences(role: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["push-preferences", role ?? "none"],
+    enabled: enabled && !!role,
+    queryFn: async () => {
+      const { data } = await clientApi.get(ENDPOINTS.notifications.pushPreferences);
+      return PushPreferenceListSchema.parse(data);
+    },
+  });
+}
+
+export function useUpdatePushPreferences(role: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (mutedCategories: string[]) => {
+      const { data } = await clientApi.put(ENDPOINTS.notifications.pushPreferences, { mutedCategories });
+      return PushPreferenceListSchema.parse(data);
+    },
+    onSuccess: (prefs) => qc.setQueryData(["push-preferences", role ?? "none"], prefs),
   });
 }

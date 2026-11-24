@@ -23,12 +23,16 @@ export const NotificationTypeSchema = z
     "COMPLAINT_RAISED",
     "COMPLAINT_COMPLETED",
     "COMPLAINT_RESOLVED",
+    "CLIENT_COMPLAINT_RAISED",
+    "COMPLAINT_REOPENED",
+    "COMPLAINT_FEEDBACK",
     "TASK_REDO_ASSIGNED",
     "TASK_ASSIGNED",
     // Work orders
     "WORK_ORDER_TASKS_COMPLETED",
     "WORK_ORDER_PENDING_REVIEW",
     "WORK_ORDER_COMPLETED",
+    "WORK_ORDER_REQUESTED",
     // Slot assignment acceptance
     "ASSIGNMENT_APPROVAL_REQUESTED",
     "ASSIGNMENT_APPROVAL_PENDING_ALERT",
@@ -81,3 +85,13 @@ export const NotificationListSchema = z.array(NotificationSchema);
 export type Notification = z.infer<typeof NotificationSchema>;
 
 export const UnreadCountSchema = z.object({ count: z.number() });
+
+/** One phone push category (backend PushCategory), already filtered to the user's role. */
+export const PushPreferenceSchema = z.object({
+  category: z.string(),
+  label: z.string(),
+  mandatory: z.boolean(),
+  enabled: z.boolean(),
+});
+export const PushPreferenceListSchema = z.array(PushPreferenceSchema);
+export type PushPreference = z.infer<typeof PushPreferenceSchema>;

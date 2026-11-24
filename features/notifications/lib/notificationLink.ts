@@ -23,7 +23,13 @@ export function notificationHref(
     case "COMPLAINT_RAISED":
     case "COMPLAINT_COMPLETED":
     case "COMPLAINT_RESOLVED":
-      return "/admin/complaints";
+    case "CLIENT_COMPLAINT_RAISED":
+    case "COMPLAINT_REOPENED":
+    case "COMPLAINT_FEEDBACK":
+      // refId is the complaint id: open it straight away.
+      return n.refId ? `/admin/complaints?complaint=${n.refId}` : "/admin/complaints";
+    case "WORK_ORDER_REQUESTED":
+      return "/admin/workforce?tab=work-orders";
     case "TASK_REDO_ASSIGNED":
       return isCleaner(role) ? "/dashboard/tasks" : "/admin/cleaner-logs";
     case "TASK_ASSIGNED":

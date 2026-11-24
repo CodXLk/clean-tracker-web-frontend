@@ -97,6 +97,10 @@ export const UpdateUserSchema = z.object({
   lastName: z.string().max(50).optional(),
   phoneNumber: z.string().max(30).optional(),
   dateOfBirth: z.string().optional().or(z.literal("")),
+  /** New sign-in email (own profile only — enforced by the API). Requires `currentPassword`. */
+  email: z.string().trim().email("Enter a valid email address").max(255).optional(),
+  /** The current password, required by the API only when `email` changes. */
+  currentPassword: z.string().max(128).optional(),
 });
 
 export type User = z.infer<typeof UserSchema>;

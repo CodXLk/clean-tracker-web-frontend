@@ -4,6 +4,33 @@ export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.has(role);
 }
 
+/**
+ * Super admins, company admins and clients get an account-only profile: no compliance documents and
+ * no field work stats (tasks, hours, rating, days active).
+ */
+const ACCOUNT_PROFILE_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT"]);
+
+export function hasAccountOnlyProfile(role: string | null | undefined): boolean {
+  return !!role && ACCOUNT_PROFILE_ROLES.has(role);
+}
+
+/** Every signed-in user may change their own email from the profile (confirmed with their password). */
+export function canChangeOwnEmail(role: string | null | undefined): boolean {
+  return !!role;
+}
+/**
+ * Super admins and company admins change sign-in emails directly — their own (with their password) and,
+ * as a recovery path, those of people they manage — with no verification code. Everyone else verifies a
+ * new address with a code emailed to it. Mirrors the API rules.
+ */
+export function changesEmailWithoutVerification(role: string | null | undefined): boolean {
+  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
+}
+
+export function canCorrectUserEmails(role: string | null | undefined): boolean {
+  return changesEmailWithoutVerification(role);
+}
+
 /** Landing route for a role: admins and clients go to the console, everyone else to the cleaner app. */
 export function landingPath(role: string | null | undefined): string {
   return isAdminRole(role) || role === "CLIENT" ? "/admin/dashboard" : "/dashboard";

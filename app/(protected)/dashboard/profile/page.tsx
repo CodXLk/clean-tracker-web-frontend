@@ -16,6 +16,7 @@ import {
   CalendarCheck,
   CalendarClock,
   ShieldCheck,
+  UserX,
 } from "lucide-react";
 import { useIsDrawerNav } from "@/components/layout/AppNav";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -34,7 +35,13 @@ import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import { cn } from "@/lib/utils/cn";
 import { formatDate } from "@/lib/utils/format";
+import { hasAccountOnlyProfile } from "@/lib/auth/roles";
+import { ROLE_LABELS } from "@/features/users/schemas/user.schema";
 import type { LucideIcon } from "lucide-react";
+
+/** Same deletion-request inbox the mobile app uses. */
+const ACCOUNT_DELETION_EMAIL = "support@aurionx.lk";
+const ACCOUNT_DELETION_MAILTO = `mailto:${ACCOUNT_DELETION_EMAIL}?subject=Account%20deletion%20request`;
 
 interface StatCard {
   label:      string;
@@ -78,6 +85,10 @@ export default function ProfilePage() {
   const router = useRouter();
   const logout = useLogout();
   const me = useMe();
+  // Super admins, company admins and clients: account settings only — no compliance documents and no
+  // field work stats (they have no tasks, shifts or attendance of their own).
+  const accountOnly = hasAccountOnlyProfile(me.data?.role);
+  const settingsRows = accountOnly ? SETTINGS_ROWS.filter((r) => r.id !== "documents") : SETTINGS_ROWS;
   // Only in-house cleaners and supervisors have invoices (client invoices are separate).
   const hasInvoices = useInvoiceAccess(!!me.data && me.data.role !== "CLIENT").data?.eligible ?? false;
   // Users assigned more than one role can switch the active role without re-entering credentials.
@@ -89,8 +100,9 @@ export default function ProfilePage() {
   const accountCreatedDate = me.data?.createdAt
     ? toLocalDateString(new Date(me.data.createdAt))
     : today;
-  const taskHistory = useMyTasks(accountCreatedDate, today);
-  const attendanceHistory = useMyAttendanceHistory();
+  const showStats = !!me.data && !accountOnly;
+  const taskHistory = useMyTasks(accountCreatedDate, today, undefined, showStats);
+  const attendanceHistory = useMyAttendanceHistory(showStats);
 
   const tasksCompleted = (taskHistory.data ?? []).filter((t) => t.status === "COMPLETED").length;
   const daysActive = new Set((attendanceHistory.data ?? []).map((log) => log.occurrenceDate)).size;
@@ -133,6 +145,7 @@ export default function ProfilePage() {
             <p className="text-sm text-grey-500">Your account details and settings</p>
           </div>
 
+          {showStats && (
           <div className="mb-6 grid grid-cols-4 gap-2 sm:gap-4">
             {stats.map((stat) => (
               <AdminStatCard
@@ -145,6 +158,7 @@ export default function ProfilePage() {
               />
             ))}
           </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <section className="rounded-2xl bg-surface p-5 shadow-sm">
@@ -169,6 +183,12 @@ export default function ProfilePage() {
                     <p className="text-xl font-bold text-on-surface">
                       {me.data ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ") : "…"}
                     </p>
+                    {accountOnly && me.data && (
+                      <>
+                        <p className="text-xs font-medium text-ink">{ROLE_LABELS[me.data.role]}</p>
+                        <p className="truncate text-xs text-grey-500">{me.data.email}</p>
+                      </>
+                    )}
                     <p className="text-xs text-grey-500">
                       Joined · {me.data?.createdAt ? formatDate(me.data.createdAt) : "…"}
                     </p>
@@ -196,7 +216,7 @@ export default function ProfilePage() {
                 </button>
                 )}
 
-                {SETTINGS_ROWS.map((row) => {
+                {settingsRows.map((row) => {
                   const Icon = row.icon;
                   return (
                     <button
@@ -250,6 +270,33 @@ export default function ProfilePage() {
                     </div>
                     <ChevronRight size={16} className="text-grey-500" />
                   </button>
+                )}
+
+                {accountOnly && (
+                  <>
+                    <a
+                      href={ACCOUNT_DELETION_MAILTO}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserX size={18} className="text-grey-700" />
+                        <span className="text-sm font-medium text-on-surface">Request account deletion</span>
+                      </div>
+                      <ChevronRight size={16} className="text-grey-500" />
+                    </a>
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-grey-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText size={18} className="text-grey-700" />
+                        <span className="text-sm font-medium text-on-surface">Privacy policy</span>
+                      </div>
+                      <ChevronRight size={16} className="text-grey-500" />
+                    </a>
+                  </>
                 )}
 
                 <button
@@ -307,6 +354,12 @@ export default function ProfilePage() {
                   <p className="text-xl font-bold text-on-surface">
                     {me.data ? [me.data.firstName, me.data.lastName].filter(Boolean).join(" ") : "…"}
                   </p>
+                  {accountOnly && me.data && (
+                    <>
+                      <p className="text-xs font-medium text-ink">{ROLE_LABELS[me.data.role]}</p>
+                      <p className="truncate text-xs text-grey-500">{me.data.email}</p>
+                    </>
+                  )}
                   <p className="text-xs text-grey-500">
                     Joined · {me.data?.createdAt ? formatDate(me.data.createdAt) : "…"}
                   </p>
@@ -335,7 +388,7 @@ export default function ProfilePage() {
 
             {/* Settings */}
             <div className="flex flex-col gap-2">
-              {SETTINGS_ROWS.map((row) => {
+              {settingsRows.map((row) => {
                 const Icon = row.icon;
                 return (
                   <button
@@ -407,7 +460,35 @@ export default function ProfilePage() {
               <ChevronRight size={16} className="text-grey-500" />
             </button>
 
+            {accountOnly && (
+              <>
+                <a
+                  href={ACCOUNT_DELETION_MAILTO}
+                  className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm text-left transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <UserX size={18} className="text-grey-700" />
+                    <span className="text-sm font-medium text-on-surface">Request account deletion</span>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </a>
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm text-left transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText size={18} className="text-grey-700" />
+                    <span className="text-sm font-medium text-on-surface">Privacy policy</span>
+                  </div>
+                  <ChevronRight size={16} className="text-grey-500" />
+                </a>
+              </>
+            )}
+
             {/* Stats grid */}
+            {showStats && (
             <div className="grid grid-cols-2 gap-3">
               {stats.map((stat) => {
                 const Icon = stat.icon;
@@ -430,6 +511,7 @@ export default function ProfilePage() {
                 );
               })}
             </div>
+            )}
           </div>
         </main>
       </div>

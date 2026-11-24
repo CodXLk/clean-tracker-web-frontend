@@ -45,11 +45,12 @@ async function fetchMyOccurrences(from: string, to: string, siteId?: string): Pr
 }
 
 /** The calling cleaner's task occurrences for a date range (defaults to a single day). */
-export function useMyTasks(from: string, to?: string, siteId?: string) {
+export function useMyTasks(from: string, to?: string, siteId?: string, enabled = true) {
   const toDate = to ?? from;
   return useQuery({
     queryKey: taskKeys.myOccurrences(from, toDate, siteId),
     queryFn: () => fetchMyOccurrences(from, toDate, siteId),
+    enabled,
   });
 }
 

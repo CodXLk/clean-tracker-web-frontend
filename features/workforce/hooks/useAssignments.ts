@@ -119,6 +119,11 @@ export function useTaskNameSuggestions() {
 function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: assignmentKeys.all });
   queryClient.invalidateQueries({ queryKey: ["site-tasks"] });
+  // Single-assignment / task-detail caches feed the edit forms: a stale copy would be re-saved over
+  // the edit that just happened (full PUT), or hide a newly-set HIGH note.
+  queryClient.invalidateQueries({ queryKey: ["assignment"] });
+  queryClient.invalidateQueries({ queryKey: ["task-edit-detail"] });
+  queryClient.invalidateQueries({ queryKey: ["site-task-counts"] });
 }
 
 export function useCreateAssignment() {
