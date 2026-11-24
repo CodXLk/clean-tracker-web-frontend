@@ -207,9 +207,10 @@ async function fetchMyAttendanceHistory(): Promise<AttendanceLog[]> {
 }
 
 /** The calling cleaner's own full attendance history (all sites, all dates). */
-export function useMyAttendanceHistory() {
+export function useMyAttendanceHistory(enabled = true) {
   return useQuery({
     queryKey: attendanceKeys.me(),
     queryFn: fetchMyAttendanceHistory,
+    enabled,
   });
 }
