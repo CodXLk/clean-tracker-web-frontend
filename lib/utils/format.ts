@@ -34,6 +34,15 @@ export function formatDate(value: string | number | Date | null | undefined, opt
   return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
 
+/** "Wednesday 25 November" — a headline day label (e.g. the dashboard's "Today"). */
+export function formatDayHeading(value: string | number | Date | null | undefined): string {
+  const date = toDate(value);
+  if (!date) return "";
+  const weekday = date.toLocaleDateString("en-AU", { weekday: "long" });
+  const month = date.toLocaleDateString("en-AU", { month: "long" });
+  return `${weekday} ${date.getDate()} ${month}`;
+}
+
 /** `dd/MM/yyyy h:mm am` (optionally in an IANA time zone). */
 export function formatDateTime(value: string | number | Date | null | undefined, timeZone?: string): string {
   const date = toDate(value);

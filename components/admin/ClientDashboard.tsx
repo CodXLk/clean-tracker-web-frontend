@@ -22,7 +22,7 @@ import { useClientOverview } from "@/features/live-dashboard/hooks/useClientDash
 import { LiveDot } from "@/features/live-dashboard/components/SiteDayDetails";
 import { CLIENT_STATUS_META } from "@/features/live-dashboard/lib/siteDayStatus";
 import type { ClientDayStatus, ClientSiteDay } from "@/features/live-dashboard/schemas/clientDashboard.schema";
-import { formatDate, todayISODate } from "@/lib/utils/format";
+import { formatDayHeading, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 const DASH = "/admin/dashboard";
@@ -96,7 +96,7 @@ export function ClientDashboard() {
 
   const d = overview.data;
   const today = todayISODate();
-  const todayLabel = formatDate(today, { weekday: "long", day: "numeric", month: "long" });
+  const todayLabel = formatDayHeading(today);
   const updatedAt = overview.dataUpdatedAt
     ? new Date(overview.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;
@@ -117,7 +117,7 @@ export function ClientDashboard() {
     <div className="flex flex-col gap-5">
       <div className="dash-fade-up flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold text-on-surface sm:text-xl">Today · {todayLabel}</h2>
+          <h2 className="text-lg font-bold text-on-surface sm:text-xl">Today {todayLabel}</h2>
           <p className="text-sm text-grey-500">
             {counts.CLEANING_IN_PROGRESS} site{counts.CLEANING_IN_PROGRESS === 1 ? "" : "s"} being cleaned now
           </p>
