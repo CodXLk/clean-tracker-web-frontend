@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { X, Sparkles, ShieldCheck, Check, Clock, UserX } from "lucide-react";
 import { ModalPortal } from "@/components/shared/ModalPortal";
 import type { CoverRole, LeaveRequest } from "@/features/leave/schemas/leave.schema";
+import { formatDate } from "@/lib/utils/format";
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
@@ -39,7 +40,7 @@ export function LeaveDetailsModal({ leave, onClose }: { leave: LeaveRequest; onC
                 </span>
               </div>
               <p className="text-xs text-grey-500">
-                {leave.requesterRole === "SUPERVISOR" ? "Supervisor" : "Cleaner"} · {leave.startDate} → {leave.endDate}
+                {leave.requesterRole === "SUPERVISOR" ? "Supervisor" : "Cleaner"} · {formatDate(leave.startDate)} → {formatDate(leave.endDate)}
                 {leave.type === "SITE_SPECIFIC" ? " · Specific sites" : " · All sites"}
               </p>
               {leave.reason && <p className="mt-1 text-xs italic text-grey-500">“{leave.reason}”</p>}

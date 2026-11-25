@@ -7,6 +7,7 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { formatMove, useMoveShift, useMyShiftSchedule, type ShiftDay } from "@/features/shifts/hooks/useShiftSchedule";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 /** Moves go up to 3 hours either way in 30-minute steps (later = positive). */
 const MOVE_STEP = 30;
@@ -137,7 +138,7 @@ export function UpcomingShiftsSection() {
                 <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-on-surface">
-                    {new Date(`${d.date}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}{" "}
+                    {formatDate(d.date, { weekday: "short", day: "numeric", month: "short" })}{" "}
                     · {d.siteName}
                   </p>
                   <p className="text-xs text-grey-600">

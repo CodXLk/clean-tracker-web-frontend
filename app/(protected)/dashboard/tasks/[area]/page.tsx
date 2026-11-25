@@ -21,6 +21,7 @@ import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { MAX_PHOTOS_PER_STAGE, fitToStageLimit, preparePhotos } from "@/features/tasks/lib/photoLimits";
+import { formatDate } from "@/lib/utils/format";
 
 const STATUS_LABEL_MAP: Record<TaskStatus, string> = {
   SCHEDULED: "Scheduled",
@@ -472,7 +473,7 @@ export default function AreaTaskPage({ params }: AreaTaskPageProps) {
                       {isRedo && task.description && (
                         <span className="text-xs text-grey-600">{task.description}</span>
                       )}
-                      <span className="text-xs text-grey-500">{task.date}</span>
+                      <span className="text-xs text-grey-500">{formatDate(task.date)}</span>
                     </div>
                     <span
                       className={cn(

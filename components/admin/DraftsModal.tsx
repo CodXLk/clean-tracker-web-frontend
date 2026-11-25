@@ -7,6 +7,7 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useDrafts, useDeleteDraft } from "@/features/workforce/hooks/useDrafts";
 import { WORK_TYPE_LABELS, type WorkType } from "@/features/workforce/schemas/assignment.schema";
 import type { AssignmentDraft } from "@/features/workforce/schemas/draft.schema";
+import { formatDateTime } from "@/lib/utils/format";
 
 interface DraftsModalProps {
   open: boolean;
@@ -22,16 +23,7 @@ const WORK_TYPE_HEX: Record<WorkType, string> = {
 };
 
 function formatWhen(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(iso) || "—";
 }
 
 /** Short relative time ("just now", "5m ago", "3h ago", "2d ago"). */

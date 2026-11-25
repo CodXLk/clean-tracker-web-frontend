@@ -10,11 +10,8 @@ import { AttendanceMapModal } from "./AttendanceMapModal";
 import type { AttendanceLog } from "@/features/attendance/schemas/attendance.schema";
 import { CHECKED_OUT_BY_LABELS, CLOSE_REASON_LABELS, formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 import { PAUSE_REASON_LABELS } from "@/features/work-ledger/hooks/useWorkLedger";
-
-function fmtDate(value?: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-}
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate } from "@/lib/utils/format";
 
 function fmtTime(iso?: string | null, timeZone?: string | null): string {
   if (!iso) return "—";
@@ -159,8 +156,7 @@ export function AttendanceLogsTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           From
-          <input
-            type="date"
+          <DateInput
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -168,8 +164,7 @@ export function AttendanceLogsTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           To
-          <input
-            type="date"
+          <DateInput
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -217,7 +212,7 @@ export function AttendanceLogsTable() {
                     <tr key={log.id} className="hover:bg-grey-50">
                       <td className="px-4 py-3 font-medium text-on-surface">{log.cleanerName ?? "—"}</td>
                       <td className="px-4 py-3 text-grey-700">{log.siteName}</td>
-                      <td className="px-4 py-3 text-grey-700">{fmtDate(log.occurrenceDate)}</td>
+                      <td className="px-4 py-3 text-grey-700">{formatDate(log.occurrenceDate) || "—"}</td>
                       <td className="px-4 py-3 text-grey-700">
                         {log.sessionType === "WORK_ORDER" ? `PO ${log.poId ?? ""}` : log.sessionType ? "General" : "—"}
                       </td>

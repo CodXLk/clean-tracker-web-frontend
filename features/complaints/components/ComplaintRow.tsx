@@ -2,6 +2,7 @@ import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import type { Complaint } from "@/features/complaints/types";
+import { formatDateTime } from "@/lib/utils/format";
 
 const STATUS_LABEL: Record<Complaint["status"], string> = {
   open:        "Open",
@@ -25,14 +26,6 @@ const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super admin",
   CLIENT_SERVICE_MANAGER: "Client service manager",
 };
-
-function formatWhen(iso?: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-}
 
 interface ComplaintRowProps {
   complaint: Complaint;
@@ -86,7 +79,7 @@ export function ComplaintRow({ complaint, onClick }: ComplaintRowProps) {
           {complaint.reporterName ? `${complaint.reporterName} · ` : ""}
           {ROLE_LABEL[complaint.reporterRole] ?? complaint.reporterRole}
         </span>
-        <span className="shrink-0">{formatWhen(complaint.reportedAt)}</span>
+        <span className="shrink-0">{formatDateTime(complaint.reportedAt)}</span>
       </div>
 
       {complaint.assignedTo && (

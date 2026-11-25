@@ -7,6 +7,7 @@ import type { TaskOccurrence } from "@/features/workforce/schemas/assignment.sch
 import type { Complaint } from "@/features/complaints/schemas/complaint.schema";
 import type { SiteDay } from "@/features/live-dashboard/schemas/siteDay.schema";
 import { SiteDayDetails } from "./SiteDayDetails";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 interface ScheduleCellDetailModalProps {
   open: boolean;
@@ -25,13 +26,11 @@ interface ScheduleCellDetailModalProps {
 
 function formatDateLong(dateStr: string): string {
   const dt = new Date(dateStr + "T00:00:00");
-  return dt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return `${dt.toLocaleDateString("en-AU", { weekday: "long" })} ${formatDate(dateStr)}`;
 }
 
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return formatDateTime(iso) || iso;
 }
 
 const COMPLAINT_STATUS_STYLE: Record<Complaint["status"], string> = {

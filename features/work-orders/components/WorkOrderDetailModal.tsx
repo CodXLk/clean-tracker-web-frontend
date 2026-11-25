@@ -15,13 +15,11 @@ import {
   type WorkOrder,
   type WorkOrderStatus,
 } from "@/features/work-orders/schemas/workOrder.schema";
+import { formatDate } from "@/lib/utils/format";
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? value
-    : d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+/** e.g. "Wed 25/11/2026". */
+function dayLabel(value: string): string {
+  return `${formatDate(value, { weekday: "short" })} ${formatDate(value)}`;
 }
 
 function formatPrice(wo: WorkOrder): string {
@@ -41,9 +39,9 @@ function formatAmount(value: number | null | undefined, type: WorkOrder["cleanin
 function formatDates(dates?: string[] | null): string {
   if (!dates || dates.length === 0) return "—";
   const sorted = [...dates].sort();
-  const first = formatDate(sorted[0]);
+  const first = dayLabel(sorted[0]);
   if (sorted.length === 1) return first;
-  return `${first} → ${formatDate(sorted[sorted.length - 1])}`;
+  return `${first} → ${dayLabel(sorted[sorted.length - 1])}`;
 }
 
 function photoUrl(photoId: string): string {

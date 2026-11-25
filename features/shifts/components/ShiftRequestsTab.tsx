@@ -7,6 +7,7 @@ import { usePendingShiftPlans, useReviewShiftPlan } from "@/features/shifts/hook
 import { formatMove, usePendingShiftMoves, useReviewShiftMove } from "@/features/shifts/hooks/useShiftSchedule";
 import { formatPlanDay } from "@/features/shifts/schemas/shiftPlan.schema";
 import { ShiftLogView } from "@/features/shifts/components/ShiftLogView";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 const SOURCE_LABELS: Record<string, string> = {
   ONBOARDING: "New site assignment",
@@ -82,7 +83,7 @@ export function ShiftRequestsTab() {
                   </p>
                   <p className="text-xs text-grey-500">
                     {SOURCE_LABELS[p.source] ?? p.source}
-                    {p.submittedAt ? ` · ${new Date(p.submittedAt).toLocaleString()}` : ""}
+                    {p.submittedAt ? ` · ${formatDateTime(p.submittedAt)}` : ""}
                     {p.siteTimezone ? ` · ${p.siteTimezone}` : ""}
                   </p>
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-on-surface">
@@ -134,7 +135,7 @@ export function ShiftRequestsTab() {
                     {m.cleanerName || "Cleaner"} · {m.siteName}
                   </p>
                   <p className="text-xs text-grey-600">
-                    {m.date}: {m.originalStart.slice(0, 5)}–{m.originalEnd.slice(0, 5)} moved {formatMove(m.moveMinutes)}
+                    {formatDate(m.date)}: {m.originalStart.slice(0, 5)}–{m.originalEnd.slice(0, 5)} moved {formatMove(m.moveMinutes)}
                   </p>
                   {m.note && <p className="mt-1 text-xs italic text-grey-600">“{m.note}”</p>}
                 </div>

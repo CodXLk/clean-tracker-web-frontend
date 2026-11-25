@@ -40,11 +40,11 @@ export const SITE_DAY_STATUS_META: Record<DayStatusKey, StatusMeta> = {
     cls: "bg-rose-100 text-rose-700", hex: "#E11D48",
   },
   CLEANING_SKIPPED: {
-    short: "Skipped", label: "Cleaning skipped", description: "Nobody checked in on this day — work resumed on a later day",
+    short: "Skipped", label: "Cleaning skipped", description: "Nobody checked in on this cleaning day",
     cls: "bg-red-100 text-red-700 line-through decoration-red-400/60", hex: "#DC2626",
   },
   CARRIED_OVER: {
-    short: "Carried", label: "Carried over", description: "Not done on the day — picked up on the following non-working day",
+    short: "Carried", label: "Carried over", description: "Not done on the day — carried to the following weekend",
     cls: "bg-indigo-100 text-indigo-700", hex: "#6366F1",
   },
   PENDING_INSPECTION: {

@@ -13,6 +13,7 @@ import type { DayOfWeek } from "@/features/user-management/schemas/site.schema";
 import type { Floor } from "@/features/user-management/schemas/floor.schema";
 import type { Area } from "@/features/user-management/schemas/area.schema";
 import type { AreaGroup as AreaGroupModel } from "@/features/user-management/schemas/area.schema";
+import { formatDate } from "@/lib/utils/format";
 
 // Default colour per work type (matches the calendar's mapping).
 const TYPE_HEX: Record<string, string> = {
@@ -23,11 +24,7 @@ const TYPE_HEX: Record<string, string> = {
 };
 
 function formatDateShort(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(iso, { weekday: "short", day: "numeric", month: "short" });
 }
 
 function formatWeekdayLong(iso: string): string {

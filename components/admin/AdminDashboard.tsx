@@ -51,7 +51,7 @@ import {
   openPause,
   weekdayShort,
 } from "@/features/live-dashboard/lib/siteDayStatus";
-import { todayISODate } from "@/lib/utils/format";
+import { formatDate, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 const REFRESH_MS = 60 * 1000;
@@ -232,8 +232,8 @@ function SiteName({ day, today, extra }: { day: SiteDay; today: string; extra?: 
       <Link
         href={siteHref(day.siteId)}
         onClick={(e) => e.stopPropagation()}
-        className="truncate font-medium text-on-surface underline-offset-2 hover:underline"
-        title="Open site schedule"
+        className="min-w-0 max-w-full truncate font-medium text-on-surface underline-offset-2 hover:underline"
+        title={day.siteName}
       >
         {day.siteName}
       </Link>
@@ -321,6 +321,8 @@ function cleaningBadgeStatus(day: SiteDay): SiteDayStatus {
     case "IN_PROGRESS": return "CLEANING_IN_PROGRESS";
     case "PAUSED": return "CLEANING_PAUSED";
     case "INCOMPLETE": return "CLEANING_INCOMPLETE";
+    case "SKIPPED": return "CLEANING_SKIPPED";
+    case "CARRIED_OVER": return "CARRIED_OVER";
     case "COMPLETED":
       return day.status === "COMPLETED" || day.status === "INSPECTION_IN_PROGRESS" || day.status === "INSPECTION_PAUSED"
         ? day.status
@@ -419,14 +421,14 @@ function CleaningTable({ days, today, now, onOpen }: {
                   onClick={() => onOpen(day)}
                   className={cn("cursor-pointer transition-colors hover:bg-grey-50", late && "bg-red-50/40")}
                 >
-                  <td className={cn(TD, "w-full max-w-0 min-w-[160px]")}>
+                  <td className={cn(TD, "w-[200px] min-w-[150px] max-w-[220px]")}>
                     <SiteName day={day} today={today} extra={carried(day)} />
                   </td>
                   <td className={TD}>
                     <StatusBadge status={cleaningBadgeStatus(day)} />
                     <PausedNote day={day} now={now} tone="text-ink" />
                   </td>
-                  <td className={cn(TD, "max-w-[260px]")}>
+                  <td className={cn(TD, "min-w-[180px]")}>
                     <People people={day.cleaners} hrefOf={cleanerHref} tz={day.timezone} date={day.date} empty="Unassigned" />
                   </td>
                   <td className={TD}><StartInfo day={day} now={now} /></td>
@@ -544,12 +546,12 @@ function InspectionTable({ days, today, now, onOpen }: {
               const status = inspectionBadgeStatus(day);
               return (
                 <tr key={`${day.siteId}_${day.date}`} onClick={() => onOpen(day)} className="cursor-pointer transition-colors hover:bg-grey-50">
-                  <td className={cn(TD, "w-full max-w-0 min-w-[160px]")}><SiteName day={day} today={today} extra={unscheduled(day)} /></td>
+                  <td className={cn(TD, "w-[200px] min-w-[150px] max-w-[220px]")}><SiteName day={day} today={today} extra={unscheduled(day)} /></td>
                   <td className={TD}>
                     <StatusBadge status={status} label={label(status)} />
                     <PausedNote day={{ ...day, cleaners: [] }} now={now} tone="text-ink" />
                   </td>
-                  <td className={cn(TD, "max-w-[260px]")}>
+                  <td className={cn(TD, "min-w-[180px]")}>
                     <People people={day.supervisors} hrefOf={supervisorHref} tz={day.timezone} date={day.date} empty="—" />
                   </td>
                   <td className={TD}><TimeText iso={t.firstIn} tz={day.timezone} date={day.date} /></td>
@@ -872,9 +874,7 @@ export function AdminDashboard() {
   const updatedAt = siteDaysQuery.dataUpdatedAt
     ? new Date(siteDaysQuery.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;
-  const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  const todayLabel = `${new Date(`${today}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long" })} ${formatDate(today)}`;
   const openDetail = (day: SiteDay) => setDetail({ siteId: day.siteId, date: day.date });
   const spinner = (
     <div className="flex justify-center py-10 text-grey-400"><Loader2 className="h-5 w-5 animate-spin" /></div>

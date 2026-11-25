@@ -7,6 +7,7 @@ import { UserDocumentsSection } from "@/features/users/components/UserDocumentsS
 import { useUserDetail } from "@/features/users/hooks/useUserDetail";
 import { ROLE_LABELS, type User } from "@/features/users/schemas/user.schema";
 import { SITE_TYPE_LABELS, type SiteType } from "@/features/user-management/schemas/site.schema";
+import { formatDate } from "@/lib/utils/format";
 
 interface UserDetailModalProps {
   open: boolean;
@@ -19,12 +20,6 @@ function fullName(first?: string | null, last?: string | null): string {
   return [first, last].filter(Boolean).join(" ").trim() || "Unnamed";
 }
 
-function formatDob(value?: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
-}
-
 function siteTypeLabel(value?: string | null): string {
   if (!value) return "Site";
   return SITE_TYPE_LABELS[value as SiteType] ?? "Site";
@@ -34,7 +29,7 @@ export function UserDetailModal({ open, onClose, user, embedded }: UserDetailMod
   const detailQuery = useUserDetail(open ? user?.id : undefined);
   const detail = detailQuery.data;
   const roleLabel = detail ? ROLE_LABELS[detail.role] : user ? ROLE_LABELS[user.role] : "Profile";
-  const dob = formatDob(detail?.dateOfBirth);
+  const dob = formatDate(detail?.dateOfBirth) || null;
 
   return (
     <PanelOrModal

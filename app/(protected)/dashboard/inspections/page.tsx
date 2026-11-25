@@ -27,6 +27,7 @@ import {
   toLocalDateString,
 } from "@/features/tasks/lib/task-utils";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 interface AreaCount {
   areaId: string;
@@ -404,11 +405,7 @@ function CardSections({
 
 
 function scheduleDateLabel(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(iso, { weekday: "short", day: "numeric", month: "short" });
 }
 
 /** Supervisor's own inspection cadence per site, with the next planned date. */

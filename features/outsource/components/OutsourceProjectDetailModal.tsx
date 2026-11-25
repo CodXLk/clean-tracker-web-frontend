@@ -6,12 +6,7 @@ import {
   OUTSOURCE_SCOPE_LABELS,
   type OutsourceProject,
 } from "@/features/outsource/schemas/outsourceProject.schema";
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
-}
+import { formatDate } from "@/lib/utils/format";
 
 interface OutsourceProjectDetailModalProps {
   open: boolean;
@@ -69,7 +64,7 @@ export function OutsourceProjectDetailModal({
               value={
                 <span className="inline-flex items-center gap-1.5">
                   <CalendarRange size={14} aria-hidden="true" className="text-grey-500" />
-                  {formatDate(project.startDate)} → {formatDate(project.endDate)}
+                  {formatDate(project.startDate) || "—"} → {formatDate(project.endDate) || "—"}
                 </span>
               }
             />

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CalendarDays, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
+import { DateInput } from "@/components/shared/DateInput";
 import { SiteFilterSelect } from "@/components/admin/SiteFilterSelect";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
@@ -125,7 +126,7 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
 
   const selectedLabel = useMemo(() => {
     const d = new Date(`${selectedDate}T00:00:00`);
-    return `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+    return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
   }, [selectedDate]);
 
   return (
@@ -160,11 +161,10 @@ function CalendarContent({ onClose }: { onClose: () => void }) {
         {/* Filters: date + site */}
         <div className="mb-4 flex flex-col gap-3 sm:flex-row">
           <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-grey-300 px-3 py-2 text-sm">
-            <CalendarDays size={16} className="shrink-0 text-grey-500" aria-hidden="true" />
-            <input
-              type="date"
+            <DateInput
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value || today)}
+              wrapperClassName="w-full min-w-0"
               className="w-full min-w-0 bg-transparent text-on-surface outline-none"
               aria-label="Pick a date"
             />

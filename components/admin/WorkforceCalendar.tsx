@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight, X, Pencil, Trash2, Clock, Calendar, Repeat, Users, UserCog, Package, MoonStar, Copy, ClipboardPaste } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { formatDate as displayDate } from "@/lib/utils/format";
+import { DateInput } from "@/components/shared/DateInput";
 import {
   useOccurrences,
   useSiteTasks,
@@ -232,19 +234,12 @@ function formatTimeDisplay(time: string): string {
 
 function formatDateLong(dateStr: string): string {
   const dt = new Date(dateStr + "T00:00:00");
-  return dt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return `${dt.toLocaleDateString("en-AU", { weekday: "long" })} ${displayDate(dateStr)}`;
 }
 
-/** "Jul 13 – 19, 2026" (or "Jun 29 – Jul 5, 2026" across a month boundary). */
+/** "13/07/2026 – 19/07/2026". */
 function formatWeekRangeLabel(startStr: string, endStr: string): string {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  const startMonth = start.toLocaleDateString("en-US", { month: "short" });
-  const endMonth = end.toLocaleDateString("en-US", { month: "short" });
-  if (startMonth === endMonth) {
-    return `${startMonth} ${start.getDate()} – ${end.getDate()}, ${end.getFullYear()}`;
-  }
-  return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
+  return `${displayDate(startStr)} – ${displayDate(endStr)}`;
 }
 
 /** Java DayOfWeek name for a yyyy-MM-dd string. */
@@ -664,8 +659,7 @@ function EventDetailModal({ event, onClose, onSave, onDelete, onEditDetails }: E
           <div className="flex items-center gap-2 py-1.5">
             <Calendar size={14} className="shrink-0 text-grey-500" aria-hidden="true" />
             {editing ? (
-              <input
-                type="date"
+              <DateInput
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="rounded-lg border border-grey-300 px-2 py-1 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary"
@@ -1783,10 +1777,7 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
     return () => document.removeEventListener("keydown", onKey);
   }, [title, onClose, onConfirm]);
 
-  const displayDate = new Date(state.date + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day:   "numeric",
-  });
+  const displayDay = displayDate(state.date);
 
   return (
     <div
@@ -1806,7 +1797,7 @@ function QuickAddPopover({ state, onConfirm, onOpenForm, onClose }: QuickAddPopo
         </button>
       </div>
       <p className="mb-2 text-xs text-grey-500">
-        {formatDisplayDate(state.date).day}, {displayDate} · {formatTimeDisplay(state.time)}
+        {formatDisplayDate(state.date).day}, {displayDay} · {formatTimeDisplay(state.time)}
       </p>
       <input
         ref={inputRef}
@@ -2615,14 +2606,13 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange, taskS
         </div>
 
         {/* Jump to a date (the containing week/month is shown) */}
-        <input
-          type="date"
+        <DateInput
           aria-label="Jump to date"
           value={formatDate(currentDate)}
           onChange={(e) => {
             if (e.target.value) setCurrentDate(new Date(e.target.value + "T00:00:00"));
           }}
-          className={cn(TOOLBAR_CONTROL, "hover:border-grey-300")}
+          className={cn(TOOLBAR_CONTROL, "w-36 hover:border-grey-300")}
         />
 
         {/* Site selector — hidden when the Operations header supplies its own. */}
@@ -3138,7 +3128,7 @@ export function WorkforceCalendar({ onNewAssignment, siteId, onSiteChange, taskS
               ? `Deactivate “${pendingToggle.name}” for all future dates? It will be hidden from upcoming schedules for cleaners and supervisors; existing history is kept. To cancel a single day instead, use the occurrence’s skip/move action.${
                   toggleUpcoming.length
                     ? ` Upcoming dates that will be removed: ${toggleUpcoming
-                        .map((d) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }))
+                        .map((d) => displayDate(d))
                         .join(", ")}${toggleUpcoming.length >= 3 ? "…" : ""}.`
                     : ""
                 }`

@@ -8,6 +8,7 @@ import { LeaveCoversModal } from "@/features/leave/components/LeaveCoversModal";
 import { LeaveDetailsModal } from "@/features/leave/components/LeaveDetailsModal";
 import { useApproveLeave, useLeaveRequests, useRejectLeave } from "@/features/leave/hooks/useLeave";
 import type { LeaveRequest } from "@/features/leave/schemas/leave.schema";
+import { formatDate } from "@/lib/utils/format";
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
@@ -138,7 +139,7 @@ export function LeaveManagementTab() {
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                 <div className="col-span-2">
                   <dt className="text-grey-500">Dates</dt>
-                  <dd className="text-sm text-grey-700">{l.startDate} → {l.endDate}</dd>
+                  <dd className="text-sm text-grey-700">{formatDate(l.startDate)} → {formatDate(l.endDate)}</dd>
                 </div>
                 <div>
                   <dt className="text-grey-500">Scope</dt>
@@ -176,7 +177,7 @@ export function LeaveManagementTab() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-grey-700">
-                      {l.startDate} → {l.endDate}
+                      {formatDate(l.startDate)} → {formatDate(l.endDate)}
                       {l.reason && <span className="block text-xs text-grey-500">“{l.reason}”</span>}
                     </td>
                     <td className="px-5 py-3.5 text-grey-700">

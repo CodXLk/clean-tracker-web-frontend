@@ -14,6 +14,7 @@ import { ClientWorkOrderFormModal } from "@/features/work-orders/components/Clie
 import { ClientReviewForm, ClientReviewList } from "@/features/work-orders/components/ClientWorkOrderReview";
 import type { WorkOrder, WorkOrderStatus } from "@/features/work-orders/schemas/workOrder.schema";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 /** Client-facing wording for each stage of a work order. */
 const CLIENT_STATUS: Record<WorkOrderStatus, { label: string; cls: string }> = {
@@ -24,12 +25,6 @@ const CLIENT_STATUS: Record<WorkOrderStatus, { label: string; cls: string }> = {
   PENDING_REVIEW: { label: "Awaiting your review", cls: "bg-violet-100 text-violet-700" },
   COMPLETED: { label: "Completed", cls: "bg-emerald-100 text-emerald-700" },
 };
-
-function formatDate(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
 
 function formatWindow(w: WorkOrder): string {
   if (!w.startTime) return "Any time";
@@ -124,7 +119,7 @@ export default function ClientWorkOrdersPage() {
                         <td className="max-w-[360px] px-4 py-3 text-grey-700">
                           <p className="line-clamp-2">{w.description ?? "—"}</p>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-grey-700">{formatDate(w.startDate)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-grey-700">{formatDate(w.startDate) || "—"}</td>
                         <td className="px-4 py-3"><StatusPill status={w.status} changesRequested={w.changesRequested} /></td>
                       </tr>
                     ))}
@@ -144,7 +139,7 @@ export default function ClientWorkOrdersPage() {
                         <p className="font-semibold text-on-surface">{w.poId}</p>
                         <StatusPill status={w.status} changesRequested={w.changesRequested} />
                       </div>
-                      <p className="text-xs text-grey-500">{w.siteName ?? "—"} · {formatDate(w.startDate)}</p>
+                      <p className="text-xs text-grey-500">{w.siteName ?? "—"} · {formatDate(w.startDate) || "—"}</p>
                       {w.description && <p className="line-clamp-2 text-sm text-grey-700">{w.description}</p>}
                     </button>
                   </li>
@@ -173,7 +168,7 @@ export default function ClientWorkOrdersPage() {
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill status={detail.status} changesRequested={detail.changesRequested} />
               <span className="inline-flex items-center gap-1 text-xs text-grey-500">
-                <Briefcase size={13} aria-hidden="true" /> Requested {formatDate(detail.createdAt)}
+                <Briefcase size={13} aria-hidden="true" /> Requested {formatDate(detail.createdAt) || "—"}
               </span>
             </div>
             <section>
@@ -199,7 +194,7 @@ export default function ClientWorkOrdersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="flex items-center gap-1 text-xs text-grey-500"><CalendarDays size={13} aria-hidden="true" /> Start date</p>
-                <p className="font-medium text-on-surface">{formatDate(detail.startDate)}</p>
+                <p className="font-medium text-on-surface">{formatDate(detail.startDate) || "—"}</p>
               </div>
               <div>
                 <p className="flex items-center gap-1 text-xs text-grey-500"><Clock size={13} aria-hidden="true" /> Work window</p>

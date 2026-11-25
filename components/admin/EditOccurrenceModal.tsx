@@ -14,6 +14,7 @@ import { useEditOccurrenceContent } from "@/features/workforce/hooks/useAssignme
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import type { TaskOccurrence, OccurrenceScope } from "@/features/workforce/schemas/assignment.schema";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 interface EditOccurrenceModalProps {
   occurrence: TaskOccurrence | null;
@@ -107,7 +108,7 @@ export function EditOccurrenceModal({ occurrence, onClose }: EditOccurrenceModal
       open={open}
       onClose={onClose}
       title="Edit task"
-      description={occurrence ? `${occurrence.name} · ${occurrence.date}` : undefined}
+      description={occurrence ? `${occurrence.name} · ${formatDate(occurrence.date)}` : undefined}
     >
       {isLoading ? (
         <div className="flex justify-center py-12">

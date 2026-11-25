@@ -13,6 +13,7 @@ import { AnnouncementComposer } from "@/features/announcements/components/Announ
 import { formatAnnouncementDate } from "@/features/announcements/lib/format";
 import { useDeleteAnnouncement, useSentAnnouncements } from "@/features/announcements/hooks/useAnnouncements";
 import type { Announcement } from "@/features/announcements/schemas/announcement.schema";
+import { formatDateTime } from "@/lib/utils/format";
 
 const PRIORITY_FILTERS = ["All", "Urgent", "Normal"] as const;
 type PriorityFilter = (typeof PRIORITY_FILTERS)[number];
@@ -87,7 +88,7 @@ export function AnnouncementManagement() {
       header: "Sent",
       sortAccessor: (a) => a.createdAt,
       cell: (a) => (
-        <span className="whitespace-nowrap text-xs text-grey-600" title={new Date(a.createdAt).toLocaleString()}>
+        <span className="whitespace-nowrap text-xs text-grey-600" title={formatDateTime(a.createdAt)}>
           {formatAnnouncementDate(a.createdAt)}
         </span>
       ),
@@ -244,7 +245,7 @@ function AnnouncementDetailModal({ announcement: a, onClose }: { announcement: A
         <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center gap-2">
             <PriorityPill urgent={a.urgent} />
-            <span className="text-xs text-grey-500">{new Date(a.createdAt).toLocaleString()}</span>
+            <span className="text-xs text-grey-500">{formatDateTime(a.createdAt)}</span>
           </div>
           <p className="whitespace-pre-line text-sm leading-relaxed text-on-surface">{a.message}</p>
           <dl className="grid grid-cols-1 gap-3 rounded-xl bg-grey-50 p-4 text-sm sm:grid-cols-2">

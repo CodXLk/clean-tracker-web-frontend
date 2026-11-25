@@ -21,6 +21,7 @@ import {
   type OccurrenceScope,
   type TaskOccurrence,
 } from "@/features/workforce/schemas/assignment.schema";
+import { formatDate } from "@/lib/utils/format";
 
 interface TaskInfoModalProps {
   occurrence: TaskOccurrence | null;
@@ -301,11 +302,7 @@ export function TaskInfoModal({ occurrence, onClose, onEditTask }: TaskInfoModal
 }
 
 function formatOccDate(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(date, { weekday: "short", day: "numeric", month: "short" });
 }
 
 function DeleteScopeOption({

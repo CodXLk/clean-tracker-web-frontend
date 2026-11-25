@@ -8,6 +8,7 @@ import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import { useCreateInvoice, useInvoiceAccess, useMyInvoices } from "@/features/invoices/hooks/useInvoices";
 import { InvoiceEditor } from "@/features/invoices/components/InvoiceEditor";
 import { InvoiceTable } from "@/features/invoices/components/InvoiceTable";
+import { DateInput } from "@/components/shared/DateInput";
 
 const input = "h-9 rounded-lg border border-grey-300 bg-white px-2.5 text-sm text-on-surface";
 
@@ -70,11 +71,11 @@ function MyList({ onOpen, roles }: { onOpen: (id: string) => void; roles: string
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs text-grey-600">
             From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={input} />
+            <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className={input} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-grey-600">
             To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} />
+            <DateInput value={to} onChange={(e) => setTo(e.target.value)} className={input} />
           </label>
           <button type="button" onClick={submit} disabled={create.isPending}
             className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">

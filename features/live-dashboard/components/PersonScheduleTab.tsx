@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Briefcase, Users, CheckCircle2, TriangleAlert, Eye } from "lucide-react";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -26,7 +26,7 @@ import {
 import type { SiteDayStatus } from "@/features/live-dashboard/schemas/siteDay.schema";
 import type { DayStatusKey } from "@/features/live-dashboard/lib/siteDayStatus";
 import { DayStatusLegend, LiveDot } from "./SiteDayDetails";
-import { todayISODate } from "@/lib/utils/format";
+import { formatDate, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 // ── Date helpers ────────────────────────────────────────────────────────────────
@@ -93,14 +93,7 @@ export function getMonthWeeks(year: number, month: number): string[][] {
 }
 
 export function formatWeekRangeLabel(startStr: string, endStr: string): string {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
-  const startMonth = start.toLocaleDateString("en-US", { month: "short" });
-  const endMonth = end.toLocaleDateString("en-US", { month: "short" });
-  if (startMonth === endMonth) {
-    return `${startMonth} ${start.getDate()} – ${end.getDate()}, ${end.getFullYear()}`;
-  }
-  return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
+  return `${formatDate(startStr)} – ${formatDate(endStr)}`;
 }
 
 // ── Time-grid helpers (cleaner week view) ───────────────────────────────────────
@@ -289,7 +282,7 @@ export function PersonScheduleTab({ audience, initialPersonId }: PersonScheduleT
         note: d.carriedFrom
           ? `carried from ${weekdayShort(d.carriedFrom)}`
           : d.carriedTo
-            ? `picked up on ${weekdayShort(d.carriedTo)}`
+            ? `carried to ${weekdayShort(d.carriedTo)}`
             : undefined,
       });
       map.set(d.siteId, entry);
@@ -759,6 +752,8 @@ interface ScheduleTableProps {
   onOpenSite?: (siteId: string) => void;
   /** Override labels/colours per status (e.g. client-facing wording). */
   statusMeta?: Partial<Record<DayStatusKey, (typeof SITE_DAY_STATUS_META)[DayStatusKey]>>;
+  /** Split rows under "Work orders" then "General sites" headings. */
+  groupBySiteType?: boolean;
 }
 
 export function ScheduleTable({
@@ -772,6 +767,7 @@ export function ScheduleTable({
   onCellClick,
   onOpenSite,
   statusMeta,
+  groupBySiteType = false,
 }: ScheduleTableProps) {
   const dayView = scopeView === "day";
 
@@ -822,7 +818,25 @@ export function ScheduleTable({
         </div>
 
         {/* Rows */}
-        {siteRows.map((s, ri) => (
+        {(groupBySiteType
+          ? [
+              { key: "wo", label: "Work orders", empty: "No active work orders", rows: siteRows.filter((s) => s.isWorkOrder) },
+              { key: "general", label: "General sites", empty: "No general cleaning sites", rows: siteRows.filter((s) => !s.isWorkOrder) },
+            ]
+          : [{ key: "all", label: "", empty: "", rows: siteRows }]
+        ).map((group) => (
+          <Fragment key={group.key}>
+            {groupBySiteType && (
+              <div className="flex items-center gap-2 border-b border-grey-200 bg-grey-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-grey-600">
+                {group.key === "wo" && <Briefcase size={13} className="text-[#C2410C]" aria-hidden="true" />}
+                {group.label}
+                <span className="rounded-full bg-grey-200 px-1.5 text-[10px] font-semibold text-grey-600">{group.rows.length}</span>
+              </div>
+            )}
+            {groupBySiteType && group.rows.length === 0 && (
+              <p className="border-b border-grey-200 px-4 py-2.5 text-xs text-grey-400">{group.empty}</p>
+            )}
+        {group.rows.map((s, ri) => (
           <div
             key={s.siteId}
             className={cn(
@@ -944,6 +958,8 @@ export function ScheduleTable({
               );
             })}
           </div>
+        ))}
+          </Fragment>
         ))}
       </div>
     </div>

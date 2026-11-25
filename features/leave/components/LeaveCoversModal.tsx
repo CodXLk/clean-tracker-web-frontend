@@ -8,6 +8,8 @@ import { useCleaners } from "@/features/cleaners/hooks/useCleaners";
 import { useEligibleWorkOrderSupervisors } from "@/features/work-orders/hooks/useWorkOrders";
 import { useAddLeaveCover, useRemoveLeaveCover } from "@/features/leave/hooks/useLeave";
 import type { CoverRole, LeaveRequest } from "@/features/leave/schemas/leave.schema";
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate } from "@/lib/utils/format";
 
 const roleKey = (siteId: string, role: CoverRole) => `${siteId}:${role}`;
 
@@ -76,7 +78,7 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
             <div>
               <h2 className="text-base font-semibold text-on-surface">Arrange cover</h2>
               <p className="text-xs text-grey-500">
-                {leave.requesterName} · {leave.startDate} → {leave.endDate}
+                {leave.requesterName} · {formatDate(leave.startDate)} → {formatDate(leave.endDate)}
               </p>
             </div>
             <button type="button" aria-label="Close" onClick={onClose} className="rounded-full p-1 text-grey-400 hover:bg-grey-100">
@@ -115,7 +117,7 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
                         <span className="flex flex-wrap items-center gap-2 text-sm text-on-surface">
                           {cover.coveringName}
                           <span className="text-xs text-grey-500">
-                            {cover.coverFrom ?? leave.startDate} → {cover.coverTo ?? leave.endDate}
+                            {formatDate(cover.coverFrom ?? leave.startDate)} → {formatDate(cover.coverTo ?? leave.endDate)}
                           </span>
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cover.approvalStatus === "APPROVED" ? "bg-success/10 text-success" : "bg-amber-100 text-amber-700"}`}>
                             {cover.approvalStatus === "APPROVED" ? (
@@ -161,23 +163,23 @@ export function LeaveCoversModal({ leave, onClose }: { leave: LeaveRequest; onCl
                       <div className="flex items-center gap-2 text-xs text-grey-600">
                         <label className="flex items-center gap-1">
                           From
-                          <input
-                            type="date"
+                          <DateInput
                             value={range.from}
                             min={leave.startDate}
                             max={leave.endDate}
                             onChange={(e) => setRanges((p) => ({ ...p, [key]: { ...range, from: e.target.value } }))}
+                            wrapperClassName="w-32"
                             className="h-8 rounded-lg border border-grey-300 px-2 text-xs"
                           />
                         </label>
                         <label className="flex items-center gap-1">
                           To
-                          <input
-                            type="date"
+                          <DateInput
                             value={range.to}
                             min={leave.startDate}
                             max={leave.endDate}
                             onChange={(e) => setRanges((p) => ({ ...p, [key]: { ...range, to: e.target.value } }))}
+                            wrapperClassName="w-32"
                             className="h-8 rounded-lg border border-grey-300 px-2 text-xs"
                           />
                         </label>

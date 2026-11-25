@@ -7,6 +7,7 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useMySites } from "@/features/attendance/hooks/useAttendance";
 import { useCreateLeave } from "@/features/leave/hooks/useLeave";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import { DateInput } from "@/components/shared/DateInput";
 
 export function LeaveRequestModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: sites = [] } = useMySites();
@@ -78,12 +79,12 @@ export function LeaveRequestModal({ open, onClose }: { open: boolean; onClose: (
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-xs font-medium text-grey-600">From</span>
-                <input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)}
+                <DateInput value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)}
                   className="h-11 rounded-xl border border-grey-300 px-3 text-sm outline-none focus:border-primary" />
               </label>
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-xs font-medium text-grey-600">To</span>
-                <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)}
+                <DateInput value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)}
                   className="h-11 rounded-xl border border-grey-300 px-3 text-sm outline-none focus:border-primary" />
               </label>
             </div>

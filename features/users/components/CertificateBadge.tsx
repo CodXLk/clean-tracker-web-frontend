@@ -2,6 +2,7 @@
 
 import { certificateAbbreviation, isMandatoryCertificate } from "@/features/users/schemas/document.schema";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 export type CertBadgeTone = "held" | "missing" | "neutral";
 
@@ -75,7 +76,7 @@ export function candidateCertMeta(
     }));
   const missing = requiredKeys.filter((k) => !held.has(k));
   if (waivedUntil) {
-    const until = new Date(waivedUntil).toLocaleDateString([], { day: "numeric", month: "short" });
+    const until = formatDate(waivedUntil, { day: "numeric", month: "short" });
     badges.unshift({
       text: `Waived to ${until}`,
       title:

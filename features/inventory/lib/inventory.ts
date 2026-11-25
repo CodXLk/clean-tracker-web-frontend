@@ -1,4 +1,5 @@
 import type { User } from "@/features/users/schemas/user.schema";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 /** Roles that can approve requests, dispatch stock and edit the catalog. */
 export function isManagement(role?: string): boolean {
@@ -21,17 +22,9 @@ export function fmtMoney(value: number | null | undefined): string {
 }
 
 export function fmtDateTime(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-AU", {
-    day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
-  });
+  return formatDateTime(iso) || "—";
 }
 
 export function fmtDate(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  return formatDate(iso) || "—";
 }

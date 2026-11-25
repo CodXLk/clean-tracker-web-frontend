@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import { FileText, Image as ImageIcon, Trash2, CheckCircle2, XCircle, Clock, Upload, Loader2 } from "lucide-react";
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate } from "@/lib/utils/format";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useMe } from "@/features/auth/hooks/useMe";
 import {
@@ -36,12 +38,6 @@ interface UserDocumentsSectionProps {
   readOnly?: boolean;
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
-}
-
 function DocumentRow({
   doc,
   isManagement,
@@ -67,7 +63,7 @@ function DocumentRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-on-surface">{doc.label}</p>
           <p className="truncate text-xs text-grey-500">
-            {doc.originalFilename ?? "Document"} · Uploaded {formatDate(doc.uploadedAt)}
+            {doc.originalFilename ?? "Document"} · Uploaded {formatDate(doc.uploadedAt) || "—"}
           </p>
           {doc.documentNumber && (
             <p className="truncate text-xs text-grey-600">No: {doc.documentNumber}</p>
@@ -299,8 +295,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
             )}
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-sm font-medium text-on-surface">Issue date (optional)</span>
-              <input
-                type="date"
+              <DateInput
                 className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 value={issueDate}
                 onChange={(e) => setIssueDate(e.target.value)}
@@ -308,8 +303,7 @@ export function UserDocumentsSection({ userId, canUpload = true, readOnly = fals
             </label>
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-sm font-medium text-on-surface">Expiry date (optional)</span>
-              <input
-                type="date"
+              <DateInput
                 className="h-11 rounded-xl border border-grey-300 bg-white px-3.5 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}

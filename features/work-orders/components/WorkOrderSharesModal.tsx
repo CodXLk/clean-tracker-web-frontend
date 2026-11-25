@@ -12,6 +12,7 @@ import {
 } from "@/features/work-orders/hooks/useWorkOrderHours";
 import { useUpdateWorkOrderStatus } from "@/features/work-orders/hooks/useWorkOrders";
 import type { WorkOrderHourEntry } from "@/features/work-orders/schemas/workOrderHours.schema";
+import { formatDate } from "@/lib/utils/format";
 
 const MANAGEMENT_ROLES = new Set(["SUPER_ADMIN", "COMPANY_ADMIN", "CLIENT_SERVICE_MANAGER"]);
 
@@ -213,7 +214,7 @@ export function WorkOrderSharesModal({
                     return (
                       <tr key={e.id} className="border-b border-grey-100">
                         <td className="py-2 pr-2 font-medium text-on-surface">{e.cleanerName}</td>
-                        {perHour && <td className="py-2 pr-2 text-grey-600">{e.entryDate ?? "—"}</td>}
+                        {perHour && <td className="py-2 pr-2 text-grey-600">{formatDate(e.entryDate) || "—"}</td>}
                         <td className="py-2 pr-2 text-right text-grey-500">{show(sys, perHour)}</td>
                         <td className="py-2 pr-2 text-right">
                           {isManagement || locked ? <span className="text-grey-600">{show(sup, perHour)}</span> : input}
