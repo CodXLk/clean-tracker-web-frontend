@@ -26,6 +26,7 @@ import { isAdminRole } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils/cn";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { MAX_PHOTOS_PER_STAGE, fitToStageLimit, preparePhotos } from "@/features/tasks/lib/photoLimits";
+import { formatDate } from "@/lib/utils/format";
 
 const RATINGS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -59,11 +60,7 @@ interface AreaInspectionPageProps {
 }
 
 function historyDateLabel(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(iso, { weekday: "short", day: "numeric", month: "short" });
 }
 
 function historyTimeLabel(iso: string): string {
@@ -541,7 +538,7 @@ export default function AreaInspectionPage({ params }: AreaInspectionPageProps) 
                       {isRedo && task.description && (
                         <span className="text-xs text-grey-600">{task.description}</span>
                       )}
-                      <span className="text-xs text-grey-500">{task.date}</span>
+                      <span className="text-xs text-grey-500">{formatDate(task.date)}</span>
                     </div>
                     <span
                       className={cn(

@@ -20,6 +20,7 @@ import { useUnreadCount } from "@/features/notifications/hooks/useNotifications"
 import { formatTaskTime, toLocalDateString } from "@/features/tasks/lib/task-utils";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 function greetingFor(hour: number): string {
   if (hour >= 5 && hour < 12) return "Good morning";
@@ -56,11 +57,7 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .slice(0, 4)
     .map(([key, g]) => {
-      const label = new Date(`${g.date}T00:00:00`).toLocaleDateString([], {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      });
+      const label = formatDate(g.date, { weekday: "short", day: "numeric", month: "short" });
       const start = formatTaskTime(g.start);
       const end = formatTaskTime(g.end);
       const timeRange = start && end ? `${start} – ${end}` : start ?? "All day";
@@ -69,11 +66,7 @@ function buildUpcomingShifts(occurrences: TaskOccurrence[]): UpcomingShift[] {
 }
 
 function inspectionDateLabel(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(iso, { weekday: "short", day: "numeric", month: "short" });
 }
 
 export default function DashboardPage() {

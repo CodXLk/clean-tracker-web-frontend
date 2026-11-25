@@ -13,6 +13,7 @@ import {
   type TimeRow,
 } from "@/features/attendance/hooks/useTimeSummary";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
+import { DateInput } from "@/components/shared/DateInput";
 
 function monthStart(): string {
   const d = new Date();
@@ -136,8 +137,7 @@ export function TimeSummaryTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           From
-          <input
-            type="date"
+          <DateInput
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -145,8 +145,7 @@ export function TimeSummaryTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           To
-          <input
-            type="date"
+          <DateInput
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"

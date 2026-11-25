@@ -21,6 +21,7 @@ import { formatMinutes } from "@/features/attendance/hooks/useTimeSummary";
 import type { TaskOccurrence } from "@/features/tasks/schemas/task.schema";
 import type { CleanerSite } from "@/features/attendance/schemas/attendance.schema";
 import { checkInEntries, inSessionContext, type CheckInEntry } from "@/features/attendance/lib/checkInEntries";
+import { formatDate } from "@/lib/utils/format";
 
 function formatTime(iso?: string | null, timeZone?: string | null): string {
   if (!iso) return "";
@@ -616,7 +617,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 <span className="inline-flex items-center gap-1 rounded-full bg-grey-100 px-2 py-0.5 font-medium">
                   <Clock size={12} aria-hidden="true" />
                   {site.shift.inProgress ? "Your shift" : "Next shift"} ·{" "}
-                  {new Date(`${site.shift.date}T00:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}{" "}
+                  {formatDate(site.shift.date, { weekday: "short", day: "numeric", month: "short" })}{" "}
                   {formatSiteTime(site.shift.startAt, site.timezone)}–{formatSiteTime(site.shift.endAt, site.timezone)}
                   {site.shift.moveMinutes !== 0 ? ` (moved ${site.shift.moveMinutes > 0 ? "+" : ""}${site.shift.moveMinutes}m)` : ""}
                 </span>

@@ -18,6 +18,7 @@ import { ConfirmDialog } from "@/features/user-management/components/ConfirmDial
 import { CleaningCheckInModal, type CheckInSubmit } from "@/features/user-management/components/CleaningCheckInModal";
 import { useSiteInventory } from "@/features/inventory/hooks/useInventory";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
+import { formatDate } from "@/lib/utils/format";
 
 // ── Date helpers ────────────────────────────────────────────────────────────────
 
@@ -45,8 +46,8 @@ function addDays(date: Date, days: number): Date {
 /** e.g. "3 Mar – 9 Mar 2026". */
 function weekRangeLabel(start: Date, end: Date): string {
   const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
-  const s = start.toLocaleDateString(undefined, opts);
-  const e = end.toLocaleDateString(undefined, { ...opts, year: "numeric" });
+  const s = formatDate(start, opts);
+  const e = formatDate(end, { ...opts, year: "numeric" });
   return `${s} – ${e}`;
 }
 
@@ -214,7 +215,7 @@ export default function ClientSiteManagementPage() {
       const tpl = templates.find((t) => t.id === payload.siteCleaningTemplateId);
       setBanner({
         kind: "success",
-        text: `${tpl?.templateName ?? "Task"} added on ${modalCell.date}. Cleaners have been notified.`,
+        text: `${tpl?.templateName ?? "Task"} added on ${formatDate(modalCell.date)}. Cleaners have been notified.`,
       });
       setModalCell(null);
     } catch (err) {
@@ -583,11 +584,7 @@ export default function ClientSiteManagementPage() {
         areaName={modalCell?.areaName ?? ""}
         dayLabel={
           modalCell
-            ? new Date(`${modalCell.date}T00:00:00`).toLocaleDateString(undefined, {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-              })
+            ? formatDate(modalCell.date, { weekday: "short", day: "numeric", month: "short" })
             : ""
         }
         submitting={checkIn.isPending}

@@ -30,6 +30,7 @@ import {
 import type { Notification, NotificationType } from "@/features/notifications/schemas/notification.schema";
 import { notificationHref } from "@/features/notifications/lib/notificationLink";
 import { useMe } from "@/features/auth/hooks/useMe";
+import { formatDate } from "@/lib/utils/format";
 
 const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   LOW_STOCK: AlertTriangle,
@@ -81,7 +82,7 @@ function formatWhen(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 export default function CleanerNotificationsPage() {

@@ -11,6 +11,7 @@ import {
 } from "@/features/leave/hooks/useLeave";
 import type { MyLeaveCover } from "@/features/leave/schemas/leave.schema";
 import { ShiftPlanDialog } from "@/features/shifts/components/ShiftPlanDialog";
+import { formatDate } from "@/lib/utils/format";
 
 const STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
@@ -20,7 +21,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 function fmt(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+  return formatDate(date, { day: "numeric", month: "short" });
 }
 
 /** Cleaner/supervisor leave: request button, cover acceptances, and my request history. */

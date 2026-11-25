@@ -12,11 +12,7 @@ import { ClientDispatchModal } from "@/features/inventory/components/ClientDispa
 import { ClientInventoryRequests } from "@/features/inventory/components/ClientInventoryRequests";
 import { ClientItemInventoryTab } from "@/features/inventory/components/ClientItemInventoryTab";
 import { PO_STATUS_LABELS, type PurchaseOrder } from "@/features/inventory/schemas/inventory.schema";
-
-function formatDate(iso?: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDate } from "@/lib/utils/format";
 
 const TABS = ["Item Requests", "Item Inventory"] as const;
 type Tab = (typeof TABS)[number];
@@ -130,7 +126,7 @@ function RequestCard({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-on-surface">{req.siteName ?? "—"}</p>
           <p className="text-xs text-grey-500">
-            {req.poNumber} · {formatDate(req.createdAt)}
+            {req.poNumber} · {formatDate(req.createdAt) || "—"}
             {req.expectedDate ? ` · needed by ${formatDate(req.expectedDate)}` : ""}
           </p>
         </div>

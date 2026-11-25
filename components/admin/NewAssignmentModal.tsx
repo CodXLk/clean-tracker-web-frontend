@@ -43,6 +43,8 @@ import {
   type WorkType,
   type RecurrenceType,
 } from "@/features/workforce/schemas/assignment.schema";
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate } from "@/lib/utils/format";
 
 export type AssignmentFormData = AssignmentFormInput;
 
@@ -2280,9 +2282,8 @@ export function NewAssignmentModal({
                     <label htmlFor="assign-date" className="text-sm font-medium text-on-surface">
                       Date
                     </label>
-                    <input
+                    <DateInput
                       id="assign-date"
-                      type="date"
                       readOnly={scopeLocked}
                       min={workOrderMode?.startDate || undefined}
                       {...register("date")}
@@ -2390,7 +2391,7 @@ export function NewAssignmentModal({
                       <p className="mt-2 text-xs text-grey-500">
                         Tasks repeat on these days from the selected date
                         {selectedSite?.endDate
-                          ? ` until the site end date (${selectedSite.endDate}).`
+                          ? ` until the site end date (${formatDate(selectedSite.endDate)}).`
                           : " (no site end date set — the series is open-ended)."}
                       </p>
                     </>

@@ -79,6 +79,7 @@ export const SiteDaySchema = z.object({
   inspectionScheduled: z.boolean().default(false),
   carriedFrom: z.string().nullish(),
   carriedTo: z.string().nullish(),
+  inspectedOn: z.string().nullish(),
   totalTasks: z.number().default(0),
   completedTasks: z.number().default(0),
   generalStart: z.string().nullish(),

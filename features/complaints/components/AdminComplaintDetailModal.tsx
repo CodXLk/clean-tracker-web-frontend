@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import { ImageLightbox } from "@/components/shared/ImageLightbox";
 import type { Complaint } from "@/features/complaints/types";
+import { formatDateTime } from "@/lib/utils/format";
 
 interface AdminComplaintDetailModalProps {
   open:      boolean;
@@ -48,14 +49,6 @@ const ACTION_LABEL: Record<string, string> = {
   REDO_SCHEDULED: "Redo scheduled",
   FEEDBACK: "Client feedback",
 };
-
-function formatWhen(iso?: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 function errorMessage(error: unknown): string | null {
   if (!error) return null;
@@ -259,7 +252,7 @@ export function AdminComplaintDetailModal({
             </div>
             <div>
               <p className="text-xs font-medium text-grey-500">Date &amp; Time</p>
-              <p className="mt-1 text-sm text-on-surface">{formatWhen(complaint.reportedAt)}</p>
+              <p className="mt-1 text-sm text-on-surface">{formatDateTime(complaint.reportedAt)}</p>
             </div>
           </div>
 
@@ -338,7 +331,7 @@ export function AdminComplaintDetailModal({
               {complaint.completedBy && (
                 <p className="mt-1 text-xs text-grey-600">
                   Completed by {complaint.completedBy}
-                  {complaint.completedAt ? ` · ${formatWhen(complaint.completedAt)}` : ""}
+                  {complaint.completedAt ? ` · ${formatDateTime(complaint.completedAt)}` : ""}
                 </p>
               )}
               {complaint.completionNote && (
@@ -413,7 +406,7 @@ export function AdminComplaintDetailModal({
               </p>
               <p className="mt-1 whitespace-pre-line text-sm text-on-surface">{complaint.clientFeedback}</p>
               {complaint.clientFeedbackAt && (
-                <p className="mt-1 text-xs text-grey-500">{formatWhen(complaint.clientFeedbackAt)}</p>
+                <p className="mt-1 text-xs text-grey-500">{formatDateTime(complaint.clientFeedbackAt)}</p>
               )}
             </div>
           )}
@@ -438,7 +431,7 @@ export function AdminComplaintDetailModal({
                     <p className="text-xs text-grey-500">
                       {[e.actorName, e.actorRole ? ROLE_LABEL[e.actorRole] ?? e.actorRole : null].filter(Boolean).join(" · ")}
                       {" · "}
-                      {formatWhen(e.at)}
+                      {formatDateTime(e.at)}
                     </p>
                     {e.note && <p className="mt-0.5 whitespace-pre-line text-xs text-grey-700">{e.note}</p>}
                   </li>

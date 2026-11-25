@@ -24,6 +24,7 @@ import { useMe } from "@/features/auth/hooks/useMe";
 import { useSiteScope } from "@/features/attendance/hooks/useSiteScope";
 import type { Complaint } from "@/features/complaints/types";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 type FilterOption = "All" | "Open" | "Awaiting review" | "Resolved";
 
@@ -325,7 +326,7 @@ export default function ComplaintsPage() {
             ) : (
               filtered.map((complaint) => {
                 const location = [complaint.floor, complaint.area].filter(Boolean).join(" · ");
-                const date = complaint.reportedAt?.slice(0, 10) ?? "";
+                const date = formatDate(complaint.reportedAt);
                 return (
                   <button
                     key={complaint.id}

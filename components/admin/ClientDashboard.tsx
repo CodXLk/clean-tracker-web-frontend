@@ -22,7 +22,7 @@ import { useClientOverview } from "@/features/live-dashboard/hooks/useClientDash
 import { LiveDot } from "@/features/live-dashboard/components/SiteDayDetails";
 import { CLIENT_STATUS_META } from "@/features/live-dashboard/lib/siteDayStatus";
 import type { ClientDayStatus, ClientSiteDay } from "@/features/live-dashboard/schemas/clientDashboard.schema";
-import { todayISODate } from "@/lib/utils/format";
+import { formatDate, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 const DASH = "/admin/dashboard";
@@ -96,9 +96,7 @@ export function ClientDashboard() {
 
   const d = overview.data;
   const today = todayISODate();
-  const todayLabel = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  const todayLabel = formatDate(today, { weekday: "long", day: "numeric", month: "long" });
   const updatedAt = overview.dataUpdatedAt
     ? new Date(overview.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;

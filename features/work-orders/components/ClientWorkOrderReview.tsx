@@ -7,12 +7,9 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useClientReviewWorkOrder } from "@/features/work-orders/hooks/useWorkOrders";
 import type { WorkOrder, WorkOrderClientReview } from "@/features/work-orders/schemas/workOrder.schema";
 import { cn } from "@/lib/utils/cn";
+import { formatDateTime } from "@/lib/utils/format";
 
 const MAX_PHOTOS = 10;
-
-function when(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
 
 /** The client's reviews of a work order (decision, note, photos), newest first. Shown to staff and the client. */
 export function ClientReviewList({ reviews, title = "Client review" }: { reviews: WorkOrderClientReview[]; title?: string }) {
@@ -30,7 +27,7 @@ export function ClientReviewList({ reviews, title = "Client review" }: { reviews
               {approved ? <CheckCircle2 size={15} aria-hidden="true" /> : <MessageSquareWarning size={15} aria-hidden="true" />}
               {approved ? "Approved" : "Changes requested"}
             </p>
-            <p className="text-xs text-grey-500">{r.reviewerName ?? "Client"} · {when(r.createdAt)}</p>
+            <p className="text-xs text-grey-500">{r.reviewerName ?? "Client"} · {formatDateTime(r.createdAt)}</p>
             {r.note && <p className="mt-1.5 whitespace-pre-line text-sm text-on-surface">{r.note}</p>}
             {r.photos.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">

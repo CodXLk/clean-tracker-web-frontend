@@ -30,6 +30,7 @@ import {
   weekdayShort,
 } from "@/features/live-dashboard/lib/siteDayStatus";
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format";
 
 interface SiteDayDetailsProps {
   day: SiteDay;
@@ -57,7 +58,12 @@ export function SiteDayDetails({ day, onOpenCleaner, onOpenSupervisor }: SiteDay
         )}
         {day.carriedTo && (
           <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-            <ArrowRight size={13} aria-hidden="true" /> Picked up on {weekdayShort(day.carriedTo)}
+            <ArrowRight size={13} aria-hidden="true" /> Carried to {weekdayShort(day.carriedTo)} {formatDate(day.carriedTo)}
+          </span>
+        )}
+        {day.inspectedOn && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+            <Search size={13} aria-hidden="true" /> Inspected on {weekdayShort(day.inspectedOn)} {formatDate(day.inspectedOn)}
           </span>
         )}
       </div>
@@ -104,7 +110,7 @@ export function SiteDayDetails({ day, onOpenCleaner, onOpenSupervisor }: SiteDay
       )}
 
       {/* Inspection */}
-      {(day.inspectionScheduled || day.supervisors.length > 0) && (
+      {(day.inspectionScheduled || day.supervisors.length > 0 || day.inspectedOn) && (
         <section className="rounded-xl border border-grey-200">
           <header className="flex flex-wrap items-center justify-between gap-2 border-b border-grey-200 bg-grey-50 px-3 py-2">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-on-surface">
@@ -112,6 +118,7 @@ export function SiteDayDetails({ day, onOpenCleaner, onOpenSupervisor }: SiteDay
             </h3>
             <span className="text-xs font-medium text-grey-600">
               {INSPECTION_STATUS_LABEL[day.inspectionStatus]}
+              {day.inspectedOn && ` · on ${formatDate(day.inspectedOn)}`}
               {!day.inspectionScheduled && day.supervisors.length > 0 && " · unscheduled visit"}
             </span>
           </header>

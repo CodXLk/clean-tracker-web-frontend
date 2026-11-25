@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { useCertificateWaiver, useSetCertificateWaiver } from "@/features/users/hooks/useCertificateWaiver";
+import { formatDateTime } from "@/lib/utils/format";
 
 function fmt(iso?: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDateTime(iso) || "—";
 }
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: "Active", ENDED: "Ended early", EXPIRED: "Expired" };

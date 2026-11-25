@@ -9,6 +9,8 @@ import { getErrorMessage } from "@/features/users/hooks/useCreateUser";
 import { toLocalDateString } from "@/features/tasks/lib/task-utils";
 import { formatMove, useShiftLog, type ShiftLogEntry } from "@/features/shifts/hooks/useShiftSchedule";
 import { cn } from "@/lib/utils/cn";
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate, formatDateTime } from "@/lib/utils/format";
 
 const STATUS_LABELS: Record<string, string> = {
   APPLIED: "Applied",
@@ -36,17 +38,7 @@ function hhmm(t: string): string {
 }
 
 function fmtDate(value: string): string {
-  return new Date(`${value}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function fmtStamp(iso?: string | null): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return `${formatDate(value, { weekday: "short" })} ${formatDate(value)}`;
 }
 
 /** Overnight shifts end the next day; a move can also push a time over midnight. */
@@ -153,8 +145,7 @@ export function ShiftLogView({ onBack }: { onBack: () => void }) {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           From
-          <input
-            type="date"
+          <DateInput
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -162,8 +153,7 @@ export function ShiftLogView({ onBack }: { onBack: () => void }) {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           To
-          <input
-            type="date"
+          <DateInput
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -240,7 +230,7 @@ export function ShiftLogView({ onBack }: { onBack: () => void }) {
                     </td>
                     <td className="px-3 py-2.5 text-xs text-grey-700">
                       {r.requestedByName || "—"}
-                      {r.requestedAt && <span className="block text-[11px] text-grey-500">{fmtStamp(r.requestedAt)}</span>}
+                      {r.requestedAt && <span className="block text-[11px] text-grey-500">{formatDateTime(r.requestedAt)}</span>}
                       {r.source && <span className="block text-[11px] text-grey-500">{SOURCE_LABELS[r.source] ?? r.source}</span>}
                       {r.note && (
                         <span className="block max-w-[220px] text-[11px] italic text-grey-600" title={r.note}>
@@ -252,7 +242,7 @@ export function ShiftLogView({ onBack }: { onBack: () => void }) {
                       {r.reviewedByName || r.reviewedAt ? (
                         <>
                           {r.reviewedByName || "—"}
-                          {r.reviewedAt && <span className="block text-[11px] text-grey-500">{fmtStamp(r.reviewedAt)}</span>}
+                          {r.reviewedAt && <span className="block text-[11px] text-grey-500">{formatDateTime(r.reviewedAt)}</span>}
                         </>
                       ) : r.status === "APPLIED" ? (
                         <span className="text-grey-500">No approval needed</span>

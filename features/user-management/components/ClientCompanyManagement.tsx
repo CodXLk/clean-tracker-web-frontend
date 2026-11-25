@@ -10,12 +10,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ClientCompanyFormModal } from "./ClientCompanyFormModal";
 import { useClientCompanies, useDeleteClientCompany } from "@/features/user-management/hooks/useClientCompanies";
 import type { ClientCompany } from "@/features/user-management/schemas/clientCompany.schema";
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
-}
+import { formatDate } from "@/lib/utils/format";
 
 export function ClientCompanyManagement() {
   const query = useClientCompanies();
@@ -57,7 +52,7 @@ export function ClientCompanyManagement() {
     {
       header: "Created",
       sortAccessor: (c) => c.createdAt ?? "",
-      cell: (c) => <span className="text-grey-500">{formatDate(c.createdAt)}</span>,
+      cell: (c) => <span className="text-grey-500">{formatDate(c.createdAt) || "—"}</span>,
     },
     {
       header: "",

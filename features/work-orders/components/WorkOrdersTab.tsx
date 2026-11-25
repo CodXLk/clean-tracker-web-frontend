@@ -24,12 +24,7 @@ import { WorkOrderFormModal } from "./WorkOrderFormModal";
 import { WorkOrderDetailModal } from "./WorkOrderDetailModal";
 import { WorkOrderProfilesModal } from "./WorkOrderProfilesModal";
 import { WorkOrderSharesModal } from "./WorkOrderSharesModal";
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
-}
+import { formatDate } from "@/lib/utils/format";
 
 /** Compact span of the dates a work order has tasks on (derived from its task occurrences). */
 function formatDates(dates?: string[] | null): string {

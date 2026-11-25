@@ -24,6 +24,9 @@ export const RateSchema = z.object({
   agreedMinutesByDay: z.record(z.string(), z.number()).default({}),
   supervisionHourlyRate: money,
   supervisionAgreedMinutesPerDay: optNum,
+  supervisionRateType: z.enum(["HOURLY", "PER_VISIT"]).nullable().optional().transform((v) => v ?? "HOURLY"),
+  supervisionPerVisitAmount: money,
+  supervisionAgreedMinutesByDay: z.record(z.string(), z.number()).nullable().optional().transform((v) => v ?? {}),
   weekendMultiplier: money,
   publicHolidayMultiplier: money,
   supervisionWeekendMultiplier: money,
@@ -31,29 +34,55 @@ export const RateSchema = z.object({
 });
 export type Rate = z.infer<typeof RateSchema>;
 
+export type RateType = "HOURLY" | "PER_VISIT";
+
 export interface RateInput {
   effectiveFrom: string;
-  cleaningRateType: "HOURLY" | "PER_VISIT";
+  cleaningRateType: RateType;
   cleaningHourlyRate?: number | null;
   cleaningPerVisitAmount?: number | null;
   agreedMinutesPerDay?: number | null;
   agreedMinutesByDay?: Partial<Record<Weekday, number>>;
+  supervisionRateType?: RateType;
   supervisionHourlyRate?: number | null;
+  supervisionPerVisitAmount?: number | null;
   supervisionAgreedMinutesPerDay?: number | null;
+  supervisionAgreedMinutesByDay?: Partial<Record<Weekday, number>>;
   weekendMultiplier?: number | null;
   publicHolidayMultiplier?: number | null;
   supervisionWeekendMultiplier?: number | null;
   supervisionPublicHolidayMultiplier?: number | null;
 }
 
+/** A person's own agreement at a site (cleaner or supervisor): hours and/or their own rate for a date range. */
 export const AgreedHoursSchema = z.object({
   id: z.string().uuid(),
-  cleanerId: z.string().uuid(),
+  cleanerId: z.string().uuid().nullable().optional(),
+  supervisorUserId: z.string().uuid().nullable().optional(),
+  personRole: z.enum(["CLEANER", "SUPERVISOR"]).nullable().optional().transform((v) => v ?? "CLEANER"),
   cleanerName: optStr,
   effectiveFrom: z.string(),
-  agreedMinutesPerDay: z.number(),
+  effectiveTo: optStr,
+  agreedMinutesPerDay: optNum,
+  agreedMinutesByDay: z.record(z.string(), z.number()).nullable().optional().transform((v) => v ?? {}),
+  rateType: z.enum(["HOURLY", "PER_VISIT"]).nullable().optional(),
+  hourlyRate: money,
+  perVisitAmount: money,
 });
 export type AgreedHours = z.infer<typeof AgreedHoursSchema>;
+
+export interface AgreedHoursInput {
+  siteId: string;
+  cleanerId?: string | null;
+  supervisorUserId?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  agreedMinutesPerDay?: number | null;
+  agreedMinutesByDay?: Partial<Record<Weekday, number>>;
+  rateType?: RateType | null;
+  hourlyRate?: number | null;
+  perVisitAmount?: number | null;
+}
 
 export const PersonSchema = z.object({
   userId: z.string().uuid(),
@@ -350,7 +379,7 @@ export function useDeleteRate() {
 export function useAddAgreedHours() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { siteId: string; cleanerId: string; effectiveFrom: string; agreedMinutesPerDay: number }) => {
+    mutationFn: async (input: AgreedHoursInput) => {
       const { siteId, ...body } = input;
       await clientApi.post(ENDPOINTS.invoices.agreedHours(siteId), body);
     },

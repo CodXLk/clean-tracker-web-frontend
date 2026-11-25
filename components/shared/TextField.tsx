@@ -1,6 +1,7 @@
 import { forwardRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { DateInput, type DateInputProps } from "@/components/shared/DateInput";
 
 interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -23,6 +24,23 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         {required && <span className="ml-0.5 text-error">*</span>}
       </label>
       <div className="relative">
+        {type === "date" ? (
+          <DateInput
+            id={inputId}
+            ref={ref}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${inputId}-error` : undefined}
+            required={required}
+            wrapperClassName="block"
+            className={cn(
+              "h-11 w-full rounded-xl border bg-white px-3.5 text-sm text-on-surface outline-none transition-colors placeholder:text-grey-500/60",
+              "focus:border-primary focus:ring-2 focus:ring-primary/20",
+              error ? "border-error" : "border-grey-300",
+              className,
+            )}
+            {...(props as DateInputProps)}
+          />
+        ) : (
         <input
           id={inputId}
           ref={ref}
@@ -38,6 +56,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           )}
           {...props}
         />
+        )}
         {isPassword && (
           <button
             type="button"

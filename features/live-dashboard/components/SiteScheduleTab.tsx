@@ -13,7 +13,7 @@ import { useComplaints } from "@/features/complaints/hooks/useComplaints";
 import { useSiteDays, indexSiteDays } from "@/features/live-dashboard/hooks/useSiteDays";
 import { weekdayShort } from "@/features/live-dashboard/lib/siteDayStatus";
 import { isSelectableInOperations } from "@/features/user-management/schemas/site.schema";
-import { todayISODate } from "@/lib/utils/format";
+import { formatDate, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import { ScheduleCellDetailModal } from "./ScheduleCellDetailModal";
 import { DayStatusLegend } from "./SiteDayDetails";
@@ -171,11 +171,11 @@ export function SiteScheduleTab({ initialSiteId }: SiteScheduleTabProps) {
       cur.total = day.totalTasks;
       cur.completed = day.completedTasks;
       cur.dayStatus = day.status;
-      cur.dayNote = day.carriedFrom
-        ? `carried from ${weekdayShort(day.carriedFrom)}`
-        : day.carriedTo
-          ? `picked up on ${weekdayShort(day.carriedTo)}`
-          : undefined;
+      cur.dayNote = [
+        day.carriedFrom ? `carried from ${weekdayShort(day.carriedFrom)}` : null,
+        day.carriedTo ? `carried to ${weekdayShort(day.carriedTo)}` : null,
+        day.inspectedOn ? `inspected on ${formatDate(day.inspectedOn)}` : null,
+      ].filter(Boolean).join(" · ") || undefined;
       inner.set(day.date, cur);
     }
     for (const [siteId, dates] of complaintsBySiteDate) {
@@ -387,6 +387,7 @@ export function SiteScheduleTab({ initialSiteId }: SiteScheduleTabProps) {
               siteRows={siteRows}
               statBySiteDate={statBySiteDate}
               mode="status"
+              groupBySiteType={!siteFilter}
               onCellClick={(siteId, date, siteName) => setDetailCell({ siteId, siteName, date })}
               onOpenSite={(siteId) => router.push(`/admin/workforce?tab=operations&site=${siteId}`)}
             />

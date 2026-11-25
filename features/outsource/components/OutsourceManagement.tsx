@@ -19,12 +19,7 @@ import {
 import { OutsourceProjectModal } from "./OutsourceProjectModal";
 import { OutsourceProfilesModal } from "./OutsourceProfilesModal";
 import { OutsourceProjectDetailModal } from "./OutsourceProjectDetailModal";
-
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
-}
+import { formatDate } from "@/lib/utils/format";
 
 type ProjectDetail =
   | { kind: "create" }
@@ -153,7 +148,7 @@ export function OutsourceManagement() {
                         <td className="px-5 py-3.5 text-grey-700">{p.siteName ?? "—"}</td>
                         <td className="px-5 py-3.5 text-grey-700">{OUTSOURCE_SCOPE_LABELS[p.scopeType]}</td>
                         <td className="px-5 py-3.5 text-grey-700">
-                          {formatDate(p.startDate)} → {formatDate(p.endDate)}
+                          {formatDate(p.startDate) || "—"} → {formatDate(p.endDate) || "—"}
                         </td>
                         <td className="px-5 py-3.5 text-grey-700">
                           {p.cleanerProfiles.filter((s) => s.cleanerId).length}/{p.numberOfOutsourceCleaners}

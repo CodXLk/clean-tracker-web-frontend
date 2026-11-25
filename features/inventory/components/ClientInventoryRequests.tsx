@@ -16,11 +16,7 @@ import type { InventoryRequest } from "@/features/inventory/schemas/inventory.sc
 import type { InventoryDelivery } from "@/features/inventory/schemas/inventory.schema";
 import { RequestDetailModal } from "./RequestDetailModal";
 import { WorkflowDeliveryProgressModal } from "./WorkflowDeliveryControls";
-
-function formatDate(iso?: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDate } from "@/lib/utils/format";
 
 /** Client-facing view of client-sourced item requests: review requested items and dispatch to the site. */
 export function ClientInventoryRequests() {
@@ -96,7 +92,7 @@ function RequestCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-on-surface">{req.siteName}</p>
-          <p className="text-xs text-grey-500">Raised {formatDate(req.createdAt)}</p>
+          <p className="text-xs text-grey-500">Raised {formatDate(req.createdAt) || "—"}</p>
         </div>
         <StatusBadge status={req.status} />
       </div>

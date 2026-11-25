@@ -25,6 +25,7 @@ import {
 import { InvoiceHistoryPanel } from "@/features/invoices/components/InvoiceHistoryPanel";
 import { dateTimeText, dayText } from "@/features/invoices/lib/format";
 import { cn } from "@/lib/utils/cn";
+import { DateInput } from "@/components/shared/DateInput";
 
 const input = "h-9 rounded-lg border border-grey-300 bg-white px-2.5 text-sm text-on-surface";
 const button = "rounded-full px-4 py-1.5 text-sm font-semibold disabled:opacity-50";
@@ -240,11 +241,11 @@ function InvoiceHeader({ inv, onError, onDeleted }: { inv: Invoice; onError: (e:
         <div className="flex flex-wrap items-end gap-2 border-t border-grey-100 pt-3">
           <label className="flex flex-col gap-1 text-xs text-grey-600">
             From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={input} />
+            <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className={input} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-grey-600">
             To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} />
+            <DateInput value={to} onChange={(e) => setTo(e.target.value)} className={input} />
           </label>
           <button type="button" disabled={busy} onClick={saveDates} className={`${button} bg-primary text-white`}>Save dates</button>
           <p className="w-full text-xs text-grey-500">Changing dates refreshes the lines and reopens completed parts.</p>

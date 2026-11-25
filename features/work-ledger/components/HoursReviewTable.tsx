@@ -18,6 +18,8 @@ import {
   type WorkSession,
 } from "@/features/work-ledger/hooks/useWorkLedger";
 import { cn } from "@/lib/utils/cn";
+import { DateInput } from "@/components/shared/DateInput";
+import { formatDate } from "@/lib/utils/format";
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -235,8 +237,7 @@ export function HoursReviewTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           From
-          <input
-            type="date"
+          <DateInput
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -244,8 +245,7 @@ export function HoursReviewTable() {
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-grey-600">
           To
-          <input
-            type="date"
+          <DateInput
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="h-10 rounded-lg border border-grey-300 bg-white px-3 text-sm text-on-surface"
@@ -381,7 +381,7 @@ export function HoursReviewTable() {
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
-                          aria-label={`Select ${r.personName ?? ""} ${r.workDate}`}
+                          aria-label={`Select ${r.personName ?? ""} ${formatDate(r.workDate)}`}
                           disabled={!editable}
                           checked={selected.has(r.id)}
                           onChange={() => toggle(r.id)}
@@ -400,7 +400,7 @@ export function HoursReviewTable() {
                           </button>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-grey-700">{r.workDate}</td>
+                      <td className="px-3 py-2 text-grey-700">{formatDate(r.workDate)}</td>
                       <td className="px-3 py-2 font-medium text-on-surface">
                         {r.personName}
                         {r.context === "SUPERVISION" && <span className="ml-1 text-[11px] text-grey-500">(supervision)</span>}

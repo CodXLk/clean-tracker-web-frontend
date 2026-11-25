@@ -8,6 +8,7 @@ import {
   type TaskOccurrence,
   type WorkType,
 } from "@/features/workforce/schemas/assignment.schema";
+import { formatDate } from "@/lib/utils/format";
 
 const DAY_SHORT: Record<string, string> = {
   MONDAY: "Mon",
@@ -36,12 +37,7 @@ function personName(c: { firstName?: string | null; lastName?: string | null }):
 }
 
 function formatDateLong(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  return `${formatDate(dateStr, { weekday: "long" })} ${formatDate(dateStr)}`;
 }
 
 interface TypeDetailsModalProps {
