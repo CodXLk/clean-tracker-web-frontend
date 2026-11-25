@@ -51,7 +51,7 @@ import {
   openPause,
   weekdayShort,
 } from "@/features/live-dashboard/lib/siteDayStatus";
-import { formatDate, todayISODate } from "@/lib/utils/format";
+import { formatDayHeading, todayISODate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 const REFRESH_MS = 60 * 1000;
@@ -874,7 +874,7 @@ export function AdminDashboard() {
   const updatedAt = siteDaysQuery.dataUpdatedAt
     ? new Date(siteDaysQuery.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
     : null;
-  const todayLabel = `${new Date(`${today}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long" })} ${formatDate(today)}`;
+  const todayLabel = formatDayHeading(today);
   const openDetail = (day: SiteDay) => setDetail({ siteId: day.siteId, date: day.date });
   const spinner = (
     <div className="flex justify-center py-10 text-grey-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
@@ -885,7 +885,7 @@ export function AdminDashboard() {
       {/* Today strip */}
       <div className="dash-fade-up flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold text-on-surface sm:text-xl">Today · {todayLabel}</h2>
+          <h2 className="text-lg font-bold text-on-surface sm:text-xl">Today {todayLabel}</h2>
           <p className="text-sm text-grey-500">
             {cleaningCounts.onSite} on site now · {cleaningCounts.notIn} cleaner{cleaningCounts.notIn === 1 ? "" : "s"} not checked in yet
           </p>
