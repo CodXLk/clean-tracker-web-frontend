@@ -18,7 +18,8 @@ import {
 } from "@/features/work-orders/schemas/workOrder.schema";
 import { CleanerListSchema, type Cleaner } from "@/features/cleaners/schemas/cleaner.schema";
 import { UserListSchema, type User } from "@/features/users/schemas/user.schema";
-import { siteKeys } from "@/features/user-management/hooks/keys";
+import { clientCompanyKeys, clientKeys, siteKeys } from "@/features/user-management/hooks/keys";
+import { userKeys } from "@/features/users/hooks/userKeys";
 
 const workOrderKeys = {
   all: ["work-orders"] as const,
@@ -65,10 +66,14 @@ export function useCreateWorkOrder() {
       const { data } = await clientApi.post(ENDPOINTS.workOrders.create, input);
       return WorkOrderSchema.parse(data);
     },
-    // A work order may create a one-time site (named after its PO ID) — refresh the site list too.
+    // A work order may create a one-time site (named after its PO ID) and, with it, a new client
+    // company / client contact (with a CLIENT login) — refresh those lists too.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workOrderKeys.all });
       queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: clientCompanyKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.lists() });
     },
   });
 }
