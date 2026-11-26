@@ -44,6 +44,11 @@ function photoUrl(photoId: string): string {
   return `/api/work-orders/photos/${photoId}`;
 }
 
+// Picker values for a client company / contact typed in and created with the work order.
+const NEW_COMPANY = "__new-client-company__";
+const NEW_CONTACT = "__new-client-contact__";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** Duration + overnight flag for a work window (end earlier than start = next day). */
 function windowInfo(start?: string, end?: string): { overnight: boolean; duration: string } | null {
   if (!start || !end) return null;
@@ -93,7 +98,13 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   // Site selection mode — a temporary "one-time" site (default on create) vs picking an existing one.
   const [siteMode, setSiteMode] = useState<"one-time" | "existing">(isEdit ? "existing" : "one-time");
   const [otClientCompanyId, setOtClientCompanyId] = useState("");
+  // A client company typed into the picker that doesn't exist yet — created with the work order.
+  const [otNewCompanyName, setOtNewCompanyName] = useState("");
   const [otClientId, setOtClientId] = useState("");
+  // Enter a new client contact (name + email) instead of picking one — always the case for a new company.
+  const [otNewContact, setOtNewContact] = useState(false);
+  const [otNewClientName, setOtNewClientName] = useState("");
+  const [otNewClientEmail, setOtNewClientEmail] = useState("");
   const [otSiteName, setOtSiteName] = useState("");
   const [otSiteType, setOtSiteType] = useState<string>("BUILDING_CLEANING");
   const [otContactPersonName, setOtContactPersonName] = useState("");
@@ -164,13 +175,23 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     [sitesQuery.data],
   );
   const companyOptions: SelectOption[] = useMemo(
-    () => (companiesQuery.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.email ?? undefined })),
-    [companiesQuery.data],
+    () => [
+      ...(companiesQuery.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.email ?? undefined })),
+      ...(otNewCompanyName
+        ? [{ value: NEW_COMPANY, label: otNewCompanyName, sublabel: "New client company — created with this work order" }]
+        : []),
+    ],
+    [companiesQuery.data, otNewCompanyName],
   );
   const clientOptions: SelectOption[] = useMemo(
-    () => (clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+    () => [
+      ...(clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.email ?? undefined })),
+      { value: NEW_CONTACT, label: "+ New client contact" },
+    ],
     [clientsQuery.data],
   );
+  const isNewCompany = !!otNewCompanyName;
+  const isNewContact = isNewCompany || otNewContact;
   // WORK_ORDER is an internal category and isn't offered for manual selection.
   const siteTypeOptions: SelectOption[] = useMemo(
     () =>
@@ -182,8 +203,41 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   );
 
   function handleOtCompanyChange(id: string) {
+    if (id === NEW_COMPANY) return;
     setOtClientCompanyId(id);
+    setOtNewCompanyName("");
     setOtClientId("");
+    setOtNewContact(false);
+  }
+
+  /** Typed a client company name in the picker: reuse an exact match, otherwise create it with the work order. */
+  function handleOtCompanyCreate(name: string) {
+    const existing = (companiesQuery.data ?? []).find((c) => c.name.trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+      handleOtCompanyChange(existing.id);
+      return;
+    }
+    setOtNewCompanyName(name);
+    setOtClientCompanyId("");
+    setOtClientId("");
+    setOtNewContact(true);
+  }
+
+  function handleOtContactChange(id: string) {
+    if (id === NEW_CONTACT) {
+      setOtNewContact(true);
+      setOtClientId("");
+      return;
+    }
+    setOtNewContact(false);
+    setOtClientId(id);
+  }
+
+  /** Typed a contact name in the picker: start a new contact with that name. */
+  function handleOtContactCreate(name: string) {
+    setOtNewContact(true);
+    setOtClientId("");
+    setOtNewClientName(name);
   }
 
   // Client and cleaning amounts are priced independently; switching a section's basis clears its own amount.
@@ -208,10 +262,10 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
   // A client company with exactly one contact needs no choice — preselect it.
   useEffect(() => {
     const list = clientsQuery.data;
-    if (otClientCompanyId && list && list.length === 1 && !otClientId) {
+    if (otClientCompanyId && list && list.length === 1 && !otClientId && !otNewContact) {
       setOtClientId(list[0]!.id);
     }
-  }, [clientsQuery.data, otClientCompanyId, otClientId]);
+  }, [clientsQuery.data, otClientCompanyId, otClientId, otNewContact]);
 
   const previews = useMemo(() => pendingFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [pendingFiles]);
 
@@ -240,7 +294,11 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
       setPrefilledPo(null);
       setSiteMode("one-time");
       setOtClientCompanyId("");
+      setOtNewCompanyName("");
       setOtClientId("");
+      setOtNewContact(false);
+      setOtNewClientName("");
+      setOtNewClientEmail("");
       setOtSiteName("");
       setOtSiteType("BUILDING_CLEANING");
       setOtContactPersonName("");
@@ -292,8 +350,15 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
     if (isEdit && !poId.trim()) return "Enter the PO ID.";
     if (!isEdit && siteMode === "one-time") {
       if (!otSiteName.trim()) return "Enter a site name for the one-time site.";
-      if (!otClientCompanyId) return "Select a client company for the one-time site.";
-      if (!otClientId) return "Select a client contact for the one-time site.";
+      if (!otClientCompanyId && !isNewCompany) return "Select a client company or type a new client company name.";
+      if (isNewCompany && otNewCompanyName.trim().length < 2) return "The client company name must be at least 2 characters.";
+      if (isNewContact) {
+        if (otNewClientName.trim().length < 2) return "Enter the client contact's name (at least 2 characters).";
+        if (!otNewClientEmail.trim()) return "Enter the client contact's email address.";
+        if (!EMAIL_PATTERN.test(otNewClientEmail.trim())) return "Enter a valid email address for the client contact.";
+      } else if (!otClientId) {
+        return "Select a client contact for the one-time site.";
+      }
     } else if (!siteId) {
       return "Select a site.";
     }
@@ -397,8 +462,12 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
           ? {
               oneTimeSite: true,
               oneTimeSiteDetails: {
-                clientCompanyId: otClientCompanyId,
-                clientId: otClientId,
+                ...(isNewCompany
+                  ? { newClientCompanyName: otNewCompanyName.trim() }
+                  : { clientCompanyId: otClientCompanyId }),
+                ...(isNewContact
+                  ? { newClientName: otNewClientName.trim(), newClientEmail: otNewClientEmail.trim() }
+                  : { clientId: otClientId }),
                 siteName: otSiteName.trim(),
                 siteType: otSiteType,
                 contactPersonName: otContactPersonName.trim() || undefined,
@@ -545,30 +614,67 @@ export function WorkOrderFormModal({ open, onClose, workOrder, onCreated, onUpda
                     searchPlaceholder="Search site types…"
                     emptyMessage="No site types"
                   />
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-4">
                     <SearchableSelect
                       label="Client company"
                       required
                       options={companyOptions}
-                      value={otClientCompanyId || null}
+                      value={isNewCompany ? NEW_COMPANY : otClientCompanyId || null}
                       onChange={handleOtCompanyChange}
+                      onCreate={handleOtCompanyCreate}
+                      createLabel={(name) => `Add new client company "${name}"`}
                       loading={companiesQuery.isLoading}
-                      placeholder="Select a client company"
-                      searchPlaceholder="Search client companies…"
+                      placeholder="Select or type a client company"
+                      searchPlaceholder="Search or type a new client company…"
                       emptyMessage="No client companies found."
+                      hint={
+                        isNewCompany
+                          ? "This client company is created with the work order."
+                          : "Pick an existing client company, or type a new name to add one."
+                      }
                     />
-                    <SearchableSelect
-                      label="Client contact"
-                      required
-                      options={clientOptions}
-                      value={otClientId || null}
-                      onChange={setOtClientId}
-                      disabled={!otClientCompanyId}
-                      loading={!!otClientCompanyId && clientsQuery.isLoading}
-                      placeholder={otClientCompanyId ? "Select a client" : "Select a client company first"}
-                      searchPlaceholder="Search clients…"
-                      emptyMessage="This client company has no clients yet."
-                    />
+                    {!isNewCompany && (
+                      <SearchableSelect
+                        label="Client contact"
+                        required
+                        options={clientOptions}
+                        value={otNewContact ? NEW_CONTACT : otClientId || null}
+                        onChange={handleOtContactChange}
+                        onCreate={handleOtContactCreate}
+                        createLabel={(name) => `Add new client contact "${name}"`}
+                        disabled={!otClientCompanyId}
+                        loading={!!otClientCompanyId && clientsQuery.isLoading}
+                        placeholder={otClientCompanyId ? "Select a client contact" : "Select a client company first"}
+                        searchPlaceholder="Search or type a new client contact…"
+                        emptyMessage="This client company has no contacts yet."
+                      />
+                    )}
+                    {isNewContact && (
+                      <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <TextField
+                            label="Client contact name"
+                            name="wo-ot-new-client-name"
+                            required
+                            value={otNewClientName}
+                            onChange={(e) => setOtNewClientName(e.target.value)}
+                            placeholder="e.g. Jane Smith"
+                          />
+                          <TextField
+                            label="Client contact email"
+                            name="wo-ot-new-client-email"
+                            type="email"
+                            required
+                            value={otNewClientEmail}
+                            onChange={(e) => setOtNewClientEmail(e.target.value)}
+                            placeholder="jane@example.com"
+                          />
+                        </div>
+                        <p className="text-xs text-grey-500">
+                          The contact is created with the work order and emailed an invite to the client portal.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-2">

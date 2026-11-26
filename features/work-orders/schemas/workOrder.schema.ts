@@ -136,8 +136,15 @@ export const WorkOrderListSchema = z.array(WorkOrderSchema);
 
 // Outbound create payload — matches CreateWorkOrderRequest. Work-order dates come from its tasks.
 export interface OneTimeSiteInput {
-  clientCompanyId: string;
-  clientId: string;
+  /** Existing client company — or omit and send {@link newClientCompanyName} to create one. */
+  clientCompanyId?: string;
+  /** Existing client contact — or omit and send {@link newClientName} + {@link newClientEmail}. */
+  clientId?: string;
+  /** New client company created with the work order. */
+  newClientCompanyName?: string;
+  /** New client contact (and portal login) created with the work order. */
+  newClientName?: string;
+  newClientEmail?: string;
   siteName: string;
   /** Category of the one-time site. Defaults to WORK_ORDER on the backend when omitted. */
   siteType?: string;

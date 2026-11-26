@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CertificateBadgeRow, type CertBadge } from "@/features/users/components/CertificateBadge";
 
@@ -33,6 +33,13 @@ interface SearchableSelectProps {
   hint?: string;
   /** Show the in-menu search field (default true). */
   searchable?: boolean;
+  /**
+   * When set, typing text that matches no option offers an "Add …" item that calls this with the
+   * trimmed text (e.g. to create a new record from the search box).
+   */
+  onCreate?: (text: string) => void;
+  /** Label of the "Add …" item for the typed text. */
+  createLabel?: (text: string) => string;
 }
 
 export function SearchableSelect({
@@ -49,6 +56,8 @@ export function SearchableSelect({
   emptyMessage = "No results found",
   hint,
   searchable = true,
+  onCreate,
+  createLabel = (text) => `Add "${text}"`,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -78,6 +87,12 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
+  const createText = query.trim();
+  const canCreate =
+    !!onCreate &&
+    searchable &&
+    createText.length > 0 &&
+    !options.some((o) => o.label.trim().toLowerCase() === createText.toLowerCase());
   const computePlacement = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
@@ -194,7 +209,7 @@ export function SearchableSelect({
                 </div>
               )}
               <ul role="listbox" className="flex-1 overflow-y-auto py-1">
-                {filtered.length === 0 ? (
+                {filtered.length === 0 && !canCreate ? (
                   <li className="px-3.5 py-3 text-sm text-grey-500">{emptyMessage}</li>
                 ) : (
                   filtered.map((option) => {
@@ -240,6 +255,21 @@ export function SearchableSelect({
                       </li>
                     );
                   })
+                )}
+                {canCreate && (
+                  <li role="option" aria-selected={false}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCreate!(createText);
+                        setOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 border-t border-grey-100 px-3.5 py-2 text-left text-sm font-medium text-primary transition-colors hover:bg-grey-100"
+                    >
+                      <Plus size={15} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate">{createLabel(createText)}</span>
+                    </button>
+                  </li>
                 )}
               </ul>
             </div>,
