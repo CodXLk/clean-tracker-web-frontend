@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Nfc, Check, AlertTriangle, LocateFixed, X, Clock, Info } from "lucide-react";
+import { MapPin, MapPinOff, Nfc, Check, AlertTriangle, LocateFixed, X, Clock, Info } from "lucide-react";
 import { SlideButton } from "@/components/shared/SlideButton";
 import { SearchableSelect } from "@/features/user-management/components/SearchableSelect";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -10,6 +10,7 @@ import { isNfcSupported, readNfcTag } from "@/lib/nfc";
 import { getCurrentPosition, distanceMeters } from "@/lib/geolocation";
 import { cn } from "@/lib/utils/cn";
 import { acquireCheckInPayload as acquirePayload } from "@/features/attendance/lib/acquireCheckInPayload";
+import { forcedCheckoutDetails } from "@/features/attendance/lib/forcedCheckout";
 import { useCheckIn, useCheckOut, useAttendanceHeartbeat } from "@/features/attendance/hooks/useAttendance";
 import { useMyTasks } from "@/features/tasks/hooks/useTasks";
 import { useComplaints } from "@/features/complaints/hooks/useComplaints";
@@ -57,6 +58,15 @@ function getMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+interface ForcePrompt {
+  site: CheckInEntry;
+  tasks: TaskOccurrence[];
+  serverMessage?: string;
+  noteRequired: boolean;
+  awayFromSite?: boolean;
+  resume?: boolean;
+}
+
 interface CheckInPanelProps {
   sites: CleanerSite[];
   isLoading: boolean;
@@ -78,10 +88,9 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   // Per-site error message and a remount key to reset the slider after a failure.
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [resetKeys, setResetKeys] = useState<Record<string, number>>({});
-  // Pending-task / early check-out warning shown before checking out.
-  const [pendingPrompt, setPendingPrompt] = useState<
-    { site: CheckInEntry; tasks: TaskOccurrence[]; serverMessage?: string } | null
-  >(null);
+  // Forced check-out prompt: unfinished tasks, leaving a mandatory period early, or away from the site
+  // (`resume` = a paused session couldn't restart away from the site; cancelling keeps it paused).
+  const [pendingPrompt, setPendingPrompt] = useState<ForcePrompt | null>(null);
   // HIGH-priority tasks shown right after a successful check-in for acknowledgement.
   const [criticalAck, setCriticalAck] = useState<
     { site: CheckInEntry; tasks: TaskOccurrence[] } | null
@@ -91,7 +100,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     { site: CheckInEntry; tasks: TaskOccurrence[] } | null
   >(null);
   const [confirming, setConfirming] = useState(false);
-  // Why the cleaner is forcing a check-out (required by the server for every forced check-out).
+  // Why the cleaner is forcing a check-out (required unless only the location forces it).
   const [forceNote, setForceNote] = useState("");
   // Not-mandatory site: leaving before the shift ends is allowed, but the cleaner is told first.
   const [earlyPrompt, setEarlyPrompt] = useState<{ site: CheckInEntry; endsAt: string } | null>(null);
@@ -198,9 +207,9 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     );
   }
 
-  async function executeCheckout(site: CheckInEntry, force: boolean, note?: string) {
+  async function executeCheckout(site: CheckInEntry, force: boolean, note?: string, geoOnly = false) {
     setErrors((prev) => ({ ...prev, [site.entryKey]: "" }));
-    const payload = await acquirePayload(site);
+    const payload = await acquirePayload(site, { geoOnly });
     await checkOut.mutateAsync({ ...payload, force, acknowledgeIncomplete: force, ...(note ? { note } : {}) });
   }
 
@@ -238,11 +247,11 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
 
   // The normal check-out flow after the HIGH-task acknowledgement: unfinished tasks need a forced
   // check-out (with a note); leaving before the shift ends on a non-mandatory site is allowed after
-  // a heads-up; a mandatory site refuses (409) and the cleaner may force it with a note.
+  // a heads-up; a mandatory site or being away from the site refuses (409) and it may be forced.
   async function finishCheckout(site: CheckInEntry) {
     const pending = pendingTasksFor(site);
     if (pending.length > 0) {
-      openForcePrompt({ site, tasks: pending });
+      openForcePrompt({ site, tasks: pending, noteRequired: true });
       bumpReset(site.entryKey);
       return;
     }
@@ -255,7 +264,7 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     await plainCheckout(site);
   }
 
-  function openForcePrompt(prompt: { site: CheckInEntry; tasks: TaskOccurrence[]; serverMessage?: string }) {
+  function openForcePrompt(prompt: ForcePrompt) {
     setForceNote("");
     setPendingPrompt(prompt);
   }
@@ -267,8 +276,15 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       const message = getMessage(err, "Check-out failed.");
-      if (status === 409 || /still to complete|force the check-out/i.test(message)) {
-        openForcePrompt({ site, tasks: [], serverMessage: message });
+      const details = forcedCheckoutDetails(err);
+      if (details || status === 409 || /still to complete|force the check-out/i.test(message)) {
+        openForcePrompt({
+          site,
+          tasks: [],
+          serverMessage: message,
+          noteRequired: details?.noteRequired ?? true,
+          awayFromSite: details?.locationMismatch ?? false,
+        });
         bumpReset(site.entryKey);
         return;
       }
@@ -339,6 +355,20 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
       }
       await finishCheckout(site);
     } catch (err) {
+      // Restarting a paused session away from the site: offer a forced check-out, or stay paused.
+      const details = mode === "in" ? forcedCheckoutDetails(err) : null;
+      if (details?.action === "RESUME" && !details.checkoutBlocked) {
+        openForcePrompt({
+          site,
+          tasks: [],
+          serverMessage: getMessage(err, "You're away from the site."),
+          noteRequired: details.noteRequired,
+          awayFromSite: true,
+          resume: true,
+        });
+        bumpReset(site.entryKey);
+        return;
+      }
       setErrors((prev) => ({
         ...prev,
         [site.entryKey]: getMessage(err, mode === "in" ? "Check-in failed." : "Check-out failed."),
@@ -348,18 +378,23 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
   }
 
   async function confirmPendingCheckout() {
-    if (!pendingPrompt || !forceNote.trim()) return;
+    if (!pendingPrompt) return;
+    const note = forceNote.trim();
+    if (pendingPrompt.noteRequired && !note) return;
     const { site } = pendingPrompt;
     setConfirming(true);
     try {
-      await executeCheckout(site, true, forceNote.trim());
+      await executeCheckout(site, true, note || undefined, pendingPrompt.awayFromSite);
       setPendingPrompt(null);
       setForceNote("");
     } catch (err) {
-      setErrors((prev) => ({
-        ...prev,
-        [site.entryKey]: getMessage(err, "Check-out failed."),
-      }));
+      const message = getMessage(err, "Check-out failed.");
+      // Things changed since the prompt opened (e.g. a task is now pending): ask for the note.
+      if (!note && /add a note/i.test(message)) {
+        setPendingPrompt({ ...pendingPrompt, noteRequired: true, serverMessage: message });
+        return;
+      }
+      setErrors((prev) => ({ ...prev, [site.entryKey]: message }));
       setPendingPrompt(null);
       bumpReset(site.entryKey);
     } finally {
@@ -697,10 +732,14 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
             <div className="flex items-start justify-between gap-3 px-5 pt-5">
               <div className="flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-error/10 text-error">
-                  <AlertTriangle size={18} aria-hidden="true" />
+                  {pendingPrompt.awayFromSite ? (
+                    <MapPinOff size={18} aria-hidden="true" />
+                  ) : (
+                    <AlertTriangle size={18} aria-hidden="true" />
+                  )}
                 </span>
                 <h2 id="pending-tasks-title" className="text-base font-semibold text-on-surface">
-                  Forced check-out
+                  {pendingPrompt.awayFromSite ? "You're away from the site" : "Forced check-out"}
                 </h2>
               </div>
               <button
@@ -750,13 +789,17 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
               )}
 
               <label className="mt-3 flex flex-col gap-1 text-xs font-medium text-grey-700">
-                Why are you leaving now? (required)
+                {pendingPrompt.noteRequired ? "Why are you leaving now? (required)" : "Add a note (optional)"}
                 <textarea
                   value={forceNote}
                   onChange={(e) => setForceNote(e.target.value)}
                   maxLength={1000}
                   rows={3}
-                  placeholder="e.g. Ran out of supplies, unwell, site locked…"
+                  placeholder={
+                    pendingPrompt.awayFromSite
+                      ? "e.g. Finished and left, called to another site…"
+                      : "e.g. Ran out of supplies, unwell, site locked…"
+                  }
                   className="rounded-xl border border-grey-300 bg-white px-3 py-2 text-sm font-normal text-on-surface"
                 />
               </label>
@@ -769,11 +812,11 @@ export function CheckInPanel({ sites, isLoading }: CheckInPanelProps) {
                 onClick={() => setPendingPrompt(null)}
                 className="flex-1 rounded-xl border border-grey-300 px-4 py-2.5 text-sm font-medium text-on-surface transition-colors hover:bg-grey-100 disabled:opacity-50"
               >
-                Keep working
+                {pendingPrompt.resume ? "Wait (stay paused)" : pendingPrompt.awayFromSite ? "Cancel" : "Keep working"}
               </button>
               <button
                 type="button"
-                disabled={confirming || !forceNote.trim()}
+                disabled={confirming || (pendingPrompt.noteRequired && !forceNote.trim())}
                 onClick={confirmPendingCheckout}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-error px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error/90 disabled:opacity-60"
               >
