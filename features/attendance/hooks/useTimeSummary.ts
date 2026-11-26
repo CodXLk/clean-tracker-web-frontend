@@ -89,6 +89,7 @@ export const TIME_TYPE_LABELS: Record<TimeRow["type"], string> = {
 export const CLOSE_REASON_LABELS: Record<string, string> = {
   CHECKED_OUT: "Checked out",
   BELOW_MINIMUM: "Below minimum",
+  LOCATION_MISMATCH: "Away from site",
   PENDING_TASKS: "Pending tasks",
   EARLY_BEFORE_SHIFT_END: "Left before shift end",
   FORGOT_CHECKOUT: "Forgot to check out",

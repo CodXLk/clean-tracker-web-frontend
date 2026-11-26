@@ -176,6 +176,7 @@ export const CLOSE_REASON_LABEL: Record<string, string> = {
   EARLY_BEFORE_SHIFT_END: "Left before shift end",
   PENDING_TASKS: "Forced check-out · tasks pending",
   BELOW_MINIMUM: "Forced check-out · below minimum time",
+  LOCATION_MISMATCH: "Forced check-out · away from the site",
   FORGOT_CHECKOUT: "Forgot to check out (closed by system)",
   WORK_ORDER_COMPLETED: "Closed when work order completed",
 };

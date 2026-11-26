@@ -4,10 +4,14 @@ import type { CheckInPayload, CleanerSite } from "@/features/attendance/schemas/
 
 /**
  * Resolve how the cleaner proves presence for a check-in/out: prefer the site's NFC tag on
- * capable devices, otherwise (or on scan failure) fall back to geolocation.
+ * capable devices, otherwise (or on scan failure) fall back to geolocation. `geoOnly` skips the
+ * NFC scan — e.g. a forced check-out away from the site, where the tag can't be reached.
  */
-export async function acquireCheckInPayload(site: CleanerSite): Promise<CheckInPayload> {
-  if (site.nfcRegistered && isNfcSupported()) {
+export async function acquireCheckInPayload(
+  site: CleanerSite,
+  opts: { geoOnly?: boolean } = {},
+): Promise<CheckInPayload> {
+  if (!(opts.geoOnly && site.hasCoordinates) && site.nfcRegistered && isNfcSupported()) {
     try {
       const uid = await readNfcTag();
       return { siteId: site.siteId, method: "NFC", nfcTagId: uid };

@@ -71,8 +71,9 @@ export async function proxyBackend(path: string, options: BackendCallOptions = {
     const result = await callBackend(path, options);
     const envelope = (result.json ?? {}) as { data?: unknown; message?: string };
     if (!result.ok) {
+      // Error details (e.g. why a forced check-out is needed) ride along with the message.
       return NextResponse.json(
-        { message: envelope.message ?? "Request failed" },
+        { message: envelope.message ?? "Request failed", ...(envelope.data != null ? { data: envelope.data } : {}) },
         { status: result.status || 500 },
       );
     }
